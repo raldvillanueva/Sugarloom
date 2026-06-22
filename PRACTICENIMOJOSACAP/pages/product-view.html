@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Product View</title>
+  <link rel="stylesheet" href="../css/product-view.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase-config.js"></script>
+  <script src="../js/product-view.js" defer></script>
+</head>
+<body>
+
+<!-- NAV -->
+<div class="top-nav">
+
+  <!-- LEFT -->
+  <div class="back-wrap" onclick="goBack()">
+    <span class="arrow"></span>
+    <span class="back-text">Back</span>
+  </div>
+
+  <!-- RIGHT -->
+  <div class="cart" onclick="goToCart()">
+    🛒
+    <span class="cart-count" id="cart">0</span>
+  </div>
+
+</div>
+
+<!-- PRODUCT -->
+<section class="product-view">
+
+  <div class="left">
+    <img id="product-img">
+  </div>
+
+  <div class="right">
+    <h1 id="product-name"></h1>
+    <p class="price" id="product-price"></p>
+
+    <p class="desc" id="product-desc">Freshly baked premium treat made with love 🍪</p>
+    <div id="box-info" style="display:none;margin-top:8px">
+      <span style="display:inline-flex;align-items:center;gap:6px;background:#f5f0eb;border:1px solid #e0d8ce;border-radius:20px;padding:4px 12px;font-size:13px;color:#7a5c3e;font-weight:500">
+         6 pcs per box
+      </span>
+    </div>
+
+    <!-- QUANTITY -->
+    <div class="qty">
+      <button onclick="changeQty(-1)">-</button>
+      <span id="qty">1</span>
+      <button onclick="changeQty(1)">+</button>
+    </div>
+
+    <!-- ADD TO CART -->
+    <button class="add-btn" onclick="addToCart()">ADD TO CART</button>
+
+    <!-- INFO -->
+    <div class="accordion">
+
+      <div class="acc-item">
+        <div class="acc-header">
+          <h2>🔥 Reheating Guide</h2>
+          <span>+</span>
+        </div>
+        <div class="acc-body">
+          Everyone has their own preference when it comes to Cookies. For that perfect soft, we recommend:<br>
+          <br>
+          <h3>•Warm in the oven for 8 minutes</h3>
+          <br>
+          <h3>•Heat in the microwave for 20 seconds from room temperature</h3><br>
+        </div>
+      </div>
+
+      <div class="acc-item">
+        <div class="acc-header">
+          <h2>🚚 Delivery Info</h2>
+          <span>+</span>
+        </div>
+        <div class="acc-body">
+          Delivery every Monday, Wednesday, Friday, Saturday.<br>
+          Same-day delivery depends on availability.
+          We deliver freshly baked cookies every Monday, Wednesday, Friday and Saturday!
+          <br>
+          <br>
+          <h3>Do you do same day deliveries?</h3>
+          As much as we want to accommodate all your Cookie requests, we need at least one day lead time to bake em’ how you like em’!
+          On special days, we do accept same day deliveries so make sure to stay tuned on our Instagram page to know when 👀
+          But if your cravings are extra strong, we might just make an exception so just shoot us a message!
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- REVIEWS PANEL -->
+  <div class="reviews-panel">
+
+    <div class="reviews-header">
+      <div class="reviews-title">Reviews</div>
+      <div class="reviews-summary">
+        <span class="avg-score" id="avg-score">—</span>
+        <div>
+          <span class="avg-stars" id="avg-stars"></span>
+          <span class="review-count" id="review-count">No reviews yet</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="write-review">
+      <h3>Write a Review</h3>
+      <div id="star-picker" class="star-picker">
+        <span data-v="1">★</span>
+        <span data-v="2">★</span>
+        <span data-v="3">★</span>
+        <span data-v="4">★</span>
+        <span data-v="5">★</span>
+      </div>
+      <input id="reviewer-name" placeholder="Your name">
+      <textarea id="review-text" rows="3" placeholder="Share your experience..."></textarea>
+      <button class="submit-review-btn" onclick="submitReview()">Post Review</button>
+    </div>
+
+    <div class="review-list" id="review-list"></div>
+
+  </div>
+
+</section>
+
+
+  <!-- MESSAGE ADDED TO CART -->
+  <div id="toast" class="toast">Added to cart 🎉</div>
+
+
+
+</body>
+</html>

@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SugarLoom Ph</title>
+  <link rel="stylesheet" href="../css/homepage.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase-config.js"></script>
+  <script src="../js/homepage.js" defer></script>
+</head>
+<body>
+
+<nav class="nav">
+  <h2 class="logo">SugarLoomPh</h2>
+  <div class="nav-links">
+    <a href="#products">BEST COOKIES</a>
+    <a href="#about">ABOUT</a>
+    <a href="#faq">FAQ</a>
+    <a href="#contact">CONTACT US</a>
+  </div>
+  <div class="nav-right">
+    <div class="nav-actions" id="nav-actions">
+      <button class="btn-outline" onclick="goToLogin()">Sign In</button>
+    </div>
+    <!-- NOTIFICATION BELL (shown when logged in) -->
+    <div class="notif-wrap" id="notifWrap" style="display:none">
+      <div class="notif-bell" id="notifBell" onclick="toggleNotifPanel()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span class="notif-count hidden" id="notifCount">0</span>
+      </div>
+      <div class="notif-panel hidden" id="notifPanel">
+        <div class="notif-panel-hdr">
+          <span>Notifications</span>
+          <button class="notif-clear-btn" onclick="clearAllNotifs()">Clear all</button>
+        </div>
+        <div id="notif-items"><div class="notif-empty">No notifications</div></div>
+      </div>
+    </div>
+    <div class="cart" onclick="goToCart()">
+      🛒
+      <span class="cart-count" id="cart">0</span>
+    </div>
+  </div>
+</nav>
+
+<!-- AI CHAT BUTTON -->
+<div id="chat-toggle">💬</div>
+
+<!-- CHAT BOX -->
+<div id="chatbox" class="hidden">
+  <div class="chat-header">
+    <div>
+      <strong>🧁 SugarLoom Assistant</strong><br>
+      <small>AI-powered support</small>
+    </div>
+    <span id="close-chat">✖</span>
+  </div>
+  <div class="chat-body" id="chat-body">
+    <div class="bot-msg">Hi! 👋 Welcome to SugarLoom Ph! How can I help you today?</div>
+    <div class="quick-btn" onclick="quickReply('availability')">📦 Check product availability</div>
+    <div class="quick-btn" onclick="quickReply('price')">💰 View pricing information</div>
+    <div class="quick-btn" onclick="quickReply('delivery')">🚚 Ask about delivery</div>
+    <div class="quick-btn" onclick="quickReply('other')">❓ Other questions</div>
+  </div>
+  <div class="chat-footer">
+    <input id="user-input" placeholder="Type your message...">
+    <button onclick="sendMessage()">Send</button>
+  </div>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-left">
+    <div class="hero-tag">✦ Freshly baked, Manila-made</div>
+    <h1>
+      Freshly baked<br>
+      handcrafted cookies<br>
+      in Manila
+    </h1>
+    <p>Serving quality baked goods with convenient ordering and delivery services.</p>
+    <div class="hero-actions">
+      <button class="btn-primary" onclick="goToShop()">Order Now</button>
+      <button class="btn-ghost" onclick="document.getElementById('products').scrollIntoView({behavior:'smooth'})">See Best Sellers</button>
+    </div>
+  </div>
+  <div class="hero-right">
+    <img src="https://images.unsplash.com/photo-1606312619070-d48b4c652a52">
+  </div>
+</section>
+
+<!-- FEATURES BAR -->
+<section class="features">
+  <div class="feature-item">
+    <span class="feature-ico">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10"/><path d="M12 8v4l3 3"/><path d="M18.5 2.5a2.5 2.5 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+    </span>
+    <div>
+      <strong>Freshly Baked Daily</strong>
+      <small>Every morning at 6am</small>
+    </div>
+  </div>
+  <div class="feature-sep"></div>
+  <div class="feature-item">
+    <span class="feature-ico">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13" rx="2"/><path d="M16 8h4l3 5v3h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+    </span>
+    <div>
+      <strong>Fast Delivery</strong>
+      <small>Metro Manila same-day</small>
+    </div>
+  </div>
+  <div class="feature-sep"></div>
+  <div class="feature-item">
+    <span class="feature-ico">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+    </span>
+    <div>
+      <strong>Premium Ingredients</strong>
+      <small>No artificial flavors</small>
+    </div>
+  </div>
+  <div class="feature-sep"></div>
+  <div class="feature-item">
+    <span class="feature-ico">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v10H4V12"/><path d="M22 7H2v5h20V7z"/><path d="M12 22V7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>
+    </span>
+    <div>
+      <strong>Custom Orders</strong>
+      <small>For events &amp; gifting</small>
+    </div>
+  </div>
+</section>
+
+<!-- BEST SELLERS -->
+<section id="products" class="products premium-section">
+  <div class="section-label">Most Loved</div>
+  <h2>Best Sellers</h2>
+  <p class="section-sub">Our customers' favorites, baked fresh every day</p>
+  <div class="product-row" id="list"></div>
+  <div class="section-cta">
+    <button onclick="goToShop()" class="btn-outline-dark">View All Products →</button>
+  </div>
+</section>
+
+<!-- DIVIDER — Marquee ribbon style -->
+<div class="divider-ribbon">
+  <div class="ribbon-track">
+    <div class="ribbon-half">
+      <span>✦ Freshly Baked</span><span>·</span><span>✦ Handcrafted</span><span>·</span><span>✦ Manila Made</span><span>·</span><span>✦ Premium Ingredients</span><span>·</span>
+      <span>✦ Freshly Baked</span><span>·</span><span>✦ Handcrafted</span><span>·</span><span>✦ Manila Made</span><span>·</span><span>✦ Premium Ingredients</span><span>·</span>
+      <span>✦ Freshly Baked</span><span>·</span><span>✦ Handcrafted</span><span>·</span><span>✦ Manila Made</span><span>·</span><span>✦ Premium Ingredients</span><span>·</span>
+      <span>✦ Freshly Baked</span><span>·</span><span>✦ Handcrafted</span><span>·</span><span>✦ Manila Made</span><span>·</span><span>✦ Premium Ingredients</span><span>·</span>
+    </div>
+    <div class="ribbon-half" aria-hidden="true">
+      <span>✦ Freshly Baked</span><span>·</span><span>✦ Handcrafted</span><span>·</span><span>✦ Manila Made</span><span>·</span><span>✦ Premium Ingredients</span><span>·</span>
+      <span>✦ Freshly Baked</span><span>·</span><span>✦ Handcrafted</span><span>·</span><span>✦ Manila Made</span><span>·</span><span>✦ Premium Ingredients</span><span>·</span>
+      <span>✦ Freshly Baked</span><span>·</span><span>✦ Handcrafted</span><span>·</span><span>✦ Manila Made</span><span>·</span><span>✦ Premium Ingredients</span><span>·</span>
+      <span>✦ Freshly Baked</span><span>·</span><span>✦ Handcrafted</span><span>·</span><span>✦ Manila Made</span><span>·</span><span>✦ Premium Ingredients</span><span>·</span>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURE SECTION -->
+<section class="feature-section reveal">
+  <div class="feature-left">
+    <div class="section-label">Staff Pick</div>
+    <h1>Matcha Cookies!</h1>
+    <p>A chewy matcha-infused cookie with a rich earthy taste and a perfectly sweet, smooth finish.</p>
+    <button onclick="orderMatcha()">Order Now</button>
+  </div>
+  <div class="feature-right">
+    <img src="https://teakandthyme.com/wp-content/uploads/2023/09/matcha-white-chocolate-cookies-DSC_5105-1x1-1200.jpg">
+  </div>
+</section>
+
+<!-- DIVIDER — Marquee ribbon style -->
+<div class="divider-ribbon alt">
+  <div class="ribbon-track">
+    <div class="ribbon-half">
+      <span>✦ Custom Orders</span><span>·</span><span>✦ Mix n' Match</span><span>·</span><span>✦ Build Your Box</span><span>·</span><span>✦ Perfect for Gifts</span><span>·</span>
+      <span>✦ Custom Orders</span><span>·</span><span>✦ Mix n' Match</span><span>·</span><span>✦ Build Your Box</span><span>·</span><span>✦ Perfect for Gifts</span><span>·</span>
+      <span>✦ Custom Orders</span><span>·</span><span>✦ Mix n' Match</span><span>·</span><span>✦ Build Your Box</span><span>·</span><span>✦ Perfect for Gifts</span><span>·</span>
+      <span>✦ Custom Orders</span><span>·</span><span>✦ Mix n' Match</span><span>·</span><span>✦ Build Your Box</span><span>·</span><span>✦ Perfect for Gifts</span><span>·</span>
+    </div>
+    <div class="ribbon-half" aria-hidden="true">
+      <span>✦ Custom Orders</span><span>·</span><span>✦ Mix n' Match</span><span>·</span><span>✦ Build Your Box</span><span>·</span><span>✦ Perfect for Gifts</span><span>·</span>
+      <span>✦ Custom Orders</span><span>·</span><span>✦ Mix n' Match</span><span>·</span><span>✦ Build Your Box</span><span>·</span><span>✦ Perfect for Gifts</span><span>·</span>
+      <span>✦ Custom Orders</span><span>·</span><span>✦ Mix n' Match</span><span>·</span><span>✦ Build Your Box</span><span>·</span><span>✦ Perfect for Gifts</span><span>·</span>
+      <span>✦ Custom Orders</span><span>·</span><span>✦ Mix n' Match</span><span>·</span><span>✦ Build Your Box</span><span>·</span><span>✦ Perfect for Gifts</span><span>·</span>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURE SECTION 2 -->
+<section class="feature-section reveal">
+  <div class="feature-left">
+    <div class="section-label">New Feature</div>
+    <h1>SugarLoom Boxes!</h1>
+    <p>Delicious freshly made treats carefully prepared and packed for every order!</p>
+    <button onclick="goToBoxes()">Order Now</button>
+  </div>
+  <div class="feature-right">
+    <img src="https://cravingskitchenph.com/cdn/shop/files/DSCF6636.jpg?v=1721989391">
+  </div>
+</section>
+
+<!-- NEWSLETTER SECTION -->
+<section class="newsletter-section">
+  <div class="newsletter-inner">
+    <div class="newsletter-text">
+      <div class="section-label light">Stay in the Loop</div>
+      <h2>Get first dibs on new flavors &amp; promos</h2>
+      <p>Join our sweet community. No spam, only cookies</p>
+    </div>
+    <div class="newsletter-form">
+      <input type="email" id="nl-email" placeholder="Your email address">
+      <button onclick="subscribeNewsletter()">Subscribe</button>
+    </div>
+    <div class="newsletter-note" id="nl-msg"></div>
+  </div>
+</section>
+
+<!-- ABOUT -->
+<section id="about" class="about">
+  <div class="about-content">
+    <div class="section-label">Our Story</div>
+    <h2>Baked with love since day one</h2>
+    <p>
+      SugarLoom Ph started as a passion project — baking happiness for friends and family.
+      Today, we serve freshly baked cookies, brownies, and desserts crafted with love, delivered straight to your door across Metro Manila.
+    </p>
+    <div class="about-pillars">
+      <div class="pillar">
+        <span class="pillar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        </span>
+        <strong>Local Ingredients</strong>
+        <small>Sourced from trusted Filipino suppliers</small>
+      </div>
+      <div class="pillar">
+        <span class="pillar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 8C8 10 5.9 16.17 3.82 19.82A2 2 0 0 0 5.5 22.6C8 22 11 20 14 17"/><path d="M17 8c0-3.31-2.69-6-6-6-1.5 0-2.87.55-3.9 1.46"/><path d="M10.34 14.9c1.02-.26 2.01-.52 2.93-.9"/></svg>
+        </span>
+        <strong>Small Batch Baking</strong>
+        <small>Every order baked fresh, never pre-made</small>
+      </div>
+      <div class="pillar">
+        <span class="pillar-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </span>
+        <strong>Made with Love</strong>
+        <small>Every cookie packed with care</small>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ SECTION -->
+<section id="faq" class="hp-info-section">
+  <div class="section-label">Help Center</div>
+  <h2 class="hp-info-title">Frequently Asked Questions</h2>
+  <p class="section-sub">Everything you need to know about SugarLoom Ph</p>
+
+  <div class="faq-list">
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        <span>How long does delivery take?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">We do same day delivery depending on your location within Manila.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        <span>How do I reheat my cookies?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">Warm in the oven for 5–8 minutes at low heat, or microwave for 15–20 seconds from room temperature for that fresh-baked feel.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        <span>Do you do custom orders?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">Yes! We love doing custom order boxes depending on your likings.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        <span>How long do cookies stay fresh?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">Our cookies stay fresh for up to 5 days at room temperature in an airtight container, or up to 2 weeks in the freezer.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q" onclick="toggleFaq(this)">
+        <span>What are your working hours?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">We're available Monday to Saturday, 8:00 AM – 5:00 PM. Orders and inquiries outside these hours will be attended to the next business day.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT SECTION -->
+<section id="contact" class="hp-info-section">
+  <div class="section-label">Get in Touch</div>
+  <h2 class="hp-info-title">Contact Us</h2>
+  <p class="section-sub">We'd love to hear from you — orders, questions, or just to say hi 🍪</p>
+
+  <div class="contact-grid">
+    <div class="contact-card">
+      <div class="contact-icon">📧</div>
+      <h3>Email</h3>
+      <p>sugarloomph@gmail.com</p>
+      <a href="mailto:sugarloomph@gmail.com" class="contact-link">Send us a message →</a>
+    </div>
+    <div class="contact-card">
+      <div class="contact-icon">📞</div>
+      <h3>Phone / Viber</h3>
+      <p>0912 345 6789</p>
+      <a href="tel:09123456789" class="contact-link">Call or text us →</a>
+    </div>
+    <div class="contact-card">
+      <div class="contact-icon">📘</div>
+      <h3>Facebook</h3>
+      <p>@sugarloomph</p>
+      <a href="https://facebook.com/sugarloomph" target="_blank" class="contact-link">Follow us →</a>
+    </div>
+  </div>
+
+  <div class="inquiry-form">
+    <h2>Send us a quick message</h2>
+    <div class="inquiry-row">
+      <input class="inquiry-input" type="text" placeholder="Your name" id="inq-name">
+      <input class="inquiry-input" type="text" placeholder="Your email" id="inq-contact">
+    </div>
+    <textarea class="inquiry-textarea" placeholder="Tell us what you're looking for — custom order, question, feedback..." id="inq-msg" rows="4"></textarea>
+    <button class="inquiry-btn" onclick="sendInquiry()">Send Message</button>
+    <div class="inquiry-note">We reply within 24 hours on weekdays 🍪</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-inner">
+
+    <div class="footer-brand">
+      <h3 class="footer-logo">SugarLoomPh</h3>
+      <p>Freshly baked handcrafted cookies delivered across Metro Manila. Made with love, baked with purpose.</p>
+      <div class="footer-socials">
+        <a href="https://facebook.com/sugarloomph" target="_blank" class="social-btn" aria-label="Facebook">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="footer-col">
+      <h4>Shop</h4>
+      <ul>
+        <li><a href="#" onclick="goToShop()">All Cookies</a></li>
+        <li><a href="#" onclick="goToShop()">Brownies</a></li>
+        <li><a href="#" onclick="goToShop()">Cupcakes</a></li>
+        <li><a href="#" onclick="goToShop()">Boxes</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <h4>Info</h4>
+      <ul>
+        <li><a href="#about">Our Story</a></li>
+        <li><a href="#" onclick="goToShop(); showSection('faq')">FAQ</a></li>
+        <li><a href="#" onclick="goToShop(); showSection('contact')">Contact Us</a></li>
+        <li><a href="#">Delivery Info</a></li>
+      </ul>
+    </div>
+
+    <div class="footer-col">
+      <h4>Contact</h4>
+      <ul>
+        <li>📧 sugarloomph@gmail.com</li>
+        <li>📞 0912 345 6789</li>
+        <li>📸 @sugarloomph</li>
+        <li>📍 Manila, Philippines</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="footer-bottom">
+    <p>© 2026 SugarLoom Ph · All rights reserved · Handcrafted with 🍪</p>
+  </div>
+</footer>
+
+</body>
+</html>

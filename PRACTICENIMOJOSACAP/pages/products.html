@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shop - SugarLoomPh</title>
+  <link rel="stylesheet" href="../css/products.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase-config.js"></script>
+  <script src="../js/products.js" defer></script>
+</head>
+<body>
+
+<!--PRODUCTS NAV-->
+<div class="products-nav">
+
+  <div class="back-btn" onclick="goBack()">
+    <span class="arrow"></span>
+    <span class="back-label">Back</span>
+  </div>
+
+  <!-- FIXED CART -->
+  <div class="nav-cart-wrap">
+    <div class="cart" onclick="goToCart()">
+      <span class="cart-icon">🛒</span>
+      <span class="cart-badge" id="cart">0</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- FILTER PILLS -->
+<div class="filter-bar">
+  <button class="filter-pill active" onclick="filterProducts('all')" data-filter="all">All</button>
+  <button class="filter-pill" onclick="filterProducts('cookie')" data-filter="cookie"> Cookies</button>
+  <button class="filter-pill" onclick="filterProducts('brownie')" data-filter="brownie"> Brownies</button>
+  <button class="filter-pill" onclick="filterProducts('cupcake')" data-filter="cupcake"> Cupcakes</button>
+  <button class="filter-pill" onclick="filterProducts('box')" data-filter="box" style="display:none">Boxes</button>
+</div>
+
+<!-- PRODUCTS -->
+<section class="products">
+  <h1 class="shop-title">Shop Cookies</h1>
+  <div class="products-grid" id="product-list"></div>
+</section>
+
+<!-- FAQ SECTION -->
+<section id="faqSection" class="about-section">
+  <div class="section-label">Help Center</div>
+  <h1>Frequently Asked Questions</h1>
+  <p class="section-sub">Everything you need to know about SugarLoom Ph</p>
+
+  <div class="faq-list">
+    <div class="faq-item">
+      <div class="faq-q">
+        <span>How long does delivery take?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">Delivery usually takes 1–2 days depending on your location within Metro Manila.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">
+        <span>How do I reheat my cookies?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">Warm in the oven for 5–8 minutes at low heat, or microwave for 15–20 seconds from room temperature for that fresh-baked feel.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">
+        <span>Do you do custom orders?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">Yes! We love doing custom cookie boxes for events, birthdays, and special occasions. DM us on Instagram to start your order.</div>
+    </div>
+    <div class="faq-item">
+      <div class="faq-q">
+        <span>How long do cookies stay fresh?</span>
+        <span class="faq-icon">+</span>
+      </div>
+      <div class="faq-a">Our cookies stay fresh for up to 5 days at room temperature in an airtight container, or up to 2 weeks in the freezer.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CONTACT SECTION -->
+<section id="contactSection" class="about-section">
+  <div class="section-label">Get in Touch</div>
+  <h1>Contact Us</h1>
+  <p class="section-sub">We'd love to hear from you — orders, questions, or just to say hi 🍪</p>
+
+  <div class="contact-grid">
+    <div class="contact-card">
+      <div class="contact-icon">📧</div>
+      <h3>Email</h3>
+      <p>sugarloomph@gmail.com</p>
+      <a href="mailto:sugarloomph@gmail.com" class="contact-link">Send us a message →</a>
+    </div>
+    <div class="contact-card">
+      <div class="contact-icon">📞</div>
+      <h3>Phone / Viber</h3>
+      <p>0912 345 6789</p>
+      <a href="tel:09123456789" class="contact-link">Call or text us →</a>
+    </div>
+    <div class="contact-card">
+      <div class="contact-icon">📸</div>
+      <h3>Instagram</h3>
+      <p>@sugarloomph</p>
+      <a href="https://instagram.com/sugarloomph" target="_blank" class="contact-link">Follow us →</a>
+    </div>
+    <div class="contact-card">
+      <div class="contact-icon">📍</div>
+      <h3>Location</h3>
+      <p>Manila, Philippines</p>
+      <a href="#" class="contact-link">We deliver Metro Manila →</a>
+    </div>
+  </div>
+
+  <div class="inquiry-form">
+    <h2>Send us a quick message</h2>
+    <div class="inquiry-row">
+      <input class="inquiry-input" type="text" placeholder="Your name" id="inq-name">
+      <input class="inquiry-input" type="text" placeholder="Your contact (email or phone)" id="inq-contact">
+    </div>
+    <textarea class="inquiry-textarea" placeholder="Tell us what you're looking for — custom order, question, feedback..." id="inq-msg" rows="4"></textarea>
+    <button class="inquiry-btn" onclick="sendInquiry()">Send Message</button>
+    <div class="inquiry-note">We reply within 24 hours on weekdays 🍪</div>
+  </div>
+</section>
+
+</body>
+</html>

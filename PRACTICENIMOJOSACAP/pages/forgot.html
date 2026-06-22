@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Forgot Password</title>
+  <link rel="stylesheet" href="../css/forgot.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase-config.js"></script>
+  <script src="../js/forgot.js" defer></script>
+</head>
+<body>
+
+<div class="forgot-box">
+  <h2>Forgot Password</h2>
+
+  <div id="step1">
+  <input id="email" placeholder="Email">
+  <button onclick="sendOTP()">Send OTP</button>
+  </div>
+
+  <div id="step2" class="hidden">
+    <input id="otp" placeholder="Enter OTP">
+    <button onclick="verifyOTP()">Verify OTP</button>
+  </div>
+
+  <div id="step3" class="hidden">
+    <input id="newpass" type="password" placeholder="New Password">
+    <input id="confirmpass" type="password" placeholder="Confirm Password">
+    <button onclick="resetPassword()">Reset Password</button>
+  </div>
+
+  <div id="msg" class="msg"></div>
+
+  <span class="back" onclick="goToLogin()">← Back to Login</span>
+</div>
+
+
+</body>
+</html>

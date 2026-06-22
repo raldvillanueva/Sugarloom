@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+ChatBot/node_modules/
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.production
+
+# Google OAuth tokens
+credentials.json
+token.json
+
+# Temporary / build artifacts
+.tmp/
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

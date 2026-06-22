@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Create Account</title>
+  <link rel="stylesheet" href="../css/login.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase-config.js"></script>
+  <script src="../js/login.js" defer></script>
+</head>
+<body>
+
+<div class="auth-container">
+
+  <div class="auth-box">
+    <h2>Create Account</h2>
+
+    <input id="fname" placeholder="First Name">
+    <input id="lname" placeholder="Last Name">
+    <input id="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+
+    <button onclick="register()">Create Account</button>
+
+    <p>Already have an account? 
+      <span class="link" onclick="goToLogin()">Sign In</span>
+    </p>
+  </div>
+
+</div>
+
+<div id="msg" class="msg"></div>
+
+</body>
+</html>

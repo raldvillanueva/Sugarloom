@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SugarLoomPh Admin</title>
+  <link rel="stylesheet" href="admin.css">
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase-config.js"></script>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="login-overlay">
+  <div class="login-card">
+    <div class="login-logo"><i class='bx bxs-cookie'></i> SugarLoomPh</div>
+
+    <!-- SIGN IN PANEL -->
+    <div id="fp-panel-login">
+      <h2>Admin Portal</h2>
+      <p class="login-sub">Sign in to manage your bakery</p>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="login-email" placeholder="admin@sugarloom.ph">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div style="position:relative">
+          <input type="password" id="login-password" placeholder="Password" style="padding-right:40px;width:100%;box-sizing:border-box">
+          <button type="button" onclick="toggleLoginPw()" id="login-pw-eye" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text-2);padding:0;display:flex;align-items:center">
+            <i class='bx bx-hide' id="login-pw-icon" style="font-size:18px"></i>
+          </button>
+        </div>
+      </div>
+      <div id="login-error" class="login-error hidden"></div>
+      <button class="btn-primary full-width" onclick="adminLogin()">Sign In</button>
+      <p class="fp-link-row">
+        <a class="fp-link" onclick="fpShow('fp-panel-step1')">Forgot password?</a>
+      </p>
+    </div>
+
+    <!-- STEP 1: Enter Email -->
+    <div id="fp-panel-step1" class="hidden">
+      <h2>Forgot Password</h2>
+      <p class="login-sub">Enter your admin email to receive an OTP.</p>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="fp-email" placeholder="admin@sugarloom.ph">
+      </div>
+      <div id="fp-msg" class="login-error hidden"></div>
+      <button class="btn-primary full-width" onclick="fpSendOTP()">Send OTP</button>
+      <p class="fp-link-row"><a class="fp-link" onclick="fpShow('fp-panel-login')">← Back to Sign In</a></p>
+    </div>
+
+    <!-- STEP 2: Verify OTP -->
+    <div id="fp-panel-step2" class="hidden">
+      <h2>Enter OTP</h2>
+      <p class="login-sub">We sent a code to <strong id="fp-email-label"></strong></p>
+      <div class="form-group">
+        <label>OTP Code</label>
+        <input type="text" id="fp-otp" placeholder="Enter OTP" maxlength="6">
+      </div>
+      <div id="fp-msg2" class="login-error hidden"></div>
+      <button class="btn-primary full-width" onclick="fpVerifyOTP()">Verify OTP</button>
+      <p class="fp-link-row"><a class="fp-link" onclick="fpShow('fp-panel-step1')">← Back</a></p>
+    </div>
+
+    <!-- STEP 3: New Password -->
+    <div id="fp-panel-step3" class="hidden">
+      <h2>New Password</h2>
+      <p class="login-sub">Set a new password for your account.</p>
+      <div class="form-group">
+        <label>New Password</label>
+        <input type="password" id="fp-newpass" placeholder="New password">
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <input type="password" id="fp-confirmpass" placeholder="Confirm password">
+      </div>
+      <div id="fp-msg3" class="login-error hidden"></div>
+      <button class="btn-primary full-width" onclick="fpResetPassword()">Reset Password</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- MAIN LAYOUT -->
+<div class="app-layout" id="app-layout">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <i class='bx bxs-cookie'></i>
+      <span>SugarLoomPh</span>
+    </div>
+
+    <div class="sidebar-section-label">MAIN</div>
+    <nav class="sidebar-nav">
+      <a class="nav-item active" data-view="dashboard" onclick="switchView('dashboard')">
+        <i class='bx bxs-dashboard'></i><span>Dashboard</span>
+      </a>
+      <a class="nav-item" data-view="products" onclick="switchView('products')">
+        <i class='bx bxs-layer'></i><span>Products</span>
+      </a>
+      <a class="nav-item" data-view="orders" onclick="switchView('orders')">
+        <i class='bx bxs-shopping-bag'></i><span>Orders</span>
+        <span class="orders-dot" id="orders-dot" style="display:none"></span>
+      </a>
+      <a class="nav-item" data-view="customers" onclick="switchView('customers')">
+        <i class='bx bxs-group'></i><span>Customers</span>
+        <span class="badge" id="cust-pending-badge" style="display:none;background:#f59e0b">0</span>
+        <span class="badge" id="reviews-badge" style="display:none;background:#f59e0b">0</span>
+      </a>
+      <div class="sidebar-section-label">MANAGEMENT</div>
+      <a class="nav-item" data-view="inventory" onclick="switchView('inventory')">
+        <i class='bx bxs-box'></i><span>Inventory</span>
+        <span class="badge danger" id="low-stock-badge" style="display:none">!</span>
+      </a>
+      <a class="nav-item" data-view="reports" onclick="switchView('reports')">
+        <i class='bx bxs-bar-chart-alt-2'></i><span>Reports</span>
+      </a>
+      <a class="nav-item" id="users-nav" data-view="users" onclick="switchView('users')">
+        <i class='bx bxs-user-detail'></i><span>Users</span>
+      </a>
+      <a class="nav-item" data-view="reviews" onclick="switchView('reviews')">
+        <i class='bx bxs-star'></i><span>Reviews</span>
+        <span class="badge" id="reviews-pending-badge" style="display:none;background:#f59e0b">0</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-user" id="sidebar-user">
+        <div class="avatar" id="sidebar-avatar">A</div>
+        <div class="sidebar-user-info">
+          <span id="sidebar-name">Admin</span>
+          <small id="sidebar-role">Administrator</small>
+        </div>
+      </div>
+      <button class="theme-btn" id="theme-btn" onclick="toggleTheme()" title="Toggle dark mode"><i class='bx bx-moon'></i></button>
+      <button class="logout-btn" onclick="adminLogout()"><i class='bx bx-log-out'></i></button>
+    </div>
+  </aside>
+
+  <!-- MAIN WRAPPER -->
+  <div class="main-wrapper">
+
+    <!-- TOPBAR -->
+    <header class="topbar">
+      <button class="menu-toggle" onclick="toggleSidebar()"><i class='bx bx-menu'></i></button>
+      <div class="topbar-search">
+        <i class='bx bx-search'></i>
+        <input type="text" id="global-search" placeholder="Search products, orders..." oninput="globalSearch(this.value)">
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn notif-btn" onclick="toggleNotifPanel()">
+          <i class='bx bx-bell'></i>
+          <span class="notif-dot" id="notif-dot"></span>
+        </button>
+        <div class="topbar-user" onclick="switchView('users')">
+          <div class="avatar sm" id="topbar-avatar">A</div>
+          <span id="topbar-name">Admin</span>
+        </div>
+      </div>
+      <!-- Notification Panel -->
+      <div class="notif-panel hidden" id="notif-panel">
+        <div class="notif-header"><strong>Notifications</strong><button onclick="clearNotifs()">Clear all</button></div>
+        <div id="notif-list"></div>
+      </div>
+    </header>
+
+    <!-- CONTENT AREA -->
+    <main class="content-area">
+
+      <!-- ========== DASHBOARD ========== -->
+      <section id="view-dashboard" class="view active">
+        <div class="page-header">
+          <div>
+            <h1>Dashboard</h1>
+            <p id="dash-date"></p>
+          </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class='bx bxs-layer'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Total Products</span>
+              <span class="stat-value" id="stat-products">0</span>
+              <span class="stat-change" id="stat-products-active"></span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class='bx bxs-shopping-bag'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Total Orders</span>
+              <span class="stat-value" id="stat-orders">0</span>
+              <span class="stat-change" id="stat-orders-today"></span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><i class='bx bxs-time'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Pending Orders</span>
+              <span class="stat-value" id="stat-revenue">0</span>
+              <span class="stat-change" id="stat-revenue-today"></span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange"><i class='bx bxs-box'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Capacity Alerts</span>
+              <span class="stat-value" id="stat-lowstock">0</span>
+              <span class="stat-change danger" id="stat-lowstock-label">items near daily limit</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Revenue + Products Row -->
+        <div class="charts-row">
+          <div class="card chart-card">
+            <div class="card-header">
+              <h3>Pending Orders</h3>
+              <a class="see-all" onclick="switchView('orders')">See All</a>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Order</th>
+                  <th>Buyer</th>
+                  <th>Contact</th>
+                  <th>Address</th>
+                  <th>Delivery Date</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="dash-pending-body">
+                <tr><td colspan="6" style="text-align:center;color:var(--text-2);padding:24px">No pending orders</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="card chart-card">
+            <div class="card-header">
+              <h3>Products</h3>
+              <a class="see-all" onclick="switchView('products')">See All</a>
+            </div>
+            <div class="dash-product-grid" id="dash-product-grid"></div>
+          </div>
+        </div>
+
+        <!-- Bottom Row -->
+        <div class="bottom-row">
+          <div class="card">
+            <div class="card-header">
+              <h3>Recent Activity</h3>
+              <a class="see-all" onclick="switchView('orders')">See All</a>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>Order</th><th>Date</th><th>Type</th><th>Status</th></tr></thead>
+              <tbody id="recent-activity-body"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <div class="card-header">
+              <h3>Top Products</h3>
+              <a class="see-all" onclick="switchView('reports')">See All</a>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>Product</th><th>Sold</th><th>Price</th><th>Revenue</th></tr></thead>
+              <tbody id="top-products-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ========== PRODUCTS ========== -->
+      <section id="view-products" class="view">
+        <div class="page-header">
+          <div><h1>Products</h1><p>Manage your bakery catalog</p></div>
+          <button class="btn-primary" onclick="openProductModal()"><i class='bx bx-plus'></i> Add Product</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="search-box">
+            <i class='bx bx-search'></i>
+            <input type="text" id="product-search" placeholder="Search products..." oninput="renderProducts()">
+          </div>
+          <select id="product-filter-cat" onchange="renderProducts()" class="select-input">
+            <option value="">All Categories</option>
+            <option>Cookies</option>
+            <option>Brownies</option>
+            <option>Cupcakes</option>
+            <option>Boxes</option>
+          </select>
+          <select id="product-filter-status" onchange="renderProducts()" class="select-input">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+
+        <div class="card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Flavor</th>
+                <th>Size</th>
+                <th>Price</th>
+                <th>Daily Limit</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="products-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+
+      <!-- ========== ORDERS ========== -->
+      <section id="view-orders" class="view">
+        <div class="page-header">
+          <div><h1>Orders</h1><p>Manage all incoming orders</p></div>
+          <div style="display:flex;align-items:center;gap:12px">
+            <button class="btn-danger" id="clear-pending-btn" onclick="clearAllPending()" style="display:none;font-size:13px;padding:8px 14px"><i class='bx bx-trash'></i> Clear All Pending</button>
+          <div class="order-stats-mini">
+            <span class="mini-stat"><strong id="o-pending">0</strong> Pending</span>
+            <span class="mini-stat"><strong id="o-confirmed">0</strong> Confirmed</span>
+            <span class="mini-stat"><strong id="o-fulfilled">0</strong> Fulfilled</span>
+            <span class="mini-stat cancel-requests-stat" style="display:none"><strong id="o-cancel-requests">0</strong> Cancel Requests</span>
+          </div>
+          </div>
+        </div>
+
+        <!-- Baker alert: shown when confirmed orders are waiting -->
+        <div id="baker-alert" style="display:none;margin-bottom:12px;padding:14px 18px;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:12px;display:none;align-items:center;gap:12px">
+          <span style="font-size:22px">🔥</span>
+          <div>
+            <div style="font-weight:700;color:#92400E;font-size:14px">Orders Ready to Bake</div>
+            <div id="baker-alert-msg" style="font-size:13px;color:#78350F"></div>
+          </div>
+        </div>
+
+        <!-- Packer alert: shown when ready-for-packing orders are waiting -->
+        <div id="packer-alert" style="display:none;margin-bottom:12px;padding:14px 18px;background:#EDE9FE;border:1.5px solid #8B5CF6;border-radius:12px;align-items:center;gap:12px">
+          <span style="font-size:22px">📦</span>
+          <div>
+            <div style="font-weight:700;color:#5B21B6;font-size:14px">Orders Ready to Pack</div>
+            <div id="packer-alert-msg" style="font-size:13px;color:#4C1D95"></div>
+          </div>
+        </div>
+
+        <div class="status-tabs" id="order-tabs">
+          <button class="status-tab active" id="tab-all" onclick="filterOrders('All',this)">All <span class="tab-count" id="tab-count-all"></span></button>
+          <button class="status-tab" id="tab-pending" onclick="filterOrders('Pending',this)">Pending <span class="tab-count pending" id="tab-count-pending"></span></button>
+          <button class="status-tab" id="tab-confirmed" onclick="filterOrders('Confirmed',this)">Confirmed <span class="tab-count confirmed" id="tab-count-confirmed"></span></button>
+          <button class="status-tab" id="tab-preparing" onclick="filterOrders('Preparing',this)">Baking <span class="tab-count baking" id="tab-count-preparing"></span></button>
+          <button class="status-tab" id="tab-ready-packing" onclick="filterOrders('Ready for Packing',this)">Ready for Packing <span class="tab-count ready-packing" id="tab-count-ready-packing"></span></button>
+          <button class="status-tab" id="tab-packing" onclick="filterOrders('Packing',this)">Packing <span class="tab-count baking" id="tab-count-packing"></span></button>
+          <button class="status-tab" id="tab-ready-for-book" onclick="filterOrders('ReadyForBook',this)">Ready for Book <span class="tab-count ready-book" id="tab-count-ready-for-book"></span></button>
+          <button class="status-tab" id="tab-completed" onclick="filterOrders('Completed',this)">Completed <span class="tab-count fulfilled" id="tab-count-completed"></span></button>
+          <button class="status-tab" id="tab-fulfilled" onclick="filterOrders('Fulfilled',this)">Fulfilled <span class="tab-count fulfilled" id="tab-count-fulfilled"></span></button>
+          <button class="status-tab cancel-requests-tab" id="tab-cancel" onclick="filterOrders('Cancel Requested',this)">Cancel Requests <span class="tab-count cancel-req" id="tab-count-cancel"></span></button>
+          <button class="status-tab" id="tab-archived" onclick="filterOrders('Archived',this)">Archived <span class="tab-count" id="tab-count-archived"></span></button>
+        </div>
+
+        <div class="card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Order ID</th>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Total</th>
+                <th>Type</th>
+                <th>Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="orders-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========== INVENTORY ========== -->
+      <section id="view-inventory" class="view">
+        <div class="page-header">
+          <div><h1>Inventory</h1><p>Monitor daily capacity and ingredients</p></div>
+          <div class="header-actions">
+            <button class="btn-secondary" onclick="openIngredientModal()"><i class='bx bx-plus'></i> Add Ingredient</button>
+            <button class="btn-primary" onclick="openProductStockModal()"><i class='bx bx-edit'></i> Set Daily Limit</button>
+          </div>
+        </div>
+
+        <!-- Product Stock Section -->
+        <div class="inv-section-label">Daily Product Capacity</div>
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>Product</th><th>Category</th><th>Daily Limit</th><th>Min Alert</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="product-stock-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Ingredients Section -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:24px;flex-wrap:wrap;gap:10px">
+          <div class="inv-section-label" style="margin:0">Ingredients & Raw Materials</div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+            <div style="position:relative;display:flex;align-items:center">
+              <i class='bx bx-search' style="position:absolute;left:10px;color:var(--text-2);font-size:15px;pointer-events:none"></i>
+              <input id="ing-search" type="text" placeholder="Search ingredient..." oninput="renderInventory()"
+                style="padding:6px 12px 6px 32px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none;width:200px">
+            </div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap" id="ing-cat-tabs">
+              <button class="status-tab active" onclick="filterIngCat('All',this)">All</button>
+              <button class="status-tab" onclick="filterIngCat('General',this)">General</button>
+              <button class="status-tab" onclick="filterIngCat('Cookies',this)">Cookies</button>
+              <button class="status-tab" onclick="filterIngCat('Brownies',this)">Brownies</button>
+              <button class="status-tab" onclick="filterIngCat('Cupcakes',this)">Cupcakes</button>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>Ingredient</th><th>Unit</th><th>Stock</th><th>Threshold</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="ingredients-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========== REPORTS ========== -->
+      <section id="view-reports" class="view">
+        <div class="page-header">
+          <div><h1>Sales Reports</h1><p>Business performance overview</p></div>
+          <div class="report-period">
+            <button class="period-btn active" onclick="setReportPeriod('day',this)">Today</button>
+            <button class="period-btn" onclick="setReportPeriod('week',this)">This Week</button>
+            <button class="period-btn" onclick="setReportPeriod('month',this)">This Month</button>
+          </div>
+        </div>
+
+        <!-- Report Stats -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon green"><i class='bx bxs-dollar-circle'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Total Revenue</span>
+              <span class="stat-value" id="rpt-revenue">₱0</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class='bx bxs-receipt'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Transactions</span>
+              <span class="stat-value" id="rpt-transactions">0</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><i class='bx bxs-shopping-bag'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Items Sold</span>
+              <span class="stat-value" id="rpt-items">0</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange"><i class='bx bx-trending-up'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Avg. Order Value</span>
+              <span class="stat-value" id="rpt-avg">₱0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="charts-row">
+          <div class="card chart-card wide">
+            <div class="card-header"><h3>Revenue Trend</h3></div>
+            <div class="trend-chart-wrap"><canvas id="revenue-trend-info"></canvas></div>
+          </div>
+          <div class="card chart-card">
+            <div class="card-header"><h3>Best Sellers</h3></div>
+            <div id="best-sellers-info" class="best-sellers-list"></div>
+          </div>
+        </div>
+
+        <!-- Transaction History -->
+        <div class="card">
+          <div class="card-header">
+            <h3>Transaction Reports History</h3>
+            <button class="btn-secondary sm" onclick="exportCSV()"><i class='bx bx-export'></i> Export CSV</button>
+          </div>
+          <div class="hist-filter-bar">
+            <button class="hist-btn" id="tx-btn-today" onclick="setHistFilter('tx','today')">Today</button>
+            <button class="hist-btn" id="tx-btn-week" onclick="setHistFilter('tx','week')">This Week</button>
+            <button class="hist-btn active" id="tx-btn-all" onclick="setHistFilter('tx','all')">All</button>
+            <div class="hist-filter-sep"></div>
+            <div class="hist-datepicker" id="tx-datepicker" onclick="openDatePicker(event,'tx')">
+              <i class='bx bx-calendar'></i>
+              <span class="dp-label" id="tx-date-label">Select date</span>
+              <span class="dp-clear" id="tx-date-clear" onclick="calClearDate(event,'tx')" style="display:none">×</span>
+              <input type="hidden" id="tx-date">
+            </div>
+          </div>
+          <table class="data-table">
+            <thead><tr><th>Tx ID</th><th>Customer</th><th>Items</th><th>Payment</th><th>Total</th><th>Date</th></tr></thead>
+            <tbody id="transactions-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Sales Reports History -->
+        <div class="card" style="margin-top:20px">
+          <div class="card-header">
+            <div>
+              <h3>Sales Reports History</h3>
+              <p style="font-size:12px;color:var(--text-2);margin:2px 0 0">All-time daily sales summary</p>
+            </div>
+            <button class="btn-secondary sm" onclick="exportSalesHistoryCSV()"><i class='bx bx-export'></i> Export CSV</button>
+          </div>
+          <div class="hist-filter-bar">
+            <button class="hist-btn" id="sales-btn-today" onclick="setHistFilter('sales','today')">Today</button>
+            <button class="hist-btn" id="sales-btn-week" onclick="setHistFilter('sales','week')">This Week</button>
+            <button class="hist-btn active" id="sales-btn-all" onclick="setHistFilter('sales','all')">All</button>
+            <div class="hist-filter-sep"></div>
+            <div class="hist-datepicker" id="sales-datepicker" onclick="openDatePicker(event,'sales')">
+              <i class='bx bx-calendar'></i>
+              <span class="dp-label" id="sales-date-label">Select date</span>
+              <span class="dp-clear" id="sales-date-clear" onclick="calClearDate(event,'sales')" style="display:none">×</span>
+              <input type="hidden" id="sales-date">
+            </div>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date</th><th>Revenue</th><th>Transactions</th><th>Items Sold</th><th>Avg. Order Value</th><th>Top Product</th>
+              </tr>
+            </thead>
+            <tbody id="sales-history-body"></tbody>
+          </table>
+        </div>
+
+        <!-- Ingredients & Raw Materials Report -->
+        <div class="card" style="margin-top:20px">
+          <div class="card-header">
+            <div>
+              <h3>Ingredients & Raw Materials Report</h3>
+              <p style="font-size:12px;color:var(--text-2);margin:2px 0 0">Usage summary per ingredient for the selected period</p>
+            </div>
+            <button class="btn-secondary sm" onclick="exportIngHistoryCSV()"><i class='bx bx-export'></i> Export CSV</button>
+          </div>
+          <div class="hist-filter-bar">
+            <button class="hist-btn" id="ing-btn-today" onclick="setHistFilter('ing','today')">Today</button>
+            <button class="hist-btn" id="ing-btn-week" onclick="setHistFilter('ing','week')">This Week</button>
+            <button class="hist-btn active" id="ing-btn-all" onclick="setHistFilter('ing','all')">All</button>
+            <div class="hist-filter-sep"></div>
+            <div class="hist-datepicker" id="ing-datepicker" onclick="openDatePicker(event,'ing')">
+              <i class='bx bx-calendar'></i>
+              <span class="dp-label" id="ing-date-label">Select date</span>
+              <span class="dp-clear" id="ing-date-clear" onclick="calClearDate(event,'ing')" style="display:none">×</span>
+              <input type="hidden" id="ing-date">
+            </div>
+            <div class="hist-filter-sep"></div>
+            <button class="hist-btn ing-hist-cat-btn active" onclick="filterIngHistCat('All',this)">All</button>
+            <button class="hist-btn ing-hist-cat-btn" onclick="filterIngHistCat('General',this)">General</button>
+            <button class="hist-btn ing-hist-cat-btn" onclick="filterIngHistCat('Cookies',this)">Cookies</button>
+            <button class="hist-btn ing-hist-cat-btn" onclick="filterIngHistCat('Brownies',this)">Brownies</button>
+            <button class="hist-btn ing-hist-cat-btn" onclick="filterIngHistCat('Cupcakes',this)">Cupcakes</button>
+            <div class="hist-filter-sep"></div>
+            <div style="position:relative;display:flex;align-items:center">
+              <i class='bx bx-search' style="position:absolute;left:8px;color:var(--text-2);font-size:14px;pointer-events:none"></i>
+              <input id="ing-hist-search" type="text" placeholder="Search..." oninput="renderIngHistory()"
+                style="padding:5px 10px 5px 28px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none;width:170px">
+            </div>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Ingredient</th><th>Unit</th><th>Current Stock</th><th>Total Used</th><th>Total Restocked</th><th>Last Movement</th>
+              </tr>
+            </thead>
+            <tbody id="ing-history-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========== CUSTOMERS ========== -->
+      <section id="view-customers" class="view">
+        <div class="page-header">
+          <div><h1>Customers</h1><p>All registered customers and their order info</p></div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <input type="text" id="customer-search" class="search-box" placeholder="Search name or email..." oninput="renderCustomers()" style="width:220px">
+          </div>
+        </div>
+
+        <div class="card">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Email</th>
+                <th>Phone</th>
+                <th>Address</th>
+                <th>Orders</th>
+                <th>Total Spent</th>
+                <th>Last Order</th>
+                <th>Reviews</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="customers-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========== USERS ========== -->
+      <section id="view-users" class="view">
+        <div class="page-header">
+          <div><h1>User Management</h1><p>Manage staff and admin accounts</p></div>
+          <button class="btn-primary" id="add-user-btn" onclick="openUserModal()"><i class='bx bx-plus'></i> Add User</button>
+        </div>
+
+        <div class="card">
+          <table class="data-table">
+            <thead><tr><th>User</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ========== REVIEWS ========== -->
+      <section id="view-reviews" class="view">
+        <div class="page-header">
+          <div><h1>Reviews</h1><p>Approve or reject customer reviews before they appear on the store</p></div>
+        </div>
+
+        <div class="tab-bar">
+          <button class="tab-btn active" id="rev-tab-pending"  onclick="filterAdminReviews('pending')">Pending</button>
+          <button class="tab-btn"        id="rev-tab-approved" onclick="filterAdminReviews('approved')">Approved</button>
+          <button class="tab-btn"        id="rev-tab-rejected" onclick="filterAdminReviews('rejected')">Rejected</button>
+        </div>
+
+        <div id="admin-reviews-list"></div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ===== MODALS ===== -->
+
+<!-- Product Modal -->
+<div class="modal-overlay hidden" id="product-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="product-modal-title">Add Product</h3>
+      <button class="modal-close" onclick="closeModal('product-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="pm-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Product Name *</label>
+          <input type="text" id="pm-name" placeholder="e.g. Chocolate Chip Cookie">
+        </div>
+        <div class="form-group">
+          <label>Category *</label>
+          <select id="pm-category">
+            <option value="">Select category</option>
+            <option>Cookies</option>
+            <option>Brownies</option>
+            <option>Cupcakes</option>
+            <option>Boxes</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Flavor</label>
+        <input type="text" id="pm-flavor" placeholder="e.g. Chocolate, Vanilla">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Price (₱) *</label>
+          <input type="number" id="pm-price" placeholder="0.00" min="0">
+        </div>
+        <div class="form-group">
+          <label>Daily Limit</label>
+          <input type="number" id="pm-stock" placeholder="0" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Product Image</label>
+        <div style="display:flex;gap:10px;align-items:center">
+          <img id="pm-img-preview" src="" alt="" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid var(--border);display:none">
+          <div style="flex:1">
+            <input type="hidden" id="pm-img">
+            <input type="file" id="pm-img-file" accept="image/*" style="display:none" onchange="handleProductImgUpload(event)">
+            <button type="button" class="btn-secondary sm" onclick="document.getElementById('pm-img-file').click()"><i class='bx bx-upload'></i> Upload Image</button>
+            <div id="pm-img-filename" style="font-size:11px;color:var(--text-2);margin-top:4px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="pm-desc" rows="3" placeholder="Brief product description..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Low Stock Threshold</label>
+          <input type="number" id="pm-threshold" placeholder="5" min="0">
+        </div>
+        <div class="form-group" style="justify-content:flex-end;flex-direction:row;align-items:center;gap:8px;padding-top:22px">
+          <label>Active</label>
+          <input type="checkbox" id="pm-active" checked style="width:auto">
+        </div>
+      </div>
+      <div class="form-group" style="margin-top:4px">
+        <label>Recipe — Ingredients used per 1 unit</label>
+        <div id="pm-recipe-rows" style="display:flex;flex-direction:column;gap:6px;margin-top:6px"></div>
+        <button type="button" id="pm-add-ingredient-btn" class="btn-secondary sm" onclick="addRecipeRow()" style="margin-top:8px">+ Add Ingredient</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('product-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveProduct()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- Ingredient Modal -->
+<div class="modal-overlay hidden" id="ingredient-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="ing-modal-title">Add Ingredient</h3>
+      <button class="modal-close" onclick="closeModal('ingredient-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="ing-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ingredient Name *</label>
+          <input type="text" id="ing-name" placeholder="e.g. All-purpose Flour">
+        </div>
+        <div class="form-group">
+          <label>Unit *</label>
+          <select id="ing-unit">
+            <option>g</option><option>ml</option><option>pcs</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Current Stock *</label>
+          <input type="number" id="ing-stock" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>Low Stock Threshold *</label>
+          <input type="number" id="ing-threshold" placeholder="5" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Category</label>
+        <select id="ing-category">
+          <option value="General">General</option>
+          <option value="Cookies">Cookies</option>
+          <option value="Brownies">Brownies</option>
+          <option value="Cupcakes">Cupcakes</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('ingredient-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveIngredient()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Adjust Stock Modal -->
+<div class="modal-overlay hidden" id="adjust-stock-modal">
+  <div class="modal sm">
+    <div class="modal-header">
+      <h3 id="adjust-title">Adjust Limit</h3>
+      <button class="modal-close" onclick="closeModal('adjust-stock-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="adj-id">
+      <input type="hidden" id="adj-type">
+      <div class="form-group">
+        <label>Current: <strong id="adj-current">0</strong></label>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Adjustment</label>
+          <select id="adj-op">
+            <option value="add">Add (+)</option>
+            <option value="sub">Remove (-)</option>
+            <option value="set">Set to</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Amount</label>
+          <input type="number" id="adj-amount" placeholder="0" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Note (optional)</label>
+        <input type="text" id="adj-note" placeholder="Reason for adjustment">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('adjust-stock-modal')">Cancel</button>
+      <button class="btn-primary" onclick="confirmAdjustStock()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Stock Modal -->
+<div class="modal-overlay hidden" id="order-stock-modal">
+  <div class="modal sm">
+    <div class="modal-header">
+      <h3><i class='bx bx-cart-add' style="margin-right:6px;color:#2563EB"></i>Order Stock from Supplier</h3>
+      <button class="modal-close" onclick="closeModal('order-stock-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Ingredient</label>
+          <input type="text" id="os-ing-name" readonly style="background:var(--bg);cursor:default">
+        </div>
+        <div class="form-group">
+          <label>Current Stock</label>
+          <input type="text" id="os-ing-stock" readonly style="background:var(--bg);cursor:default">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Qty to Order</label>
+          <input type="number" id="os-qty" placeholder="0" min="1">
+        </div>
+        <div class="form-group">
+          <label>Unit</label>
+          <input type="text" id="os-unit" readonly style="background:var(--bg);cursor:default">
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Supplier Name</label>
+        <input type="text" id="os-supplier" placeholder="e.g. ABC Baking Supplies">
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Expected Delivery Date</label>
+        <input type="date" id="os-date">
+      </div>
+      <div class="form-group">
+        <label>Notes (optional)</label>
+        <textarea id="os-notes" rows="2" placeholder="Any special instructions..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('order-stock-modal')">Cancel</button>
+      <button class="btn-primary" onclick="closeModal('order-stock-modal')"><i class='bx bx-cart-add'></i> Place Order</button>
+    </div>
+  </div>
+</div>
+
+<!-- Refund Modal -->
+<div class="modal-overlay hidden" id="refund-modal">
+  <div class="modal sm">
+    <div class="modal-header">
+      <h3>Process GCash Refund</h3>
+      <button class="modal-close" onclick="closeModal('refund-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="refund-modal-info" style="margin-bottom:16px;padding:14px;background:var(--bg);border-radius:10px;font-size:13px;line-height:1.8"></div>
+      <div class="form-group">
+        <label>GCash Number to Refund <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="refund-gcash-number" placeholder="09XXXXXXXXX" maxlength="11">
+      </div>
+      <div class="form-group">
+        <label>GCash Reference No. (optional)</label>
+        <input type="text" id="refund-ref-number" placeholder="e.g. 1234567890">
+      </div>
+      <div class="form-group">
+        <label>Note (optional)</label>
+        <input type="text" id="refund-note" placeholder="Additional notes...">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('refund-modal')">Cancel</button>
+      <button class="btn-primary" id="refund-confirm-btn" onclick="confirmRefund()" style="background:#16A34A">✓ Mark as Refunded</button>
+    </div>
+  </div>
+</div>
+
+<!-- Order Detail Modal -->
+<div class="modal-overlay hidden" id="order-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="order-modal-title">Order Detail</h3>
+      <button class="modal-close" onclick="closeModal('order-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body" id="order-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('order-modal')">Close</button>
+      <button class="btn-lalamove" id="order-lalamove-btn" onclick="bookLalamove()" style="display:none">
+        🛵 Book Lalamove
+      </button>
+      <button class="btn-prepare" id="order-prepare-btn" onclick="prepareOrderAction()" style="display:none">
+        🍳 Prepare Order
+      </button>
+      <button class="btn-secondary" id="order-packing-btn" onclick="startPackingAction()" style="display:none;background:#16A34A;color:#fff;border:none">
+        ✅ Done Baking — Pass to Packer
+      </button>
+      <button class="btn-secondary" id="order-reject-cancel-btn" onclick="rejectCancelRequest()" style="display:none">
+        Reject Cancel
+      </button>
+      <button class="btn-primary" id="order-confirm-btn" onclick="confirmOrderAction()"></button>
+    </div>
+  </div>
+</div>
+
+<!-- User Modal -->
+<div class="modal-overlay hidden" id="user-modal">
+  <div class="modal sm">
+    <div class="modal-header">
+      <h3 id="user-modal-title">Add User</h3>
+      <button class="modal-close" onclick="closeModal('user-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="um-id">
+      <div class="form-row">
+        <div class="form-group">
+          <label>First Name *</label>
+          <input type="text" id="um-fname" placeholder="Juan">
+        </div>
+        <div class="form-group">
+          <label>Last Name *</label>
+          <input type="text" id="um-lname" placeholder="Dela Cruz">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Email *</label>
+        <input type="email" id="um-email" placeholder="juan@sugarloom.ph">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="um-password">Password *</label>
+          <input type="password" id="um-password" placeholder="••••••••">
+        </div>
+        <div class="form-group">
+          <label>Role *</label>
+          <select id="um-role">
+            <option value="Administrator">Administrator</option>
+            <option value="Baker">Baker</option>
+            <option value="Packer">Packer</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('user-modal')">Cancel</button>
+      <button class="btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay hidden" id="confirm-modal">
+  <div class="modal sm">
+    <div class="modal-header">
+      <h3 id="confirm-modal-title">Confirm Action</h3>
+      <button class="modal-close" onclick="closeConfirmModal()"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;align-items:center;gap:16px;">
+        <div id="confirm-modal-icon" style="width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;background:var(--danger-light);color:var(--danger);">
+          <i class='bx bx-archive-in'></i>
+        </div>
+        <p id="confirm-modal-message" style="margin:0;font-size:14px;color:var(--text-1);line-height:1.5;"></p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeConfirmModal()">Cancel</button>
+      <button class="btn-danger" id="confirm-modal-ok">Archive</button>
+    </div>
+  </div>
+</div>
+
+<!-- Customer Detail Modal -->
+<div class="modal-overlay hidden" id="customer-modal">
+  <div class="modal lg">
+    <div class="modal-header">
+      <h3 id="cust-modal-title">Customer Details</h3>
+      <button class="modal-close" onclick="closeModal('customer-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body" id="cust-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('customer-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay hidden" id="reviews-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="reviews-modal-title">Customer Reviews</h3>
+      <button class="modal-close" onclick="closeModal('reviews-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body" id="reviews-modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('reviews-modal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<!-- ===== CUSTOM CALENDAR POPUP ===== -->
+<div id="cal-popup" class="cal-popup">
+  <div class="cal-popup-hdr">
+    <button class="cal-nav-btn" onclick="calNav(-1)">&#8249;</button>
+    <span class="cal-month-lbl" id="cal-month-lbl"></span>
+    <button class="cal-nav-btn" onclick="calNav(1)">&#8250;</button>
+  </div>i cant checkout 
+  <div class="cal-weekdays">
+    <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+  </div>
+  <div class="cal-days" id="cal-days"></div>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>

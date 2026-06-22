@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>My Orders</title>
+  <link rel="stylesheet" href="../css/orders.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase-config.js"></script>
+  <script src="../js/orders.js" defer></script>
+</head>
+<body>
+
+  <!-- NAV -->
+<nav class="nav">
+
+  <!-- LEFT -->
+<div class="back-btn" onclick="goBack()">
+  <span class="arrow"></span>
+  <span class="back-text">Back</span>
+</div>
+
+  <!-- RIGHT -->
+  <div class="user-menu">
+
+    <!-- USER ICON -->
+    <div class="user-icon" id="userIcon">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </div>
+
+    <!-- DROPDOWN -->
+    <div class="dropdown" id="dropdown">
+
+      <div class="dropdown-header">
+        <div class="avatar">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        </div>
+        <p id="userEmail">user@email.com</p>
+      </div>
+
+      <hr>
+
+      <div class="dropdown-item" onclick="showView('profileView')">Profile</div>
+      <div class="dropdown-item" onclick="showView('settingsView')">Settings</div>
+      <div class="dropdown-item logout" onclick="logout()">Sign out</div>
+
+    </div> <!-- ✅ CLOSE DROPDOWN -->
+
+  </div> <!-- ✅ CLOSE USER MENU -->
+
+</nav> <!-- ✅ CLOSE NAV -->
+
+<!-- TABS -->
+<div class="tabs">
+  <span id="ordersTab" class="active" onclick="showView('ordersView')">Orders</span>
+  <span id="reviewsTab" onclick="showView('reviewsView')">Reviews</span>
+  <span id="buyAgainTab" onclick="showView('buyAgainView')">Buy Again</span>
+  <span id="profileTab" onclick="showView('profileView')">Profile</span>
+</div>
+
+<!-- 🔥 ORDERS VIEW -->
+<div id="ordersView" class="view active">
+  <div class="orders-container">
+
+
+  <div id="orders-list" class="empty-box">
+    <h3>No orders yet</h3>
+    <p>Go to store to place an order.</p>
+  </div>
+
+
+  </div>
+</div>
+
+<!-- 🔥 BUY AGAIN VIEW -->
+<div id="buyAgainView" class="view">
+  <div class="orders-container">
+    <div id="buy-again-list"></div>
+  </div>
+</div>
+
+<!-- 🔥 REVIEWS VIEW -->
+<div id="reviewsView" class="view">
+  <div class="orders-container">
+    <div id="reviews-list"></div>
+  </div>
+</div>
+
+<!-- 🔥 PROFILE VIEW -->
+<div id="profileView" class="view">
+  <div class="profile-container">
+
+    <!-- LEFT SIDE -->
+    <div class="profile-left">
+
+      <div class="summary">
+        <div class="profile-heading">
+          <h3>Profile</h3>
+          <button class="edit-btn" id="editProfileBtn" onclick="toggleEditProfile()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+            Edit
+          </button>
+        </div>
+
+        <!-- VIEW MODE -->
+        <div id="profileViewData">
+          <p class="label">Name</p>
+          <p id="fullName"></p>
+          <p class="label">Email</p>
+          <p id="emailText"></p>
+          <p class="label" id="phoneLabel" style="display:none">Phone</p>
+          <p id="phoneText"></p>
+        </div>
+
+        <!-- EDIT MODE -->
+        <div id="profileEditForm" style="display:none">
+          <p class="label">First Name</p>
+          <input class="profile-input" id="fnameInput" placeholder="First name">
+          <p class="label">Last Name</p>
+          <input class="profile-input" id="lnameInput" placeholder="Last name">
+          <p class="label">Email</p>
+          <input class="profile-input" id="emailInput" placeholder="Email">
+          <p class="label">Phone</p>
+          <input class="profile-input" id="phoneInput" placeholder="Phone number (09XXXXXXXXX)">
+          <div class="profile-actions">
+            <button class="save-btn" onclick="saveProfile()">Save</button>
+            <button class="cancel-btn" onclick="toggleEditProfile()">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT SIDE -->
+    <div class="profile-right">
+
+      <div class="summary">
+        <div class="address-header">
+          <h3>Addresses</h3>
+          <span class="add" onclick="toggleAddressForm()">+ Add</span>
+        </div>
+
+        <!-- ADD FORM -->
+        <div id="addressForm" style="display:none">
+          <input class="profile-input" id="addrInput" placeholder="Street address">
+          <input class="profile-input" id="cityInput" placeholder="City" style="margin-top:8px">
+          <div class="profile-actions">
+            <button class="save-btn" onclick="saveAddress()">Save</button>
+            <button class="cancel-btn" onclick="toggleAddressForm()">Cancel</button>
+          </div>
+        </div>
+
+        <div id="addressList">
+          <div class="no-address">No addresses added</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+  <!-- SETTINGS VIEW -->
+  <div id="settingsView" class="view">
+    <div class="settings-container">
+
+      <div class="summary">
+        <h3>Account Settings</h3>
+        <p class="desc">Manage your account preferences and security.</p>
+      </div>
+
+      <div class="summary settings-card">
+        <div class="settings-row">
+          <div class="settings-info">
+            <strong>Sign out everywhere</strong>
+            <p>This will sign you out of all devices and sessions where you're currently logged in.</p>
+          </div>
+          <button class="settings-btn-danger" onclick="logout()">Sign Out All Devices</button>
+        </div>
+      </div>
+
+      <div class="summary settings-card">
+        <div class="settings-row">
+          <div class="settings-info">
+            <strong>Delete Account</strong>
+            <p>Permanently delete your account and all associated data. This action cannot be undone.</p>
+          </div>
+          <button class="settings-btn-outline-danger">Delete Account</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+<!-- Cancel Confirm Modal -->
+<div class="o-modal-overlay hidden" id="cancel-confirm-modal">
+  <div class="o-modal">
+    <div class="o-modal-header">
+      <h3>Cancel Order</h3>
+      <button class="o-modal-close" onclick="closeCancelModal()">&#x2715;</button>
+    </div>
+    <div class="o-modal-body">
+      <p class="o-modal-subtitle">Please select a reason for cancellation. The admin will review your request.</p>
+      <div class="o-reason-list" id="cancel-reason-list">
+        <label class="o-reason-item">
+          <input type="radio" name="cancel-reason" value="Changed my mind">
+          <span class="o-reason-check"></span>
+          <span class="o-reason-text">Changed my mind</span>
+        </label>
+        <label class="o-reason-item">
+          <input type="radio" name="cancel-reason" value="Ordered by mistake">
+          <span class="o-reason-check"></span>
+          <span class="o-reason-text">Ordered by mistake</span>
+        </label>
+        <label class="o-reason-item">
+          <input type="radio" name="cancel-reason" value="Wrong items or quantity">
+          <span class="o-reason-check"></span>
+          <span class="o-reason-text">Wrong items or quantity</span>
+        </label>
+        <label class="o-reason-item">
+          <input type="radio" name="cancel-reason" value="Delivery date no longer works">
+          <span class="o-reason-check"></span>
+          <span class="o-reason-text">Delivery date no longer works</span>
+        </label>
+        <label class="o-reason-item">
+          <input type="radio" name="cancel-reason" value="Found a better option">
+          <span class="o-reason-check"></span>
+          <span class="o-reason-text">Found a better option</span>
+        </label>
+        <label class="o-reason-item">
+          <input type="radio" name="cancel-reason" value="Budget / financial reasons">
+          <span class="o-reason-check"></span>
+          <span class="o-reason-text">Budget / financial reasons</span>
+        </label>
+        <label class="o-reason-item">
+          <input type="radio" name="cancel-reason" value="Event was cancelled">
+          <span class="o-reason-check"></span>
+          <span class="o-reason-text">Event was cancelled</span>
+        </label>
+        <label class="o-reason-item" id="others-reason-item">
+          <input type="radio" name="cancel-reason" value="__others__">
+          <span class="o-reason-check"></span>
+          <span class="o-reason-text">Others</span>
+        </label>
+        <textarea id="others-reason-input" class="o-others-input hidden" placeholder="Tell us more about your reason..." maxlength="200"></textarea>
+      </div>
+    </div>
+    <div class="o-modal-footer">
+      <button class="o-btn-ghost" onclick="closeCancelModal()">Keep Order</button>
+      <button class="o-btn-danger" id="cancel-confirm-ok" disabled>Request Cancel</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

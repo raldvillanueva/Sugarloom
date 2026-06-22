@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Checkout — SugarLoomPh</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/checkout.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../js/supabase-config.js"></script>
+  <script src="../js/checkout.js" defer></script>
+</head>
+<body>
+
+<div id="msg" class="msg"></div>
+
+<!-- TOP NAV -->
+<nav class="checkout-nav">
+  <span class="checkout-nav-brand" onclick="goBack()">SugarLoomPh</span>
+  <div class="checkout-cart-btn" onclick="goToCart()">
+    🛒
+    <span id="checkoutCartCount">0</span>
+  </div>
+</nav>
+
+<div class="page-wrap">
+
+  <!-- LEFT COLUMN -->
+  <div class="form-col">
+
+    <!-- Contact -->
+    <div class="checkout-block">
+      <div class="section-header-row">
+        <h2>Contact</h2>
+      </div>
+      <div class="contact-row">
+        <div class="contact-left">
+          <div class="avatar" id="userAvatar">G</div>
+          <span class="contact-email" id="contactEmailDisplay">guest</span>
+        </div>
+        <div class="contact-menu-wrap">
+          <button class="dots-btn" onclick="toggleContactMenu(event)">&#8226;&#8226;&#8226;</button>
+          <div class="contact-dropdown" id="contactDropdown">
+            <button onclick="signOut()">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delivery -->
+    <div class="checkout-block">
+      <div class="tabs">
+        <div class="tab active">&#128666; Ship</div>
+      </div>
+
+      <div class="field-wrap">
+        <select id="country" class="has-value">
+          <option>Philippines</option>
+        </select>
+        <label>Country/Region</label>
+      </div>
+
+      <div class="field-row">
+        <div class="field-wrap">
+          <input id="fname" placeholder=" " autocomplete="given-name">
+          <label>First name</label>
+        </div>
+        <div class="field-wrap">
+          <input id="lname" placeholder=" " autocomplete="family-name">
+          <label>Last name</label>
+        </div>
+      </div>
+
+      <div class="field-wrap">
+        <input id="address" placeholder=" " autocomplete="street-address">
+        <label>Address</label>
+      </div>
+
+      <div class="field-wrap">
+        <input id="apartment" placeholder=" ">
+        <label>Apartment, suite, etc. (optional)</label>
+      </div>
+
+      <div class="field-row">
+        <div class="field-wrap">
+          <input id="postal" placeholder=" " autocomplete="postal-code">
+          <label>Postal code</label>
+        </div>
+        <div class="field-wrap">
+          <input id="city" placeholder=" " autocomplete="address-level2">
+          <label>City</label>
+        </div>
+      </div>
+
+      <div class="field-wrap">
+        <select id="region">
+          <option value="">Select region</option>
+          <option>Abra</option><option>Agusan del Norte</option><option>Agusan del Sur</option>
+          <option>Aklan</option><option>Albay</option><option>Antique</option>
+          <option>Apayao</option><option>Aurora</option><option>Basilan</option>
+          <option>Bataan</option><option>Batanes</option><option>Batangas</option>
+          <option>Benguet</option><option>Biliran</option><option>Bohol</option>
+          <option>Bukidnon</option><option>Bulacan</option><option>Cagayan</option>
+          <option>Camarines Norte</option><option>Camarines Sur</option><option>Camiguin</option>
+          <option>Capiz</option><option>Catanduanes</option><option>Cavite</option>
+          <option>Cebu</option><option>Cotabato</option><option>Davao de Oro</option>
+          <option>Davao del Norte</option><option>Davao del Sur</option><option>Davao Occidental</option>
+          <option>Davao Oriental</option><option>Dinagat Islands</option><option>Eastern Samar</option>
+          <option>Guimaras</option><option>Ifugao</option><option>Ilocos Norte</option>
+          <option>Ilocos Sur</option><option>Iloilo</option><option>Isabela</option>
+          <option>Kalinga</option><option>La Union</option><option>Laguna</option>
+          <option>Lanao del Norte</option><option>Lanao del Sur</option><option>Leyte</option>
+          <option>Maguindanao</option><option>Marinduque</option><option>Masbate</option>
+          <option>Metro Manila</option><option>Misamis Occidental</option><option>Misamis Oriental</option>
+          <option>Mountain Province</option><option>Negros Occidental</option><option>Negros Oriental</option>
+          <option>Northern Samar</option><option>Nueva Ecija</option><option>Nueva Vizcaya</option>
+          <option>Occidental Mindoro</option><option>Oriental Mindoro</option><option>Palawan</option>
+          <option>Pampanga</option><option>Pangasinan</option><option>Quezon</option>
+          <option>Quirino</option><option>Rizal</option><option>Romblon</option>
+          <option>Samar</option><option>Sarangani</option><option>Siquijor</option>
+          <option>Sorsogon</option><option>South Cotabato</option><option>Southern Leyte</option>
+          <option>Sultan Kudarat</option><option>Sulu</option><option>Surigao del Norte</option>
+          <option>Surigao del Sur</option><option>Tarlac</option><option>Tawi-Tawi</option>
+          <option>Zambales</option><option>Zamboanga del Norte</option><option>Zamboanga del Sur</option>
+          <option>Zamboanga Sibugay</option>
+        </select>
+        <label>Region</label>
+      </div>
+
+      <div class="field-wrap phone-field">
+        <span class="phone-prefix">&#127477;&#127469; +63</span>
+        <input id="phone" placeholder=" " inputmode="numeric" pattern="[0-9]*" autocomplete="tel">
+        <label>Phone</label>
+      </div>
+    </div>
+
+    <!-- Shipping Method -->
+    <div class="checkout-block">
+      <h2>Shipping method</h2>
+      <label class="shipping-option">
+        <input type="radio" name="shipping" checked>
+        <span class="shipping-name">Local delivery</span>
+        <span class="shipping-price">&#8369;180.00</span>
+      </label>
+      <a href="#" class="instructions-link" onclick="toggleInstructions(event)">Add delivery instructions</a>
+      <textarea id="deliveryInstructions" class="instructions-area hidden" placeholder="Delivery instructions (optional)"></textarea>
+    </div>
+
+    <!-- Payment -->
+    <div class="checkout-block">
+      <h2>Payment</h2>
+      <p class="secure-note"></p>All transactions are secure and encrypted.</p>
+
+      <div class="pay-list">
+        <label class="pay-row" id="pay-cod">
+          <div class="pay-radio-wrap">
+            <input type="radio" name="payment" value="Cash on Delivery" checked onchange="updatePlaceOrderBtn()">
+            <span class="pay-name">Cash on Delivery</span>
+          </div>
+          <span class="pay-icon">&#128181;</span>
+        </label>
+        <label class="pay-row" id="pay-gcash">
+          <div class="pay-radio-wrap">
+            <input type="radio" name="payment" value="GCash" onchange="updatePlaceOrderBtn()">
+            <span class="pay-name">GCash</span>
+          </div>
+          <span class="pay-icon">&#128241;</span>
+        </label>
+        <div id="gcash-qr" class="gcash-qr-wrap" style="display:none;">
+          <p class="gcash-qr-label">Scan to pay via GCash</p>
+          <img src="../Images/QR CODE.png" alt="GCash QR Code" class="gcash-qr-img">
+        </div>
+      </div>
+
+      <div id="cod-notice" style="display:none; margin-top:12px; padding:10px 14px; background:#fff8e1; border-left:4px solid #f59e0b; border-radius:6px; font-size:13px; color:#92400e;">
+        For COD orders exceeding &#8369;2,000, an online payment is required. We recommend using <strong>GCash</strong>.
+      </div>
+
+      <button onclick="placeOrder()" class="place-order-btn">Place Order</button>
+      <p id="cookie-notice" style="display:none; margin:8px 0 0; font-size:12px; color:#dc2626; text-align:center;"></p>
+    </div>
+
+    <!-- Footer -->
+    <footer class="checkout-footer">
+      <a href="#" onclick="openPolicy('refund'); return false;">Refund policy</a>
+      <a href="#" onclick="openPolicy('privacy'); return false;">Privacy policy</a>
+      <a href="#" onclick="openPolicy('terms'); return false;">Terms of service</a>
+    </footer>
+
+  </div>
+
+  <!-- RIGHT COLUMN -->
+  <div class="summary-col">
+    <div class="summary-inner">
+      <div id="summary-items"></div>
+      <div class="summary-divider"></div>
+      <div class="summary-line">
+        <span>Subtotal</span>
+        <span>&#8369;<span id="subtotal">0</span></span>
+      </div>
+      <div class="summary-line">
+        <span>Delivery</span>
+        <span>&#8369;50</span>
+      </div>
+      <div class="summary-divider"></div>
+      <div class="summary-line total-line">
+        <span>Total <small class="currency-note">PHP</small></span>
+        <span class="total-amount">&#8369;<span id="total">0</span></span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Policy Modal -->
+<div id="policyModal" class="policy-overlay" onclick="closePolicyModal()">
+  <div class="policy-box" onclick="event.stopPropagation()">
+    <div class="policy-header">
+      <h2 id="policyTitle"></h2>
+      <button class="policy-close" onclick="closePolicyModal()">&#10005;</button>
+    </div>
+    <div class="policy-body" id="policyBody"></div>
+  </div>
+</div>
+
+<script>
+const POLICIES = {
+  refund: {
+    title: "Refund Policy",
+    content: `
+      <p><strong>Last updated: April 2026</strong></p>
+      <h3>1. Our Commitment</h3>
+      <p>At SugarLoomPh, we take great pride in the quality of our baked goods. If you are not completely satisfied with your order, we want to make it right.</p>
+      <h3>2. Eligibility for Refunds</h3>
+      <ul>
+        <li>Refund requests must be made within <strong>24 hours</strong> of receiving your order.</li>
+        <li>Items must be uneaten or partially uneaten and in their original packaging.</li>
+        <li>Photographic evidence of the issue (damaged, incorrect, or spoiled items) is required.</li>
+      </ul>
+      <h3>3. Non-Refundable Items</h3>
+      <ul>
+        <li>Custom or personalized cake orders once production has begun.</li>
+        <li>Items purchased during promotional sales or with discount codes.</li>
+        <li>Orders where the issue is due to improper storage after delivery.</li>
+      </ul>
+      <h3>4. Refund Process</h3>
+      <p>Approved refunds will be processed within <strong>3–5 business days</strong> to your original payment method (GCash or cash equivalent). We may offer a replacement or store credit as an alternative.</p>
+      <h3>5. How to Request</h3>
+      <p>Contact us via the contact method you provided at checkout, or message us on Facebook at <strong>@SugarLoomPh</strong>.</p>
+    `
+  },
+  privacy: {
+    title: "Privacy Policy",
+    content: `
+      <p><strong>Last updated: April 2026</strong></p>
+      <h3>1. Information We Collect</h3>
+      <p>When you place an order, we collect the following information:</p>
+      <ul>
+        <li>Full name and contact details (phone number, email)</li>
+        <li>Delivery address</li>
+        <li>Order and payment information</li>
+        <li>Preferred delivery date and time</li>
+      </ul>
+      <h3>2. How We Use Your Information</h3>
+      <ul>
+        <li>To process and fulfill your orders.</li>
+        <li>To contact you regarding your delivery or order status.</li>
+        <li>To improve our products and services.</li>
+        <li>To send promotional updates (only with your consent).</li>
+      </ul>
+      <h3>3. Data Sharing</h3>
+      <p>We do not sell or share your personal information with third parties. Your data is only used internally by the SugarLoomPh team to operate our business.</p>
+      <h3>4. Data Security</h3>
+      <p>We take reasonable measures to protect your personal information from unauthorized access, disclosure, or loss. Payment transactions are handled securely through GCash.</p>
+      <h3>5. Your Rights</h3>
+      <p>You may request to view, correct, or delete your personal data at any time by contacting us at <strong>@SugarLoomPh</strong> on social media.</p>
+    `
+  },
+  terms: {
+    title: "Terms of Service",
+    content: `
+      <p><strong>Last updated: April 2026</strong></p>
+      <h3>1. Acceptance of Terms</h3>
+      <p>By placing an order on SugarLoomPh, you agree to these Terms of Service. Please read them carefully before completing your purchase.</p>
+      <h3>2. Orders & Payments</h3>
+      <ul>
+        <li>All prices are listed in Philippine Pesos (₱) and are inclusive of applicable fees.</li>
+        <li>Orders are confirmed only upon successful payment or approval of Cash on Delivery.</li>
+        <li>For COD orders exceeding ₱2,000, an online payment via GCash is required.</li>
+        <li>Bulk orders (₱2,000+) require at least 2 days advance notice for the delivery date.</li>
+      </ul>
+      <h3>3. Delivery</h3>
+      <ul>
+        <li>We deliver within our serviceable areas in the Philippines.</li>
+        <li>Delivery times are estimates and may vary due to traffic or weather conditions.</li>
+        <li>SugarLoomPh is not liable for delays caused by circumstances beyond our control.</li>
+      </ul>
+      <h3>4. Product Quality</h3>
+      <p>All baked goods are freshly prepared and subject to availability. In the event an item is unavailable, we will contact you to offer a substitute or refund.</p>
+      <h3>5. Limitation of Liability</h3>
+      <p>SugarLoomPh shall not be liable for any indirect, incidental, or consequential damages arising from the use of our products or services beyond the value of your order.</p>
+      <h3>6. Changes to Terms</h3>
+      <p>We reserve the right to update these terms at any time. Continued use of our services after changes constitutes acceptance of the new terms.</p>
+    `
+  }
+};
+
+function openPolicy(type) {
+  const data = POLICIES[type];
+  document.getElementById("policyTitle").innerText = data.title;
+  document.getElementById("policyBody").innerHTML = data.content;
+  document.getElementById("policyModal").classList.add("show");
+  document.body.style.overflow = "hidden";
+}
+
+function closePolicyModal() {
+  document.getElementById("policyModal").classList.remove("show");
+  document.body.style.overflow = "";
+}
+</script>
+
+</body>
+</html>
