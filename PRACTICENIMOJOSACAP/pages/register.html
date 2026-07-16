@@ -1,31 +1,49 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Create Account</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Account – SugarLoom Ph</title>
   <link rel="stylesheet" href="../css/login.css">
+  <link href="https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="../js/supabase-config.js"></script>
   <script src="../js/login.js" defer></script>
 </head>
 <body>
 
-<div class="auth-container">
+<div class="page-wrap">
+  <div class="auth-card">
 
-  <div class="auth-box">
-    <h2>Create Account</h2>
+    <div class="brand" onclick="window.location.href='../pages/homepage.html'" style="cursor:pointer;">
+      <i class='bx bxs-cookie brand-icon'></i>
+      <div>
+        <span class="brand-name">SugarLoomPh</span>
+        <small class="brand-sub">HANDCRAFTED COOKIES</small>
+      </div>
+    </div>
 
-    <input id="fname" placeholder="First Name">
-    <input id="lname" placeholder="Last Name">
-    <input id="email" placeholder="Email">
-    <input id="password" type="password" placeholder="Password">
+    <h2 class="auth-title">Create account</h2>
+    <p class="auth-sub">Fill in your details to get started</p>
 
-    <button onclick="register()">Create Account</button>
+    <div style="display:flex;gap:10px;">
+      <input id="fname" type="text" placeholder="First name" style="flex:1">
+      <input id="lname" type="text" placeholder="Last name" style="flex:1">
+    </div>
+    <input id="email" type="email" placeholder="Email" style="margin-top:10px">
+    <input id="password" type="password" placeholder="Password (min 6 chars)" style="margin-top:10px">
 
-    <p>Already have an account? 
-      <span class="link" onclick="goToLogin()">Sign In</span>
+    <div id="reg-error" class="err-msg hidden" style="margin-top:6px"></div>
+
+    <button class="btn-continue" onclick="register()" style="margin-top:16px">Create Account</button>
+
+    <p class="terms-text" style="margin-top:16px;text-align:center">
+      Already have an account? 
+      <a onclick="goToLogin()" style="cursor:pointer;color:#5e4fd6;font-weight:600">Sign in</a>
     </p>
-  </div>
 
+  </div>
+  <a class="privacy-link" href="#">Privacy policy</a>
 </div>
 
 <div id="msg" class="msg"></div>
