@@ -73,43 +73,6 @@ body {
   margin-bottom: 22px;
 }
 
-/* ── PHONE BUTTON ── */
-.btn-phone {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 13px 20px;
-  background: #5C4FE5;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
-  cursor: pointer;
-  transition: background 0.18s;
-}
-.btn-phone:hover { background: #4A3DD1; }
-
-/* ── OR DIVIDER ── */
-.or-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 12px;
-  color: #CCC;
-  margin: 20px 0 16px;
-}
-.or-divider::before,
-.or-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: #E8E8E8;
-}
-
 /* ── INPUTS ── */
 input[type="text"],
 input[type="email"],

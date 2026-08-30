@@ -36,34 +36,11 @@
 
       <button class="btn-continue" onclick="goToPassword()">Continue</button>
 
-      <div class="or-divider"><span>or</span></div>
-
-      <button class="btn-phone" onclick="showPanel('panel-phone')">
-        Continue with mobile phone number
-      </button>
-
       <p class="terms-text">By continuing, you agree to our <a class="terms-link" href="#" onclick="showPolicy('tos');return false;">Terms of service</a></p>
     <p class="terms-text" style="margin-top:10px">Don't have an account? <a onclick="window.location.href='register.html'" style="cursor:pointer;color:#5e4fd6;font-weight:600">Create account</a></p>
     </div>
 
-    <!-- PANEL 2: Phone -->
-    <div id="panel-phone" class="hidden">
-      <h2 class="auth-title">Sign in</h2>
-      <p class="auth-sub">Enter your mobile phone number</p>
-
-      <div class="phone-row">
-        <span class="phone-code">🇵🇭 +63</span>
-        <input id="phone" type="tel" placeholder="9XX XXX XXXX" maxlength="10">
-      </div>
-      <div id="phone-error" class="err-msg hidden"></div>
-
-      <button class="btn-continue" onclick="loginWithPhone()">Continue</button>
-
-      <p class="terms-text">By continuing, you agree to our <a class="terms-link" href="#" onclick="showPolicy('tos');return false;">Terms of service</a></p>
-      <p class="back-link"><a onclick="showPanel('panel-main')">← Back</a></p>
-    </div>
-
-    <!-- PANEL 3: OTP Code -->
+    <!-- PANEL 2: OTP Code -->
     <div id="panel-otp" class="hidden">
       <h2 class="auth-title">Enter code</h2>
       <p class="auth-sub otp-sent-to">Sent to <span id="email-display"></span></p>
