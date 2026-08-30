@@ -181,11 +181,13 @@ async function register() {
   const fname    = document.getElementById('fname').value.trim();
   const lname    = document.getElementById('lname').value.trim();
   const email    = document.getElementById('email').value.trim();
+  const phone    = document.getElementById('phone').value.trim();
   const password = document.getElementById('password').value;
   const confirm  = document.getElementById('confirm').value;
 
-  if (!fname || !lname || !email || !password || !confirm) { showMsg('Fill all fields'); return; }
+  if (!fname || !lname || !email || !phone || !password || !confirm) { showMsg('Fill all fields'); return; }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showMsg('Invalid email format'); return; }
+  if (!/^9\d{9}$/.test(phone)) { showMsg('Invalid phone number (e.g. 9XXXXXXXXX)'); return; }
 
   const unmet = unmetPasswordRules(password);
   if (unmet.length) { showMsg(`Password needs: ${unmet[0].label.toLowerCase()}`); return; }
@@ -202,7 +204,7 @@ async function register() {
 
   await _supa.from('profiles').upsert({
     id:   data.user.id,
-    data: { fname, lname, phone: '', addresses: [] }
+    data: { fname, lname, phone, addresses: [] }
   });
 
   showMsg('Account created! Check your email to verify, then sign in.');
@@ -247,7 +249,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const phoneInput = document.getElementById('phone');
   if (phoneInput) {
-    phoneInput.addEventListener('keydown', e => { if (e.key === 'Enter') loginWithPhone(); });
+    /* Both pages have a #phone input now, so Enter means different things */
+    phoneInput.addEventListener('keydown', e => {
+      if (e.key !== 'Enter') return;
+      if (document.getElementById('phone-error')) loginWithPhone();
+      else if (document.getElementById('confirm')) register();
+    });
     phoneInput.addEventListener('keypress', function(e) {
       if (!/[0-9]/.test(e.key)) e.preventDefault();
       if (this.value.length >= 10) e.preventDefault();
