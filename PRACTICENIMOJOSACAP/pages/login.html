@@ -45,7 +45,14 @@
       <h2 class="auth-title">Enter code</h2>
       <p class="auth-sub otp-sent-to">Sent to <span id="email-display"></span></p>
 
-      <input id="otp-code" type="text" placeholder="6-digit code" maxlength="6" inputmode="numeric">
+      <div class="otp-inputs" id="otp-inputs">
+        <input class="otp-box" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="Digit 1">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 2">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 3">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 5">
+        <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6">
+      </div>
       <div id="otp-error" class="err-msg hidden"></div>
 
       <button class="btn-continue" onclick="submitOTP()">Submit</button>

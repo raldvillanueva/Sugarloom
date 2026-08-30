@@ -14,9 +14,11 @@ function showPanel(id) {
     if (el) el.classList.add('hidden');
   });
   document.getElementById(id).classList.remove('hidden');
-  if (id !== 'panel-otp') {
-    const otpInput = document.getElementById('otp-code');
-    if (otpInput) otpInput.value = '';
+
+  if (id === 'panel-otp') {
+    otpBoxes()[0]?.focus();
+  } else {
+    clearOtp();
   }
 }
 
@@ -92,16 +94,27 @@ async function resendOTP() {
   }
 }
 
+/* The boxes auto-submit once full, so guard against Enter or the Submit
+   button firing a second verify while the first is still in flight. */
+let _otpSubmitting = false;
+
 async function submitOTP() {
   const email = document.getElementById('email').value.trim();
-  const otp   = document.getElementById('otp-code').value.trim();
+  const otp   = otpValue();
   const errEl = document.getElementById('otp-error');
 
-  if (!otp || otp.length < 6) return flashError(errEl, 'Enter the 6-digit code');
+  if (_otpSubmitting) return;
+  if (otp.length < 6) return flashError(errEl, 'Enter the 6-digit code');
 
+  _otpSubmitting = true;
   const { data, error } = await _supa.auth.verifyOtp({ email, token: otp, type: 'email' });
+  _otpSubmitting = false;
 
-  if (error) return flashError(errEl, 'Incorrect code. Please try again.');
+  if (error) {
+    clearOtp();
+    otpBoxes()[0]?.focus();
+    return flashError(errEl, 'Incorrect code. Please try again.');
+  }
 
   await storeSession(data.user);
   showMsg('Login successful');
@@ -237,11 +250,76 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  const otpInput = document.getElementById('otp-code');
-  if (otpInput) {
-    otpInput.addEventListener('input', () => {
-      otpInput.value = otpInput.value.replace(/\D/g, '').slice(0, 6);
-    });
-    otpInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitOTP(); });
-  }
+  initOtpBoxes();
 });
+
+/* ── OTP BOXES ── */
+function otpBoxes() {
+  return Array.from(document.querySelectorAll('#otp-inputs .otp-box'));
+}
+
+function otpValue() {
+  return otpBoxes().map(b => b.value).join('');
+}
+
+function clearOtp() {
+  otpBoxes().forEach(b => { b.value = ''; b.classList.remove('filled'); });
+}
+
+/* Spread a string of digits across the boxes from `start`, then park the
+   caret on the last one filled. */
+function fillOtpFrom(start, digits) {
+  const boxes = otpBoxes();
+  digits.split('').forEach((d, i) => {
+    const box = boxes[start + i];
+    if (box) { box.value = d; box.classList.add('filled'); }
+  });
+  const last = Math.min(start + digits.length, boxes.length - 1);
+  boxes[last].focus();
+  boxes[last].select();
+}
+
+function initOtpBoxes() {
+  const boxes = otpBoxes();
+  if (!boxes.length) return;
+
+  boxes.forEach((box, i) => {
+    box.addEventListener('input', () => {
+      const digits = box.value.replace(/\D/g, '');
+      box.value = '';
+      box.classList.remove('filled');
+      if (!digits) return;
+
+      /* A phone keyboard's autofill can drop the whole code into one box */
+      fillOtpFrom(i, digits);
+
+      if (otpValue().length === boxes.length) submitOTP();
+    });
+
+    box.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { submitOTP(); return; }
+
+      if (e.key === 'Backspace' && !box.value && i > 0) {
+        e.preventDefault();
+        boxes[i - 1].value = '';
+        boxes[i - 1].classList.remove('filled');
+        boxes[i - 1].focus();
+        return;
+      }
+      if (e.key === 'ArrowLeft'  && i > 0)               boxes[i - 1].focus();
+      if (e.key === 'ArrowRight' && i < boxes.length - 1) boxes[i + 1].focus();
+    });
+
+    box.addEventListener('paste', e => {
+      e.preventDefault();
+      const text = (e.clipboardData || window.clipboardData).getData('text');
+      const digits = text.replace(/\D/g, '').slice(0, boxes.length - i);
+      if (!digits) return;
+
+      fillOtpFrom(i, digits);
+      if (otpValue().length === boxes.length) submitOTP();
+    });
+
+    box.addEventListener('focus', () => box.select());
+  });
+}
