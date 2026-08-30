@@ -42,47 +42,90 @@ async function storeSession(supaUser) {
 }
 
 /* ── OTP LOGIN (main panel in login.html) ── */
+
+/* Which channel the pending code went out on, so resend and verify both
+   use the same one. Set by goToPassword() / loginWithPhone(). */
+let _otpTarget = null;   // { channel: 'email' | 'sms', value }
+
+function flashError(el, text, ms = 3000) {
+  el.textContent = text;
+  el.classList.remove('hidden');
+  setTimeout(() => el.classList.add('hidden'), ms);
+}
+
+function sendOtpTo(target) {
+  const opts = { options: { shouldCreateUser: false } };
+  return target.channel === 'sms'
+    ? _supa.auth.signInWithOtp({ phone: target.value, ...opts })
+    : _supa.auth.signInWithOtp({ email: target.value, ...opts });
+}
+
 async function goToPassword() {
   const email = document.getElementById('email').value.trim();
   const errEl = document.getElementById('email-error');
 
-  if (!email) {
-    errEl.textContent = 'Please enter your email address';
-    errEl.classList.remove('hidden');
-    setTimeout(() => errEl.classList.add('hidden'), 3000);
-    return;
-  }
+  if (!email) return flashError(errEl, 'Please enter your email address');
+
+  _otpTarget = { channel: 'email', value: email };
 
   // Show OTP panel immediately
   document.getElementById('email-display').textContent = email;
   showPanel('panel-otp');
 
-  const { error } = await _supa.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: false }
-  });
+  const { error } = await sendOtpTo(_otpTarget);
 
   if (error) {
     showPanel('panel-main');
-    errEl.textContent = error.message.includes('not found') || error.message.includes('registered')
+    flashError(errEl, error.message.includes('not found') || error.message.includes('registered')
       ? 'No account found. Please register first.'
-      : 'Failed to send code. Try again.';
-    errEl.classList.remove('hidden');
-    setTimeout(() => errEl.classList.add('hidden'), 4000);
+      : 'Failed to send code. Try again.', 4000);
   }
 }
 
+/* ── PHONE OTP LOGIN ──
+   Requires an SMS provider configured in Supabase (Auth → Providers →
+   Phone). Without one, signInWithOtp({ phone }) fails and we say so
+   rather than leaving the user on a spinner. */
+async function loginWithPhone() {
+  const phone = document.getElementById('phone').value.trim();
+  const errEl = document.getElementById('phone-error');
+
+  if (!/^9\d{9}$/.test(phone)) {
+    return flashError(errEl, 'Enter a valid mobile number (9XXXXXXXXX)');
+  }
+
+  _otpTarget = { channel: 'sms', value: '+63' + phone };
+
+  document.getElementById('email-display').textContent = '+63 ' + phone;
+  showPanel('panel-otp');
+
+  const { error } = await sendOtpTo(_otpTarget);
+
+  if (error) {
+    showPanel('panel-phone');
+    flashError(errEl, phoneOtpError(error), 5000);
+  }
+}
+
+function phoneOtpError(error) {
+  const m = (error.message || '').toLowerCase();
+  if (m.includes('not found') || m.includes('registered')) {
+    return 'No account uses this number yet. Sign in with email to link it.';
+  }
+  if (m.includes('sms') || m.includes('provider') || m.includes('disabled') || m.includes('unsupported')) {
+    return 'SMS sign-in is not available yet. Please use email.';
+  }
+  return 'Failed to send code. Try again.';
+}
+
 async function resendOTP() {
-  const email = document.getElementById('email').value.trim();
-  const btn   = document.getElementById('resend-btn');
+  const btn = document.getElementById('resend-btn');
+  if (!_otpTarget) return;
 
   btn.style.pointerEvents = 'none';
   btn.textContent = 'Sending...';
 
-  const { error } = await _supa.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: false }
-  });
+  const { error } = await sendOtpTo(_otpTarget);
 
   if (!error) {
     btn.textContent = 'Sent!';
@@ -90,37 +133,22 @@ async function resendOTP() {
   } else {
     btn.textContent = 'Resend code';
     btn.style.pointerEvents = '';
-    const errEl = document.getElementById('otp-error');
-    errEl.textContent = 'Failed to resend. Try again.';
-    errEl.classList.remove('hidden');
-    setTimeout(() => errEl.classList.add('hidden'), 3000);
+    flashError(document.getElementById('otp-error'), 'Failed to resend. Try again.');
   }
 }
 
 async function submitOTP() {
-  const email = document.getElementById('email').value.trim();
   const otp   = document.getElementById('otp-code').value.trim();
   const errEl = document.getElementById('otp-error');
 
-  if (!otp || otp.length < 6) {
-    errEl.textContent = 'Enter the 6-digit code';
-    errEl.classList.remove('hidden');
-    setTimeout(() => errEl.classList.add('hidden'), 3000);
-    return;
-  }
+  if (!otp || otp.length < 6) return flashError(errEl, 'Enter the 6-digit code');
+  if (!_otpTarget) return flashError(errEl, 'Request a new code first');
 
-  const { data, error } = await _supa.auth.verifyOtp({
-    email,
-    token: otp,
-    type:  'email'
-  });
+  const { data, error } = _otpTarget.channel === 'sms'
+    ? await _supa.auth.verifyOtp({ phone: _otpTarget.value, token: otp, type: 'sms' })
+    : await _supa.auth.verifyOtp({ email: _otpTarget.value, token: otp, type: 'email' });
 
-  if (error) {
-    errEl.textContent = 'Incorrect code. Please try again.';
-    errEl.classList.remove('hidden');
-    setTimeout(() => errEl.classList.add('hidden'), 3000);
-    return;
-  }
+  if (error) return flashError(errEl, 'Incorrect code. Please try again.');
 
   await storeSession(data.user);
   showMsg('Login successful');
@@ -209,14 +237,6 @@ async function register() {
 
   showMsg('Account created! Check your email to verify, then sign in.');
   setTimeout(() => { window.location.href = 'login.html'; }, 2000);
-}
-
-/* ── PHONE (not yet available) ── */
-function loginWithPhone() {
-  const errEl = document.getElementById('phone-error');
-  errEl.textContent = 'Phone number login is not yet available.';
-  errEl.classList.remove('hidden');
-  setTimeout(() => errEl.classList.add('hidden'), 3000);
 }
 
 /* ── NAVIGATION ── */
