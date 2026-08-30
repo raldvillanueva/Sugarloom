@@ -90,7 +90,6 @@ body {
   font-family: 'Inter', sans-serif;
   cursor: pointer;
   transition: background 0.18s;
-  margin-bottom: 20px;
 }
 .btn-phone:hover { background: #4A3DD1; }
 
@@ -101,7 +100,7 @@ body {
   gap: 12px;
   font-size: 12px;
   color: #CCC;
-  margin-bottom: 16px;
+  margin: 20px 0 16px;
 }
 .or-divider::before,
 .or-divider::after {

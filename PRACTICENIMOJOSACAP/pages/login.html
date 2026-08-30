@@ -31,16 +31,16 @@
       <h2 class="auth-title">Sign in</h2>
       <p class="auth-sub">Sign in or create an account</p>
 
-      <button class="btn-phone" onclick="showPanel('panel-phone')">
-        Continue with mobile phone number
-      </button>
-
-      <div class="or-divider"><span>or</span></div>
-
       <input id="email" type="email" placeholder="Email">
       <div id="email-error" class="err-msg hidden"></div>
 
       <button class="btn-continue" onclick="goToPassword()">Continue</button>
+
+      <div class="or-divider"><span>or</span></div>
+
+      <button class="btn-phone" onclick="showPanel('panel-phone')">
+        Continue with mobile phone number
+      </button>
 
       <p class="terms-text">By continuing, you agree to our <a class="terms-link" href="#" onclick="showPolicy('tos');return false;">Terms of service</a></p>
     <p class="terms-text" style="margin-top:10px">Don't have an account? <a onclick="window.location.href='register.html'" style="cursor:pointer;color:#5e4fd6;font-weight:600">Create account</a></p>
