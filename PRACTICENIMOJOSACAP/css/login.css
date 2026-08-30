@@ -257,6 +257,63 @@ input::placeholder { color: #BBBBBB; }
 }
 .hidden { display: none; }
 
+/* ── PASSWORD STRENGTH ── */
+.pw-meter { margin-top: 10px; }
+
+.pw-bar { display: flex; gap: 4px; }
+.pw-bar span {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: #E8E8E8;
+  transition: background 0.18s;
+}
+
+.pw-label {
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 6px;
+}
+
+.pw-meter[data-level="weak"]   .pw-bar span.on { background: #DC2626; }
+.pw-meter[data-level="fair"]   .pw-bar span.on { background: #F59E0B; }
+.pw-meter[data-level="good"]   .pw-bar span.on { background: #1B5CE0; }
+.pw-meter[data-level="strong"] .pw-bar span.on { background: #16A34A; }
+
+.pw-meter[data-level="weak"]   .pw-label { color: #DC2626; }
+.pw-meter[data-level="fair"]   .pw-label { color: #F59E0B; }
+.pw-meter[data-level="good"]   .pw-label { color: #1B5CE0; }
+.pw-meter[data-level="strong"] .pw-label { color: #16A34A; }
+
+.pw-reqs { list-style: none; margin-top: 8px; }
+.pw-req {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #9CA3AF;
+  margin-bottom: 3px;
+  transition: color 0.18s;
+}
+.pw-req i { font-size: 15px; }
+.pw-req.ok { color: #16A34A; }
+
+.pw-match {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 6px;
+}
+.pw-match i { font-size: 15px; }
+.pw-match.ok  { color: #16A34A; }
+.pw-match.bad { color: #DC2626; }
+
+/* Beats the generic .hidden rule above for these flex/block elements */
+.pw-meter.hidden,
+.pw-match.hidden { display: none; }
+
 /* ── PRIVACY FOOTER ── */
 .privacy-link {
   font-size: 13px;

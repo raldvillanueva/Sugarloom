@@ -30,7 +30,18 @@
     <input id="fname" type="text" placeholder="First name">
     <input id="lname" type="text" placeholder="Last name" style="margin-top:10px">
     <input id="email" type="email" placeholder="Email" style="margin-top:10px">
-    <input id="password" type="password" placeholder="Password (min 6 chars)" style="margin-top:10px">
+    <input id="password" type="password" placeholder="Password" style="margin-top:10px">
+
+    <div class="pw-meter hidden" id="pw-meter">
+      <div class="pw-bar">
+        <span></span><span></span><span></span><span></span><span></span>
+      </div>
+      <p class="pw-label" id="pw-label"></p>
+      <ul class="pw-reqs" id="pw-reqs"></ul>
+    </div>
+
+    <input id="confirm" type="password" placeholder="Confirm password" style="margin-top:10px">
+    <p class="pw-match hidden" id="pw-match"></p>
 
     <div id="reg-error" class="err-msg hidden" style="margin-top:6px"></div>
 
