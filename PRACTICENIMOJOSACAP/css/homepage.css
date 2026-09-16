@@ -463,6 +463,12 @@ a { text-decoration: none; color: inherit; }
   background: var(--text);
 }
 
+/* Brand-pink variant, used where the newsletter band used to sit */
+.divider-ribbon.accent {
+  background: var(--pink);
+  color: #fff;
+}
+
 .ribbon-track {
   display: flex;
   width: max-content;
@@ -486,6 +492,14 @@ a { text-decoration: none; color: inherit; }
 @keyframes marquee {
   from { transform: translateX(0); }
   to   { transform: translateX(-50%); }
+}
+
+/* Runs the same loop backwards so neighbouring ribbons don't drift in sync */
+.ribbon-track.reverse { animation-name: marquee-reverse; }
+
+@keyframes marquee-reverse {
+  from { transform: translateX(-50%); }
+  to   { transform: translateX(0); }
 }
 
 /* ─── FEATURE SECTION ─── */
@@ -542,79 +556,6 @@ a { text-decoration: none; color: inherit; }
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   border: 1px solid var(--border);
-}
-
-/* ─── NEWSLETTER ─── */
-.newsletter-section {
-  background: var(--text);
-  padding: 80px 60px;
-}
-
-.newsletter-inner {
-  max-width: 760px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.newsletter-text h2 {
-  font-family: 'Playfair Display', serif;
-  font-size: 38px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: -0.5px;
-  margin-bottom: 10px;
-}
-
-.newsletter-text p {
-  color: rgba(255,255,255,0.6);
-  font-size: 15px;
-  margin-bottom: 32px;
-}
-
-.newsletter-form {
-  display: flex;
-  gap: 10px;
-  max-width: 480px;
-  margin: 0 auto;
-}
-
-.newsletter-form input {
-  flex: 1;
-  padding: 13px 18px;
-  border-radius: 30px;
-  border: 1px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.08);
-  color: #fff;
-  font-size: 14px;
-  font-family: 'Inter', sans-serif;
-  outline: none;
-  transition: border-color var(--transition);
-}
-
-.newsletter-form input::placeholder { color: rgba(255,255,255,0.4); }
-.newsletter-form input:focus { border-color: rgba(255,255,255,0.4); }
-
-.newsletter-form button {
-  padding: 13px 26px;
-  background: #fff;
-  color: var(--text);
-  border-radius: 30px;
-  font-size: 14px;
-  font-weight: 700;
-  transition: var(--transition);
-  white-space: nowrap;
-}
-
-.newsletter-form button:hover {
-  background: var(--pink);
-  color: #fff;
-}
-
-.newsletter-note {
-  margin-top: 14px;
-  font-size: 13px;
-  color: rgba(255,255,255,0.5);
-  min-height: 20px;
 }
 
 /* ─── ABOUT ─── */

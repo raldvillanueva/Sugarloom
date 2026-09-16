@@ -68,15 +68,6 @@ const CMS_SECTIONS = [
     ]
   },
   {
-    title: 'Newsletter band',
-    fields: [
-      { key: 'nl_label', label: 'Small label', placeholder: 'Stay in the Loop' },
-      { key: 'nl_title', label: 'Heading',     placeholder: 'Get first dibs on new flavors & promos' },
-      { key: 'nl_text',  label: 'Subtitle',    placeholder: 'Join our sweet community. No spam, only cookies' },
-      { key: 'nl_btn',   label: 'Button',      placeholder: 'Subscribe' }
-    ]
-  },
-  {
     title: 'About / Our Story',
     fields: [
       { key: 'about_label',  label: 'Small label',      placeholder: 'Our Story' },
