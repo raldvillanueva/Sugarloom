@@ -368,9 +368,10 @@ function showApp(){
   const isStaff  = isBaker || isPacker;
   if(currentUser.role !== 'Administrator'){
     document.getElementById('users-nav').style.display = 'none';
+    document.getElementById('content-nav').style.display = 'none';
   }
   if(isStaff){
-    ['dashboard','products','customers','inventory','reports','reviews'].forEach(v => {
+    ['dashboard','products','customers','inventory','reports','reviews','content'].forEach(v => {
       const el = document.querySelector(`.nav-item[data-view="${v}"]`);
       if(el) el.style.display = 'none';
     });
@@ -486,6 +487,7 @@ function switchView(view){
   if(view==='customers')  renderCustomers();
   if(view==='users')      renderUsers();
   if(view==='reviews')    renderAdminReviews();
+  if(view==='content')    renderContent();
 }
 
 function toggleSidebar(){

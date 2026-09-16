@@ -70,6 +70,13 @@ create table if not exists profiles (
   data jsonb not null default '{}'::jsonb
 );
 
+-- Editable homepage copy (Admin → Content). One row per page, id = 'homepage'.
+-- Any key left blank falls back to the text baked into the HTML.
+create table if not exists site_content (
+  id   text primary key,
+  data jsonb not null default '{}'::jsonb
+);
+
 -- ── Disable RLS for now (re-enable with proper policies before going live) ──
 alter table products       disable row level security;
 alter table ingredients    disable row level security;
@@ -80,3 +87,4 @@ alter table stock_log      disable row level security;
 alter table reviews        disable row level security;
 alter table order_tracking disable row level security;
 alter table profiles       disable row level security;
+alter table site_content   disable row level security;

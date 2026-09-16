@@ -121,6 +121,9 @@
       <a class="nav-item" data-view="reports" onclick="switchView('reports')">
         <i class='bx bxs-bar-chart-alt-2'></i><span>Reports</span>
       </a>
+      <a class="nav-item" id="content-nav" data-view="content" onclick="switchView('content')">
+        <i class='bx bxs-edit-alt'></i><span>Content</span>
+      </a>
       <a class="nav-item" id="users-nav" data-view="users" onclick="switchView('users')">
         <i class='bx bxs-user-detail'></i><span>Users</span>
       </a>
@@ -630,6 +633,26 @@
         </div>
       </section>
 
+      <!-- ========== CONTENT (CMS) ========== -->
+      <section id="view-content" class="view">
+        <div class="page-header">
+          <div>
+            <h1>Website Content</h1>
+            <p>Edit the text and images customers see on the homepage. Leave a box empty to keep the original wording.</p>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn-outline" onclick="previewSite()"><i class='bx bx-link-external'></i> View site</button>
+            <button class="btn-primary" onclick="saveSiteContent()"><i class='bx bx-save'></i> Save changes</button>
+          </div>
+        </div>
+
+        <div id="cms-form"></div>
+
+        <div style="margin:20px 0 40px;text-align:right">
+          <button class="btn-primary" onclick="saveSiteContent()"><i class='bx bx-save'></i> Save changes</button>
+        </div>
+      </section>
+
       <!-- ========== REVIEWS ========== -->
       <section id="view-reviews" class="view">
         <div class="page-header">
@@ -1030,5 +1053,6 @@
 </div>
 
 <script src="admin.js"></script>
+<script src="cms.js"></script>
 </body>
 </html>
