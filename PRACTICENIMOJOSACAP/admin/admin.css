@@ -1397,14 +1397,25 @@ body.dark .tab-btn.active { background: #1A1A2E; box-shadow: 0 1px 4px rgba(0,0,
 .cms-field textarea::placeholder { color: #A8AFBB; }
 .cms-hint { font-size: 11px; color: var(--text-2); }
 
-/* Image fields show a thumbnail of the current URL */
-.cms-image-row { display: flex; align-items: center; gap: 10px; }
+/* Image fields: thumbnail, an upload button, and a link box as a fallback */
+.cms-image-row { display: flex; align-items: flex-start; gap: 10px; }
 .cms-thumb {
-  width: 44px; height: 44px; flex: 0 0 44px;
+  width: 56px; height: 56px; flex: 0 0 56px;
   object-fit: cover; border-radius: var(--radius-sm);
   border: 1px solid var(--border); background: var(--bg-2);
 }
 .cms-thumb.broken { opacity: .35; }
+
+.cms-image-controls {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.cms-image-actions { display: flex; gap: 6px; }
+.cms-image-url { font-size: 12px !important; }
+.cms-image-status {
+  font-size: 11px; color: var(--text-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* FAQ repeater */
 .cms-faq-item {

@@ -146,7 +146,7 @@ async function loadSiteContentAdmin() {
   } catch (err) {
     console.error('Could not load site content:', err);
     siteContent = {};
-    toast('Could not load website content', 'error');
+    toast('Could not load website content', 'danger');
   }
 }
 
@@ -164,19 +164,33 @@ function cmsFieldHtml(f) {
       </div>`;
   }
 
-  /* An image field shows a thumbnail of whatever URL is in the box. */
+  /* Image fields take an upload or a pasted link. The real value lives in
+     a hidden input so an uploaded picture doesn't fill the box with a
+     giant data URL. */
   if (f.type === 'image') {
+    const isUpload = val.startsWith('data:');
     return `
-      <div class="cms-field">
-        <label for="cms-${f.key}">${cmsEscape(f.label)}</label>
+      <div class="cms-field" data-image-field="${f.key}">
+        <label>${cmsEscape(f.label)}</label>
         <div class="cms-image-row">
           <img class="cms-thumb" src="${cmsEscape(val || f.placeholder)}" alt=""
                onerror="this.classList.add('broken')">
-          <input id="cms-${f.key}" type="url" data-cms-key="${f.key}"
-            value="${cmsEscape(val)}" placeholder="${cmsEscape(f.placeholder)}"
-            oninput="cmsPreviewImage(this)">
+          <div class="cms-image-controls">
+            <input type="hidden" id="cms-${f.key}" data-cms-key="${f.key}" value="${cmsEscape(val)}">
+            <input type="file" id="cms-file-${f.key}" accept="image/*" style="display:none"
+                   onchange="handleCmsImgUpload(event, '${f.key}')">
+            <div class="cms-image-actions">
+              <button type="button" class="btn-secondary sm" onclick="document.getElementById('cms-file-${f.key}').click()">
+                <i class='bx bx-upload'></i> Upload picture
+              </button>
+              <button type="button" class="btn-ghost sm" onclick="resetCmsImage('${f.key}')">Reset</button>
+            </div>
+            <input type="text" class="cms-image-url" placeholder="or paste a link"
+                   value="${isUpload ? '' : cmsEscape(val)}"
+                   oninput="setCmsImageUrl('${f.key}', this.value)">
+            <small class="cms-image-status">${isUpload ? 'Uploaded picture' : (val ? 'Using a link' : 'Using the original picture')}</small>
+          </div>
         </div>
-        <small class="cms-hint">Paste a link to an image. Upload it somewhere public first, then copy the address.</small>
       </div>`;
   }
 
@@ -189,10 +203,86 @@ function cmsFieldHtml(f) {
     </div>`;
 }
 
-function cmsPreviewImage(input) {
-  const img = input.closest('.cms-image-row').querySelector('.cms-thumb');
-  img.classList.remove('broken');
-  img.src = input.value.trim() || img.src;
+/* Shrinks a picked photo before it is stored. The homepage fetches this
+   row on every visit, so a straight-off-the-phone 4MB photo would be paid
+   for by every customer. Scales the long edge down to CMS_IMG_MAX_PX and
+   re-encodes as JPEG. */
+const CMS_IMG_MAX_PX = 1600;
+const CMS_IMG_QUALITY = 0.82;
+
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('That file is not an image'));
+      img.onload = () => {
+        const scale = Math.min(1, CMS_IMG_MAX_PX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', CMS_IMG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function cmsImageField(key) {
+  return document.querySelector(`[data-image-field="${key}"]`);
+}
+
+function setCmsImageValue(key, value, status) {
+  const field = cmsImageField(key);
+  field.querySelector('input[type="hidden"]').value = value;
+
+  const thumb = field.querySelector('.cms-thumb');
+  thumb.classList.remove('broken');
+  if (value) thumb.src = value;
+
+  field.querySelector('.cms-image-status').textContent = status;
+}
+
+async function handleCmsImgUpload(e, key) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  const field = cmsImageField(key);
+  field.querySelector('.cms-image-status').textContent = 'Working on it…';
+
+  try {
+    const dataUrl = await shrinkImage(file);
+    setCmsImageValue(key, dataUrl, `Uploaded ${file.name}`);
+    field.querySelector('.cms-image-url').value = '';
+  } catch (err) {
+    console.error('image upload failed:', err);
+    field.querySelector('.cms-image-status').textContent = 'Could not use that file — try a JPG or PNG';
+    toast('Could not read that picture', 'danger');
+  } finally {
+    e.target.value = '';   // let the same file be picked again
+  }
+}
+
+function setCmsImageUrl(key, url) {
+  const trimmed = url.trim();
+  setCmsImageValue(key, trimmed, trimmed ? 'Using a link' : 'Using the original picture');
+}
+
+/* Clearing the field is how you go back to the picture built into the page. */
+function resetCmsImage(key) {
+  const field = cmsImageField(key);
+  field.querySelector('input[type="hidden"]').value = '';
+  field.querySelector('.cms-image-url').value = '';
+  field.querySelector('.cms-image-status').textContent = 'Using the original picture';
+
+  const thumb = field.querySelector('.cms-thumb');
+  const original = CMS_SECTIONS
+    .flatMap(s => s.fields)
+    .find(f => f.key === key);
+  if (original) { thumb.classList.remove('broken'); thumb.src = original.placeholder; }
 }
 
 function faqRowHtml(item, i) {
@@ -289,7 +379,7 @@ async function saveSiteContent() {
     toast('Website content saved', 'success');
   } catch (err) {
     console.error('saveSiteContent error:', err);
-    toast('Could not save — check your connection and try again', 'error');
+    toast('Could not save — check your connection and try again', 'danger');
   }
 }
 
