@@ -463,12 +463,6 @@ a { text-decoration: none; color: inherit; }
   background: var(--text);
 }
 
-/* Brand-pink variant, used where the newsletter band used to sit */
-.divider-ribbon.accent {
-  background: var(--pink);
-  color: #fff;
-}
-
 .ribbon-track {
   display: flex;
   width: max-content;
