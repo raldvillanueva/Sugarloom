@@ -1,6 +1,9 @@
 let cart = 0;
 
-const products = [
+/* Fallback Best Sellers, used only if the catalogue can't be reached.
+   The live row comes from the products table — pick which ones show
+   under Admin → Content → Best Sellers. */
+let products = [
   {
     name:"Chocolate Chip Cookies Box",
     price:120,
@@ -43,23 +46,67 @@ const products = [
   }
 ];
 
-//RENDERING THE PRODUCTS 
+/* Pulls the Best Sellers row from the real catalogue.
+   Which products appear, and in what order, is the best_sellers list
+   saved by Admin → Content. If nothing is chosen there, the first few
+   active products are shown so the row is never empty. */
+const BEST_SELLERS_FALLBACK_COUNT = 5;
+
+async function loadBestSellers(){
+  try {
+    const [prodRes, contentRes] = await Promise.all([
+      _supa.from('products').select('data'),
+      _supa.from('site_content').select('data').eq('id', 'homepage').maybeSingle()
+    ]);
+
+    const all = (prodRes.data || []).map(r => r.data).filter(p => p && p.active);
+    if(!all.length) return;   // keep the built-in list
+
+    const chosen = contentRes.data?.data?.best_sellers;
+    let picked = Array.isArray(chosen) && chosen.length
+      ? chosen.map(id => all.find(p => p.id === id)).filter(Boolean)
+      : [];
+
+    /* Nothing chosen, or everything chosen has since been deleted or
+       hidden — show real products rather than the stale built-in list. */
+    if(!picked.length) picked = all.slice(0, BEST_SELLERS_FALLBACK_COUNT);
+
+    products = picked.map(p => ({
+      name:        p.name,
+      price:       p.price,
+      img:         p.img || '',
+      description: p.description || '',
+      ingredients: [],
+      allergens:   []
+    }));
+  } catch(e){
+    console.warn('Best Sellers falling back to built-in list:', e);
+  }
+}
+
+//RENDERING THE PRODUCTS
 function render(){
   const container = document.getElementById("list");
 
   container.innerHTML = ""; // 🔥 prevent duplicates
 
-  products.forEach((p)=>{
+  products.forEach((p, i)=>{
+    /* Pass the index, not the values — an uploaded photo is a data URL
+       thousands of characters long, and a name like "Mom's Cookies"
+       would break out of the quotes. */
     container.innerHTML += `
-      <div class="product-item"
-        onclick="viewProduct('${p.name}', '${p.price}', '${p.img}')">
-        
+      <div class="product-item" onclick="viewProductAt(${i})">
         <img src="${p.img}">
         <h3>${p.name}</h3>
         <p class="desc">${p.description}</p>
       </div>
     `;
   });
+}
+
+function viewProductAt(i){
+  const p = products[i];
+  if(p) viewProduct(p.name, p.price, p.img);
 }
 
 //VIEW PRODUCT 
@@ -74,7 +121,11 @@ function viewProduct(name, price, img){
     if(adminProd?.price) product.price = adminProd.price;
   } catch(e){}
 
-  localStorage.setItem("selectedProduct", JSON.stringify(product));
+  // Strip base64 images before storing — product-view reads img from admin DB
+  const toStore = { ...product };
+  if(toStore.img && toStore.img.startsWith('data:')) toStore.img = '';
+
+  localStorage.setItem("selectedProduct", JSON.stringify(toStore));
   window.location.href = "../pages/product-view.html";
 }
 
@@ -431,7 +482,8 @@ function revealSections(){
 
 window.addEventListener("scroll", revealSections);
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  await loadBestSellers();
   render();              // ✅ ONLY ONCE
   updateNavUser();       // ✅ login fix
   updateCartCount();     // ✅ cart count

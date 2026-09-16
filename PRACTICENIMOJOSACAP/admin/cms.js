@@ -39,7 +39,7 @@ const CMS_SECTIONS = [
   },
   {
     title: 'Best Sellers heading',
-    note:  'The products themselves are managed under Products.',
+    note:  'Prices, photos and descriptions come from Products. Pick which ones appear below.',
     fields: [
       { key: 'best_label', label: 'Small label',  placeholder: 'Most Loved' },
       { key: 'best_title', label: 'Heading',      placeholder: 'Best Sellers' },
@@ -130,6 +130,7 @@ const CMS_DEFAULT_FAQ = [
 ];
 
 let siteContent = {};
+let cmsProducts = [];   // the live catalogue, for the Best Sellers picker
 
 function cmsEscape(s) {
   return String(s == null ? '' : s)
@@ -285,6 +286,65 @@ function resetCmsImage(key) {
   if (original) { thumb.classList.remove('broken'); thumb.src = original.placeholder; }
 }
 
+/* ── BEST SELLERS PICKER ──
+   Ticking a product adds it to the homepage row. Order follows the order
+   you tick them, so the first one ticked shows first. */
+function bestSellerPickerHtml() {
+  if (!cmsProducts.length) {
+    return `<p class="cms-card-note">No products found. Add products first, then come back.</p>`;
+  }
+
+  const chosen = Array.isArray(siteContent.best_sellers) ? siteContent.best_sellers : [];
+
+  /* Chosen ones float to the top, in the order they'll appear */
+  const ordered = [
+    ...chosen.map(id => cmsProducts.find(p => p.id === id)).filter(Boolean),
+    ...cmsProducts.filter(p => !chosen.includes(p.id))
+  ];
+
+  return `
+    <div class="cms-picker" id="cms-best-sellers">
+      ${ordered.map(p => {
+        const on = chosen.includes(p.id);
+        return `
+          <label class="cms-pick ${on ? 'on' : ''}">
+            <input type="checkbox" value="${cmsEscape(p.id)}" ${on ? 'checked' : ''}
+                   onchange="updateBestSellerPicks()">
+            <img src="${cmsEscape(p.img || '')}" alt="" onerror="this.style.visibility='hidden'">
+            <span class="cms-pick-name">${cmsEscape(p.name)}</span>
+            <span class="cms-pick-meta">₱${cmsEscape(p.price)}${p.active ? '' : ' · hidden'}</span>
+          </label>`;
+      }).join('')}
+    </div>
+    <p class="cms-pick-count" id="cms-pick-count"></p>`;
+}
+
+function updateBestSellerPicks() {
+  const boxes = [...document.querySelectorAll('#cms-best-sellers input[type="checkbox"]')];
+  boxes.forEach(b => b.closest('.cms-pick').classList.toggle('on', b.checked));
+
+  const n = boxes.filter(b => b.checked).length;
+  document.getElementById('cms-pick-count').textContent = n
+    ? `${n} product${n === 1 ? '' : 's'} shown on the homepage`
+    : 'None ticked — the homepage will show the first few products automatically';
+}
+
+function collectBestSellers() {
+  return [...document.querySelectorAll('#cms-best-sellers input[type="checkbox"]:checked')]
+    .map(b => b.value);
+}
+
+async function loadCmsProducts() {
+  try {
+    const { data, error } = await _supa.from('products').select('data');
+    if (error) throw error;
+    cmsProducts = (data || []).map(r => r.data).filter(Boolean);
+  } catch (err) {
+    console.error('Could not load products for the picker:', err);
+    cmsProducts = [];
+  }
+}
+
 function faqRowHtml(item, i) {
   return `
     <div class="cms-faq-item" data-faq-row>
@@ -322,13 +382,14 @@ function renumberFaqRows() {
 }
 
 async function renderContent() {
-  await loadSiteContentAdmin();
+  await Promise.all([loadSiteContentAdmin(), loadCmsProducts()]);
 
   const cards = CMS_SECTIONS.map(sec => `
     <div class="card cms-card">
       <h3 class="cms-card-title">${cmsEscape(sec.title)}</h3>
       ${sec.note ? `<p class="cms-card-note">${cmsEscape(sec.note)}</p>` : ''}
       <div class="cms-grid">${sec.fields.map(cmsFieldHtml).join('')}</div>
+      ${sec.title === 'Best Sellers heading' ? bestSellerPickerHtml() : ''}
     </div>`);
 
   /* The FAQ editor goes right after its heading card, so the form reads
@@ -344,6 +405,7 @@ async function renderContent() {
 
   document.getElementById('cms-form').innerHTML = cards.join('');
   renderFaqRows();
+  if (document.getElementById('cms-best-sellers')) updateBestSellerPicks();
 }
 
 function collectSiteContent() {
@@ -361,6 +423,9 @@ function collectSiteContent() {
     if (q && a) faq.push({ q, a });
   });
   if (faq.length) out.faq = faq;
+
+  const best = collectBestSellers();
+  if (best.length) out.best_sellers = best;   // none ticked = automatic
 
   return out;
 }
