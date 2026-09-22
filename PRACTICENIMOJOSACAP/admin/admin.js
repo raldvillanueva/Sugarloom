@@ -1126,7 +1126,15 @@ function renderOrders(){
   } else {
     list = DB.orders.filter(o=>!o.archived && o.status===orderFilter);
   }
-  list = [...list].sort((a,b)=>new Date(b.date)-new Date(a.date));
+  /* The bake queue runs oldest first — whoever ordered first gets baked
+     first. queuedAt is only set when someone sends an order to the back,
+     so untouched orders keep their original place. Everywhere else stays
+     newest-first. */
+  const isBakeQueue = isBaker && orderFilter === 'Confirmed';
+  const queueTime = o => new Date(o.queuedAt || o.date).getTime();
+  list = isBakeQueue
+    ? [...list].sort((a,b)=>queueTime(a)-queueTime(b))
+    : [...list].sort((a,b)=>new Date(b.date)-new Date(a.date));
 
   const allTracking = _trackingCache;
   const lalamoveLabels = {
@@ -1162,11 +1170,17 @@ function renderOrders(){
     return { label: o.status, cls };
   }
 
-  document.getElementById('orders-body').innerHTML = list.map(o=>{
+  document.getElementById('orders-body').innerHTML = list.map((o,idx)=>{
     const sp = getStatusPill(o);
+    const queueTag = isBakeQueue
+      ? `<span class="queue-pos ${idx===0?'next':''}" title="${idx===0?'Bake this one next':'Position in the queue'}">${idx===0?'NEXT':'#'+(idx+1)}</span> `
+      : '';
+    const deferTag = isBakeQueue && o.deferCount
+      ? `<span class="queue-defer" title="Sent to the back ${o.deferCount} time${o.deferCount===1?'':'s'}">↻${o.deferCount}</span>`
+      : '';
     return `
-    <tr>
-      <td class="fw-bold">${o.id}</td>
+    <tr class="${isBakeQueue && idx===0 ? 'queue-next-row' : ''}">
+      <td class="fw-bold">${queueTag}${o.id}${deferTag}</td>
       <td>${o.customer}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
       <td class="fw-bold">₱${o.total.toLocaleString()}</td>
@@ -1179,6 +1193,8 @@ function renderOrders(){
           ${isAdmin && !o.archived && (o.status==='Fulfilled'||o.status==='Cancelled')?`<button class="btn-icon danger" onclick="archiveOrder('${o.id}')" title="Archive"><i class='bx bx-archive-in'></i></button>`:isAdmin && o.archived?`<button class="btn-icon success" onclick="unarchiveOrder('${o.id}')" title="Unarchive"><i class='bx bx-archive-out'></i></button>`:''}
           ${isAdmin && o.status==='Pending'&&!o.archived?`<button class="btn-icon success" onclick="openOrderModal('${o.id}')" title="Confirm"><i class='bx bx-check'></i></button>`:''}
           ${(isAdmin||isBaker) && o.status==='Confirmed'&&!o.archived?`<button class="btn-icon success" onclick="openOrderModal('${o.id}')" title="Prepare Order"><i class='bx bx-dish'></i></button>`:''}
+          ${isBaker && o.status==='Confirmed'&&!o.archived&&list.length>1?`<button class="btn-icon warn" onclick="bakerDeferOrder('${o.id}')" title="Not yet — send to back of queue"><i class='bx bx-down-arrow-circle'></i></button>`:''}
+          ${isBaker && o.status==='Confirmed'&&!o.archived?`<button class="btn-icon danger" onclick="bakerDeclineOrder('${o.id}')" title="Can't bake this — send back to the admin"><i class='bx bx-x'></i></button>`:''}
           ${(isAdmin||isBaker) && o.status==='Preparing' && o.preparingSubStatus==='baking' && !o.archived?`<button class="btn-icon success" onclick="bakerDoneBaking('${o.id}')" title="Done Baking" style="background:var(--success-light);color:var(--success)"><i class='bx bx-check-double'></i></button>`:''}
           ${(isAdmin||isPacker) && o.status==='Ready for Packing'&&!o.archived?`<button class="btn-icon success" onclick="packerStartPacking('${o.id}')" title="Start Packing" style="background:#EDE9FE;color:#7C3AED"><i class='bx bx-package'></i></button>`:''}
           ${(isAdmin||isPacker) && o.status==='Preparing' && o.preparingSubStatus==='packing' && !o.archived?`<button class="btn-icon success" onclick="packerDonePacking('${o.id}')" title="Done Packing"><i class='bx bx-check-double'></i></button>`:''}
@@ -1205,14 +1221,27 @@ function archiveOrder(id){
   });
 }
 
-function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', onConfirm }){
+function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', inputLabel=null, inputPlaceholder='', onConfirm }){
   document.getElementById('confirm-modal-title').textContent = title;
   document.getElementById('confirm-modal-message').textContent = message;
   document.getElementById('confirm-modal-icon').innerHTML = `<i class='bx ${icon}'></i>`;
+
+  // Optional free-text box, used for things like a decline reason
+  const wrap  = document.getElementById('confirm-modal-input-wrap');
+  const input = document.getElementById('confirm-modal-input');
+  input.value = '';
+  if(inputLabel){
+    document.getElementById('confirm-modal-input-label').textContent = inputLabel;
+    input.placeholder = inputPlaceholder;
+    wrap.classList.remove('hidden');
+  } else {
+    wrap.classList.add('hidden');
+  }
+
   const okBtn = document.getElementById('confirm-modal-ok');
   okBtn.textContent = okText;
   okBtn.className = okClass;
-  okBtn.onclick = () => { closeConfirmModal(); onConfirm(); };
+  okBtn.onclick = () => { const v = input.value.trim(); closeConfirmModal(); onConfirm(v); };
   document.getElementById('confirm-modal').classList.remove('hidden');
 }
 
@@ -1387,6 +1416,15 @@ function openOrderModal(id, viewOnly=false){
       <thead><tr><th>Item</th><th>Qty</th></tr></thead>
       <tbody>${o.items.map(i=>`<tr><td class="fw-bold">${i.name}</td><td>${i.qty}</td></tr>`).join('')}</tbody>
     </table>` : `
+    ${o.declineReason && o.status==='Pending' ? `
+      <div style="margin-bottom:16px;padding:12px 16px;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;display:flex;gap:10px;align-items:flex-start">
+        <span style="font-size:18px;flex-shrink:0">👨‍🍳</span>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:#EA580C;margin-bottom:2px">SENT BACK BY THE BAKER</div>
+          <div style="font-size:13px">${o.declineReason}</div>
+          <div style="font-size:11px;color:var(--text-2);margin-top:2px">${o.declinedBy || 'Baker'}${o.declinedAt ? ' · ' + fmtDateTime(o.declinedAt) : ''}</div>
+        </div>
+      </div>` : ''}
     ${infoGrid}
     <table class="data-table">
       <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead>
@@ -1729,6 +1767,8 @@ function confirmOrderAction(){
     const _soConfirm = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
     const _soMatchC = _soConfirm.find(x => x.id === o.id);
     if(_soMatchC){ _soMatchC.status = 'Confirmed'; localStorage.setItem('sl_store_orders', JSON.stringify(_soConfirm)); }
+    // Re-confirming clears any earlier send-back, so the banner doesn't linger
+    delete o.declineReason; delete o.declinedBy; delete o.declinedAt;
     updateOrderStatus(o.id,'Confirmed');
     syncStatusToCustomer(o, 'Confirmed');
   } else if(o.status==='Preparing'){
@@ -1770,6 +1810,59 @@ function startPackingAction(){
   sendStatusEmail(o, 'Packing');
   saveDB(); closeModal('order-modal'); renderOrders(); updateBadges();
   toast('Order marked as Packing — passed to Packer', 'success');
+}
+
+/* Baker is mid-way through something else — push this order to the back
+   of the bake queue. It stays Confirmed, so nothing changes for the
+   customer and no one needs to re-approve it. */
+function bakerDeferOrder(id){
+  const o = DB.orders.find(oo=>oo.id===id);
+  if(!o) return;
+  showConfirm({
+    title: 'Bake this later?',
+    message: `Order ${o.id} moves to the back of the queue. It stays confirmed and the customer sees no change.`,
+    okText: 'Send to back',
+    okClass: 'btn-secondary',
+    icon: 'bx-down-arrow-circle',
+    onConfirm: () => {
+      o.queuedAt   = new Date().toISOString();
+      o.deferCount = (o.deferCount || 0) + 1;
+      saveDB(); renderOrders(); updateBadges();
+      toast('Moved to the back of the queue', 'success');
+    }
+  });
+}
+
+/* Baker can't take the order at all — hand it back to the admin by
+   returning it to Pending, with a reason so they know why. */
+function bakerDeclineOrder(id){
+  const o = DB.orders.find(oo=>oo.id===id);
+  if(!o) return;
+  showConfirm({
+    title: 'Send back to the admin?',
+    message: `Order ${o.id} goes back to Pending for the admin to sort out. Use this when it can't be baked at all — to bake it later instead, use "send to back of queue".`,
+    okText: 'Send back',
+    okClass: 'btn-danger',
+    icon: 'bx-x',
+    inputLabel: 'Reason (the admin will see this)',
+    inputPlaceholder: 'e.g. out of red velvet mix',
+    onConfirm: (reason) => {
+      o.status        = 'Pending';
+      o.declineReason = reason || 'No reason given';
+      o.declinedBy    = `${currentUser.fname} ${currentUser.lname}`.trim();
+      o.declinedAt    = new Date().toISOString();
+      delete o.queuedAt;
+      delete o.preparingSubStatus;
+
+      const _so = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
+      const _soMatch = _so.find(x => x.id === o.id);
+      if(_soMatch){ _soMatch.status = 'Pending'; localStorage.setItem('sl_store_orders', JSON.stringify(_so)); }
+      syncStatusToCustomer(o, 'Pending');
+
+      saveDB(); renderOrders(); updateBadges();
+      toast('Sent back to the admin', 'success');
+    }
+  });
 }
 
 function bakerDoneBaking(id){
