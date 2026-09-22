@@ -246,11 +246,41 @@ function checkLogin(){
   }
 }
 
-function adminLogin(){
+/* ── PASSWORDS ──
+   Staff passwords are stored as a SHA-256 hash rather than as typed. The
+   admin_users table has no row-level security, so anyone holding the
+   public anon key could read it; a hash means that read doesn't hand over
+   working logins.
+
+   Accounts created before this still have a plain `password`. Those are
+   accepted once and upgraded to a hash on the next successful sign-in, so
+   nobody is locked out. */
+async function hashPassword(plain){
+  const bytes = new TextEncoder().encode(String(plain));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function passwordMatches(user, typed){
+  if(user.passwordHash) return user.passwordHash === await hashPassword(typed);
+  return user.password !== undefined && user.password === typed;   // legacy
+}
+
+async function setUserPassword(user, plain){
+  user.passwordHash = await hashPassword(plain);
+  delete user.password;
+}
+
+async function adminLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pw    = document.getElementById('login-password').value;
-  const u = DB.users.find(u=>u.email===email && u.password===pw && u.active);
-  if(!u){ showLoginError('Invalid credentials'); return; }
+
+  const u = DB.users.find(u => u.email === email && u.active);
+  if(!u || !(await passwordMatches(u, pw))){ showLoginError('Invalid credentials'); return; }
+
+  // Quietly move legacy plain-text accounts onto a hash
+  if(!u.passwordHash){ await setUserPassword(u, pw); saveDB(); }
+
   currentUser = u;
   sessionStorage.setItem('sl_admin_sess', JSON.stringify(u));
   showApp();
@@ -342,8 +372,7 @@ function fpResetPassword(){
   const u = DB.users.find(u=>u.email.toLowerCase()===email.toLowerCase());
   if(!u){ fpShowMsg('fp-msg3','Account not found'); return; }
 
-  u.password = newpass;
-  saveDB();
+  setUserPassword(u, newpass).then(saveDB);
   fpVerified = false;
   fpShowMsg('fp-msg3','Password updated! Redirecting...','success');
   setTimeout(()=>{ fpShow('fp-panel-login'); }, 1800);
@@ -567,9 +596,9 @@ function renderDashboard(){
         return `
         <tr style="cursor:pointer" onclick="switchView('orders');setTimeout(()=>openOrderModal('${o.id}',true),200)">
           <td><span class="fw-bold">${o.id}</span><br><small class="text-muted">${fmtDate(o.date)}</small><br>${o.preparingSubStatus === 'readyForBook' ? '<span style="font-size:10px;font-weight:700;color:#d97706;background:#fef3c7;padding:2px 6px;border-radius:4px">📍 Ready for Book</span>' : '<span style="font-size:10px;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:4px">Pending</span>'}</td>
-          <td>${o.customer || '—'}</td>
-          <td>${o.phone || o.customerEmail || '—'}</td>
-          <td>${o.address || '—'}</td>
+          <td>${escHTML(o.customer || '—')}</td>
+          <td>${escHTML(o.phone || o.customerEmail || '—')}</td>
+          <td>${escHTML(o.address || '—')}</td>
           <td>${deliveryCell}</td>
           <td>₱${Number(o.total||0).toLocaleString()}</td>
         </tr>`;
@@ -595,7 +624,7 @@ function renderDashboard(){
   const recent = [...DB.orders].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,6);
   tbody.innerHTML = recent.map(o=>`
     <tr>
-      <td><span class="fw-bold">${o.id}</span><br><small class="text-muted">${o.customer}</small></td>
+      <td><span class="fw-bold">${o.id}</span><br><small class="text-muted">${escHTML(o.customer)}</small></td>
       <td>${fmtDate(o.date)}</td>
       <td>${o.type}</td>
       <td><span class="pill ${o.status.toLowerCase()}">${o.status}</span></td>
@@ -1228,7 +1257,7 @@ function renderOrders(){
     return `
     <tr class="${isQueue && idx===0 ? 'queue-next-row' : ''}">
       <td class="fw-bold">${queueTag}${o.id}${deferTag}${overdueTag}</td>
-      <td>${o.customer}</td>
+      <td>${escHTML(o.customer)}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
       <td class="fw-bold">₱${o.total.toLocaleString()}</td>
       <td>${o.type}</td>
@@ -1469,14 +1498,14 @@ function openOrderModal(id, viewOnly=false){
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
       <div><label style="font-size:11px;color:var(--text-2);font-weight:700">ORDER ID</label><div class="fw-bold" style="font-size:13px">${o.id}</div></div>
       <div><label style="font-size:11px;color:var(--text-2);font-weight:700">STATUS</label><div><span class="pill ${modalStatusCls}">${modalStatusLabel}</span></div></div>
-      <div><label style="font-size:11px;color:var(--text-2);font-weight:700">CUSTOMER</label><div class="fw-bold">${o.customer}</div></div>
+      <div><label style="font-size:11px;color:var(--text-2);font-weight:700">CUSTOMER</label><div class="fw-bold">${escHTML(o.customer)}</div></div>
       <div><label style="font-size:11px;color:var(--text-2);font-weight:700">DATE</label><div>${fmtDateTime(o.date)}</div></div>
       <div><label style="font-size:11px;color:var(--text-2);font-weight:700">TYPE</label><div>${o.type}</div></div>
       ${o.payment?`<div><label style="font-size:11px;color:var(--text-2);font-weight:700">PAYMENT</label><div>${o.payment}</div></div>`:''}
-      ${o.address?`<div style="grid-column:1/-1"><label style="font-size:11px;color:var(--text-2);font-weight:700">DELIVERY ADDRESS</label><div>${o.address}</div></div>`:''}
+      ${o.address?`<div style="grid-column:1/-1"><label style="font-size:11px;color:var(--text-2);font-weight:700">DELIVERY ADDRESS</label><div>${escHTML(o.address)}</div></div>`:''}
       ${o.preferredDate?`<div style="grid-column:1/-1"><label style="font-size:11px;color:var(--text-2);font-weight:700">PREFERRED DELIVERY DATE</label><div>${new Date(o.preferredDate).toLocaleDateString('en-PH',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div></div>`:''}
       ${o.preferredTime?`<div style="grid-column:1/-1"><label style="font-size:11px;color:var(--text-2);font-weight:700">PREFERRED DELIVERY TIME</label><div>${o.preferredTime}</div></div>`:''}
-      ${o.contactMethod?`<div style="grid-column:1/-1"><label style="font-size:11px;color:var(--text-2);font-weight:700">PREFERRED CONTACT METHOD</label><div>${o.contactMethod}</div></div>`:''}
+      ${o.contactMethod?`<div style="grid-column:1/-1"><label style="font-size:11px;color:var(--text-2);font-weight:700">PREFERRED CONTACT METHOD</label><div>${escHTML(o.contactMethod)}</div></div>`:''}
     </div>`;
 
   // Baker view: items with per-item ingredient dropdown, no customer info
@@ -1512,7 +1541,7 @@ function openOrderModal(id, viewOnly=false){
       <span style="font-size:18px;flex-shrink:0">↩️</span>
       <div>
         <div style="font-size:12px;font-weight:700;color:#EA580C;margin-bottom:2px">SENT BACK</div>
-        <div style="font-size:13px">${o.declineReason}</div>
+        <div style="font-size:13px">${escHTML(o.declineReason)}</div>
         <div style="font-size:11px;color:var(--text-2);margin-top:2px">${o.declinedBy || 'Staff'}${o.declinedAt ? ' · ' + fmtDateTime(o.declinedAt) : ''}</div>
       </div>
     </div>` : '';
@@ -1560,7 +1589,7 @@ function openOrderModal(id, viewOnly=false){
       body.innerHTML = `<div style="margin-bottom:16px;padding:12px 16px;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;display:flex;gap:10px;align-items:flex-start">
         <span style="font-size:18px;flex-shrink:0">⚠️</span>
         <div><div style="font-size:12px;font-weight:700;color:#EA580C;margin-bottom:2px">CANCELLATION REQUEST</div>
-        <div style="font-size:13px;color:#374151">Reason: <strong>${o.cancelReason}</strong></div></div>
+        <div style="font-size:13px;color:#374151">Reason: <strong>${escHTML(o.cancelReason)}</strong></div></div>
       </div>` + body.innerHTML;
     }
   } else if(o.status==='Cancelled'){
@@ -2201,7 +2230,7 @@ function openRefundModal(id){
   document.getElementById('refund-modal-info').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
       <div><span style="color:var(--text-2);font-size:11px;font-weight:700">ORDER</span><div class="fw-bold">${o.id}</div></div>
-      <div><span style="color:var(--text-2);font-size:11px;font-weight:700">CUSTOMER</span><div>${o.customer}</div></div>
+      <div><span style="color:var(--text-2);font-size:11px;font-weight:700">CUSTOMER</span><div>${escHTML(o.customer)}</div></div>
       <div><span style="color:var(--text-2);font-size:11px;font-weight:700">AMOUNT TO REFUND</span><div class="fw-bold" style="color:#16A34A;font-size:15px">₱${o.total.toLocaleString()}</div></div>
       <div><span style="color:var(--text-2);font-size:11px;font-weight:700">PAYMENT</span><div>${o.payment}</div></div>
     </div>`;
@@ -2997,10 +3026,10 @@ function renderCustomers(){
               <div class="avatar sm">${c.name[0]?.toUpperCase()||'?'}</div>
               ${c.hasPending ? `<span class="pending-dot" title="Has pending order"></span>` : ''}
             </div>
-            <div class="product-name">${c.name}</div>
+            <div class="product-name">${escHTML(c.name)}</div>
           </div>
         </td>
-        <td>${c.email}</td>
+        <td>${escHTML(c.email)}</td>
         <td>${c.phone}</td>
         <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${c.address}">${c.address}</td>
         <td class="fw-bold">${c.orders}</td>
@@ -3151,7 +3180,7 @@ function openUserModal(id){
   openModal('user-modal');
 }
 
-function saveUser(){
+async function saveUser(){
   const id    = document.getElementById('um-id').value;
   const fname = document.getElementById('um-fname').value.trim();
   const lname = document.getElementById('um-lname').value.trim();
@@ -3162,11 +3191,14 @@ function saveUser(){
   if(!id && !pw){ toast('Password required for new user','danger'); return; }
   if(id){
     const idx = DB.users.findIndex(u=>u.id===id);
-    DB.users[idx] = {...DB.users[idx], fname, lname, email, role, ...(pw?{password:pw}:{})};
+    DB.users[idx] = {...DB.users[idx], fname, lname, email, role};
+    if(pw) await setUserPassword(DB.users[idx], pw);   // blank means keep the current one
     toast('User updated','success');
   } else {
     if(DB.users.find(u=>u.email===email)){ toast('Email already exists','danger'); return; }
-    DB.users.push({id:'u'+Date.now(), fname, lname, email, password:pw, role, active:true});
+    const user = {id:'u'+Date.now(), fname, lname, email, role, active:true};
+    await setUserPassword(user, pw);
+    DB.users.push(user);
     toast('User added','success');
   }
   saveDB(); closeModal('user-modal'); renderUsers();
@@ -3236,7 +3268,7 @@ function buildNotifs(){
     const id = `cancel_req_${o.id}`;
     if(seen.has(id)) return;
     notifList.push({ id, icon:'bx-x-circle', color:'#DC2626',
-      text:`Cancel request for order ${o.id} from ${o.customer}${o.cancelReason ? ' — "'+o.cancelReason+'"' : ''}`,
+      text:`Cancel request for order ${o.id} from ${escHTML(o.customer)}${o.cancelReason ? ' — "'+o.cancelReason+'"' : ''}`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
   });
@@ -3246,7 +3278,7 @@ function buildNotifs(){
     const id = `order_${o.id}`;
     if(seen.has(id)) return;
     notifList.push({ id, icon:'bx-shopping-bag', color:'#2563EB',
-      text:`New order ${o.id} from ${o.customer}`,
+      text:`New order ${o.id} from ${escHTML(o.customer)}`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
   });
@@ -3256,7 +3288,7 @@ function buildNotifs(){
     const id = `prepare_${o.id}`;
     if(seen.has(id)) return;
     notifList.push({ id, icon:'bx-dish', color:'#D97706',
-      text:`Order ${o.id} from ${o.customer} needs to be prepared`,
+      text:`Order ${o.id} from ${escHTML(o.customer)} needs to be prepared`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
   });
@@ -3268,7 +3300,7 @@ function buildNotifs(){
     const id = `ready_pack_${o.id}`;
     if(seen.has(id)) return;
     notifList.push({ id, icon:'bx-package', color:'#7C3AED',
-      text:`Order ${o.id} from ${o.customer} is ready to be packed`,
+      text:`Order ${o.id} from ${escHTML(o.customer)} is ready to be packed`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id, true),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
   });
@@ -3278,7 +3310,7 @@ function buildNotifs(){
     const id = `packed_${o.id}`;
     if(seen.has(id)) return;
     notifList.push({ id, icon:'bx-box', color:'#0891B2',
-      text:`Order ${o.id} from ${o.customer} is packed — mark ready for Lalamove`,
+      text:`Order ${o.id} from ${escHTML(o.customer)} is packed — mark ready for Lalamove`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
   });
@@ -3288,7 +3320,7 @@ function buildNotifs(){
     const id = `ready_book_${o.id}`;
     if(seen.has(id)) return;
     notifList.push({ id, icon:'bx-map', color:'#16A34A',
-      text:`Order ${o.id} from ${o.customer} is ready to book Lalamove`,
+      text:`Order ${o.id} from ${escHTML(o.customer)} is ready to book Lalamove`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
   });

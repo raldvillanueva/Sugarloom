@@ -96,8 +96,16 @@ on the deployed site with nothing to start up.
 
 ## Known gaps
 
-- No RLS; the anon key can read and write every table.
-- Admin passwords are stored and compared in plain text in `admin_users`.
-- Customer names and addresses are interpolated straight into admin HTML,
-  so a crafted name could inject markup into the panel.
-- Email delivery needs `js/server.js` hosted somewhere.
+- RLS is off for every table except `profiles` (see `supabase-rls.sql`).
+  The admin panel signs in against its own `admin_users` table and then
+  uses the same public anon key a customer does, so Postgres can't tell
+  staff from visitors. Fixing that means moving staff onto Supabase Auth,
+  or putting the panel behind a server holding the service_role key.
+- Email delivery and the admin forgot-password OTP need `js/server.js`
+  hosted somewhere.
+
+Staff passwords are SHA-256 hashed (unsalted — enough that reading
+`admin_users` doesn't hand over logins, not enough to resist a serious
+offline attack). Accounts created before that are upgraded on next login.
+Customer-supplied text is escaped with `escHTML()` before it reaches
+admin markup.

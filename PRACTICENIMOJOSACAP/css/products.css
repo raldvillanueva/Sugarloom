@@ -504,3 +504,28 @@ a { text-decoration: none; color: inherit; }
   font-size: 12px;
   color: var(--text-muted);
 }
+/* ── TOAST (shared with the homepage, used by js/inquiry.js) ── */
+.site-toast {
+  position: fixed;
+  bottom: 32px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 14px 24px;
+  border-radius: 30px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: 'Inter', sans-serif;
+  white-space: nowrap;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  z-index: 9999;
+}
+.site-toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;
+}
+.site-toast.success { background: #1a1a1a; color: #fff; }
+.site-toast.error   { background: #d32f2f; color: #fff; }
