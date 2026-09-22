@@ -1842,36 +1842,20 @@ function confirmOrderAction(){
     });
     return;
   } else if(o.status==='Pending'){
-    // Deduct raw ingredients on confirmation (soldToday already counted at placement).
-    // Guarded: an order sent back by the baker returns to Pending with its
-    // ingredients already taken out, and must not be deducted twice.
-    if(!o.stockDeducted) o.items.forEach(item=>{
-      const p = DB.products.find(pp=>pp.name===item.name || pp.id===item.id);
-      if(p){
-        if(p.recipe){
-          p.recipe.forEach(r=>{
-            const ing = DB.ingredients.find(i=>i.id===r.ingredientId);
-            if(ing){
-              const ibefore = ing.stock;
-              const deduct = r.qty * item.qty;
-              ing.stock = Math.max(0, ing.stock - deduct);
-              logStock({ type:'ingredient', itemId:ing.id, itemName:ing.name, unit:ing.unit, op:'order', before:ibefore, after:ing.stock, note:`Order confirmed`, ref:o.id });
-            }
-          });
-        }
-      }
-    });
+    /* Ingredients are NOT taken out here — confirming only accepts the
+       order. They come out when baking actually starts, in
+       prepareOrderAction(), so stock reflects what is really in the
+       kitchen rather than what has merely been agreed to. */
     // Update sl_store_orders so syncStoreOrders() doesn't re-import as Pending on reload
     const _soConfirm = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
     const _soMatchC = _soConfirm.find(x => x.id === o.id);
     if(_soMatchC){ _soMatchC.status = 'Confirmed'; localStorage.setItem('sl_store_orders', JSON.stringify(_soConfirm)); }
-    o.stockDeducted = true;
     // Re-confirming clears any earlier send-back, so the banner doesn't linger
     delete o.declineReason; delete o.declinedBy; delete o.declinedAt;
     updateOrderStatus(o.id,'Confirmed');
     syncStatusToCustomer(o, 'Confirmed');
   } else if(o.status==='Preparing'){
-    // Stock already deducted at confirmation — just record transaction
+    // Stock already deducted when baking started — just record transaction
     updateOrderStatus(o.id,'Fulfilled');
     if(!DB.transactions.find(t=>t.id==='TX-'+o.id))
       DB.transactions.push({ id:'TX-'+o.id, customer:o.customer, items:o.items, total:o.total, date:new Date().toISOString(), payment:o.payment||'GCash' });
@@ -1881,17 +1865,53 @@ function confirmOrderAction(){
   saveDB(); closeModal('order-modal'); renderOrders(); updateBadges(); renderInventory();
 }
 
+/* Takes an order's ingredients out of stock. Called when baking starts,
+   not when the order is confirmed — stock should reflect what has
+   actually gone into the mixing bowl. The flag makes it safe to call more
+   than once for the same order, which matters because an order can come
+   back to Confirmed and be started again. */
+function deductIngredientsFor(o){
+  if(o.stockDeducted) return [];
+
+  const used = [];
+  o.items.forEach(item=>{
+    const p = DB.products.find(pp=>pp.name===item.name || pp.id===item.id);
+    if(!p || !p.recipe) return;
+    p.recipe.forEach(r=>{
+      const ing = DB.ingredients.find(i=>i.id===r.ingredientId);
+      if(!ing) return;
+      const before = ing.stock;
+      const deduct = r.qty * item.qty;
+      ing.stock = Math.max(0, ing.stock - deduct);
+      used.push({ name: ing.name, deduct, unit: ing.unit, short: before < deduct });
+      logStock({ type:'ingredient', itemId:ing.id, itemName:ing.name, unit:ing.unit, op:'order', before, after:ing.stock, note:'Baking started', ref:o.id });
+    });
+  });
+
+  o.stockDeducted = true;
+  return used;
+}
+
 function prepareOrderAction(){
   const o = DB.orders.find(oo=>oo.id===currentOrderId);
   if(!o) return;
   o.preparingAt = new Date().toISOString();
   o.preparingSubStatus = 'baking';
+
+  // Ingredients come out of stock now that it is actually being baked
+  const used  = deductIngredientsFor(o);
+  const short = used.filter(u => u.short);
+  if(short.length){
+    toast(`Started baking — but stock was short on ${short.map(s=>s.name).join(', ')}`, 'warning');
+  } else if(used.length){
+    toast('Started baking — ingredients deducted from inventory', 'success');
+  }
   const _soPrep = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
   const _soMatchP = _soPrep.find(x => x.id === o.id);
   if(_soMatchP){ _soMatchP.status = 'Preparing'; localStorage.setItem('sl_store_orders', JSON.stringify(_soPrep)); }
   updateOrderStatus(o.id, 'Preparing');
   syncStatusToCustomer(o, 'Preparing');
-  saveDB(); closeModal('order-modal'); renderOrders(); updateBadges();
+  saveDB(); closeModal('order-modal'); renderOrders(); updateBadges(); renderInventory();
 }
 
 function startPackingAction(){
