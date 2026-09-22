@@ -1509,3 +1509,21 @@ body.dark .tab-btn.active { background: #1A1A2E; box-shadow: 0 1px 4px rgba(0,0,
   letter-spacing: .04em;
   vertical-align: middle;
 }
+
+/* Lalamove demo controls */
+.llm-demo {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.llm-demo-tag {
+  padding: 2px 7px; border-radius: 6px;
+  background: var(--warning-light); color: var(--warning);
+  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+}
+.llm-demo-note { font-size: 12px; color: var(--text-2); flex: 1; min-width: 160px; }
+.llm-demo-actions { display: flex; gap: 6px; }
+.llm-demo-actions button[disabled] { opacity: .45; cursor: not-allowed; }

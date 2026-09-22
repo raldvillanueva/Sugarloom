@@ -1387,6 +1387,18 @@ function openOrderModal(id, viewOnly=false){
         </div>
         ${driverHTML}
         ${linkHTML}
+        <div class="llm-demo">
+          <span class="llm-demo-tag">DEMO</span>
+          <span class="llm-demo-note">Simulated delivery — advances on its own, or step it manually.</span>
+          <div class="llm-demo-actions">
+            <button class="btn-secondary sm" onclick="lalamoveDemoAdvance('${o.id}')" ${tracking.status==='COMPLETED'?'disabled':''}>
+              <i class='bx bx-fast-forward'></i> Next stage
+            </button>
+            <button class="btn-ghost sm" onclick="lalamoveDemoRestart('${o.id}')">
+              <i class='bx bx-revision'></i> Restart
+            </button>
+          </div>
+        </div>
       </div>`;
   }
 
@@ -1602,48 +1614,78 @@ function bookLalamove(){
   btn.disabled   = true;
   btn.textContent = 'Booking...';
 
-  fetch('http://localhost:5000/lalamove/create-order', {
-    method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      customerName:    o.customer,
-      customerPhone:   o.phone,
-      deliveryAddress: o.address
-    })
-  })
-  .then(r => r.json())
-  .then(data => {
-    if(data.success){
-      // Save tracking to Supabase order_tracking table
-      const trackingData = {
-        lalamoveRef: data.orderRef,
-        shareLink:   data.shareLink || null,
-        status:      'ASSIGNING_DRIVER',
-        driver:      null,
-        lastUpdated: new Date().toISOString()
-      };
-      _supa.from('order_tracking')
-        .upsert({ order_id: o.id, data: trackingData }, { onConflict: 'order_id' })
-        .catch(console.error);
-
-      o.lalamoveRef = data.orderRef;
-      saveDB();
-
-      toast('Lalamove booked! Ref: ' + data.orderRef, 'success');
-      closeModal('order-modal');
-      openOrderModal(o.id); // reopen to show tracking section
-    } else {
-      btn.disabled   = false;
-      btn.textContent = '🛵 Book Lalamove';
-      const errMsg = typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
-      toast('Lalamove error: ' + errMsg, 'error');
-    }
-  })
-  .catch(err => {
-    btn.disabled   = false;
-    btn.textContent = '🛵 Book Lalamove';
-    toast('Network error: ' + err.message, 'error');
+  const data = LalamoveSim.createOrder({
+    customerName:    o.customer,
+    customerPhone:   o.phone,
+    deliveryAddress: o.address
   });
+
+  if(!data.success){
+    btn.disabled    = false;
+    btn.textContent = '🛵 Book Lalamove';
+    toast('Lalamove error: ' + data.error, 'danger');
+    return;
+  }
+
+  // Save tracking to Supabase order_tracking table
+  const trackingData = {
+    lalamoveRef: data.orderRef,
+    bookedAt:    data.bookedAt,
+    shareLink:   data.shareLink || null,
+    status:      'ASSIGNING_DRIVER',
+    driver:      null,
+    lastUpdated: new Date().toISOString()
+  };
+  _supa.from('order_tracking')
+    .upsert({ order_id: o.id, data: trackingData }, { onConflict: 'order_id' })
+    .then(() => { _trackingCache[o.id] = trackingData; })
+    .catch(console.error);
+
+  _trackingCache[o.id] = trackingData;
+  o.lalamoveRef = data.orderRef;
+  saveDB();
+
+  toast('Lalamove booked! Ref: ' + data.orderRef, 'success');
+  closeModal('order-modal');
+  openOrderModal(o.id); // reopen to show tracking section
+}
+
+/* Presenter controls — jump the open booking to its next stage, or start
+   it over, so a demo doesn't depend on waiting in real time. */
+async function lalamoveDemoAdvance(orderId){
+  const t = _trackingCache[orderId];
+  if(!t) return;
+
+  const skewed = LalamoveSim.skewToNextStage(t.bookedAt || t.lalamoveRef);
+  if(skewed === null){ toast('Already delivered', 'warning'); return; }
+
+  await applyLalamoveSkew(orderId, t, skewed);
+  toast('Moved to the next delivery stage', 'success');
+}
+
+async function lalamoveDemoRestart(orderId){
+  const t = _trackingCache[orderId];
+  if(!t) return;
+  await applyLalamoveSkew(orderId, t, Date.now());
+  toast('Delivery restarted', 'success');
+}
+
+async function applyLalamoveSkew(orderId, tracking, bookedAt){
+  const res = LalamoveSim.track(bookedAt);
+  const updated = {
+    ...tracking,
+    bookedAt,
+    status:      res.status,
+    driver:      res.driver,
+    lastUpdated: new Date().toISOString()
+  };
+  _trackingCache[orderId] = updated;
+  await _supa.from('order_tracking')
+    .upsert({ order_id: orderId, data: updated }, { onConflict: 'order_id' })
+    .catch(console.error);
+  renderOrders();
+  closeModal('order-modal');
+  openOrderModal(orderId);
 }
 
 /* Poll Lalamove statuses for all active bookings and update Supabase order_tracking */
@@ -1663,9 +1705,9 @@ async function pollLalamoveStatuses(){
     const t       = row.data;
 
     try {
-      const r    = await fetch(`http://localhost:5000/lalamove/track/${t.lalamoveRef}`);
-      const data = await r.json();
+      const data = LalamoveSim.track(t.bookedAt || t.lalamoveRef);
       if (!data.success) continue;
+      if (data.status === t.status) continue;   // nothing moved since last poll
 
       const updatedTracking = {
         ...t,
