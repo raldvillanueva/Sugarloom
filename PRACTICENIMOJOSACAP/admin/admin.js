@@ -1130,13 +1130,15 @@ function renderOrders(){
   } else {
     list = DB.orders.filter(o=>!o.archived && o.status===orderFilter);
   }
-  /* The bake queue runs oldest first — whoever ordered first gets baked
-     first. queuedAt is only set when someone sends an order to the back,
-     so untouched orders keep their original place. Everywhere else stays
-     newest-first. */
-  const isBakeQueue = isBaker && orderFilter === 'Confirmed';
+  /* Staff queues run oldest first — whoever ordered first gets baked and
+     packed first. queuedAt is only set when someone sends an order to the
+     back, so untouched orders keep their original place. Everywhere else
+     stays newest-first. */
+  const isBakeQueue = isBaker  && orderFilter === 'Confirmed';
+  const isPackQueue = isPacker && orderFilter === 'Ready for Packing';
+  const isQueue     = isBakeQueue || isPackQueue;
   const queueTime = o => new Date(o.queuedAt || o.date).getTime();
-  list = isBakeQueue
+  list = isQueue
     ? [...list].sort((a,b)=>queueTime(a)-queueTime(b))
     : [...list].sort((a,b)=>new Date(b.date)-new Date(a.date));
 
@@ -1176,17 +1178,18 @@ function renderOrders(){
 
   document.getElementById('orders-body').innerHTML = list.map((o,idx)=>{
     const sp = getStatusPill(o);
-    const queueTag = isBakeQueue
-      ? `<span class="queue-pos ${idx===0?'next':''}" title="${idx===0?'Bake this one next':'Position in the queue'}">${idx===0?'NEXT':'#'+(idx+1)}</span> `
+    const nextLabel = isBakeQueue ? 'Bake this one next' : 'Pack this one next';
+    const queueTag = isQueue
+      ? `<span class="queue-pos ${idx===0?'next':''}" title="${idx===0?nextLabel:'Position in the queue'}">${idx===0?'NEXT':'#'+(idx+1)}</span> `
       : '';
-    const deferTag = isBakeQueue && o.deferCount
+    const deferTag = isQueue && o.deferCount
       ? `<span class="queue-defer" title="Sent to the back ${o.deferCount} time${o.deferCount===1?'':'s'}">↻${o.deferCount}</span>`
       : '';
     const overdueTag = o.autoArchived
       ? `<span class="auto-archived-tag" title="${o.archivedReason || 'Delivery date has passed'}">PAST DUE</span>`
       : '';
     return `
-    <tr class="${isBakeQueue && idx===0 ? 'queue-next-row' : ''}">
+    <tr class="${isQueue && idx===0 ? 'queue-next-row' : ''}">
       <td class="fw-bold">${queueTag}${o.id}${deferTag}${overdueTag}</td>
       <td>${o.customer}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
@@ -1204,6 +1207,8 @@ function renderOrders(){
           ${isBaker && o.status==='Confirmed'&&!o.archived?`<button class="btn-icon danger" onclick="bakerDeclineOrder('${o.id}')" title="Can't bake this — send back to the admin"><i class='bx bx-x'></i></button>`:''}
           ${(isAdmin||isBaker) && o.status==='Preparing' && o.preparingSubStatus==='baking' && !o.archived?`<button class="btn-icon success" onclick="bakerDoneBaking('${o.id}')" title="Done Baking" style="background:var(--success-light);color:var(--success)"><i class='bx bx-check-double'></i></button>`:''}
           ${(isAdmin||isPacker) && o.status==='Ready for Packing'&&!o.archived?`<button class="btn-icon success" onclick="packerStartPacking('${o.id}')" title="Start Packing" style="background:#EDE9FE;color:#7C3AED"><i class='bx bx-package'></i></button>`:''}
+          ${isPacker && o.status==='Ready for Packing'&&!o.archived&&list.length>1?`<button class="btn-icon warn" onclick="packerDeferOrder('${o.id}')" title="Not yet — send to back of queue"><i class='bx bx-down-arrow-circle'></i></button>`:''}
+          ${isPacker && o.status==='Ready for Packing'&&!o.archived?`<button class="btn-icon danger" onclick="packerSendBackToBaker('${o.id}')" title="Can't pack this — send back to the baker"><i class='bx bx-x'></i></button>`:''}
           ${(isAdmin||isPacker) && o.status==='Preparing' && o.preparingSubStatus==='packing' && !o.archived?`<button class="btn-icon success" onclick="packerDonePacking('${o.id}')" title="Done Packing"><i class='bx bx-check-double'></i></button>`:''}
           ${(isAdmin||isPacker) && o.status==='Preparing' && o.preparingSubStatus==='packed' && !o.archived?`<button class="btn-icon success" onclick="packerReadyForBook('${o.id}')" title="Ready for Book"><i class='bx bx-map-pin'></i></button>`:''}
           ${isAdmin && o.status==='Preparing' && o.preparingSubStatus==='readyForBook' && !o.archived?`<button class="btn-icon edit" onclick="openOrderModal('${o.id}')" title="Book Lalamove"><i class='bx bx-map'></i></button>`:''}
@@ -1452,7 +1457,19 @@ function openOrderModal(id, viewOnly=false){
       </tr>` : ''}`;
   }).join('');
 
+  /* Shown to whoever now owns the order after someone handed it back */
+  const sendBackBanner = o.declineReason ? `
+    <div style="margin-bottom:16px;padding:12px 16px;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;display:flex;gap:10px;align-items:flex-start">
+      <span style="font-size:18px;flex-shrink:0">↩️</span>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#EA580C;margin-bottom:2px">SENT BACK</div>
+        <div style="font-size:13px">${o.declineReason}</div>
+        <div style="font-size:11px;color:var(--text-2);margin-top:2px">${o.declinedBy || 'Staff'}${o.declinedAt ? ' · ' + fmtDateTime(o.declinedAt) : ''}</div>
+      </div>
+    </div>` : '';
+
   document.getElementById('order-modal-body').innerHTML = isBakerView ? `
+    ${sendBackBanner}
     <table class="data-table">
       <thead><tr><th>Item</th><th>Qty</th><th></th></tr></thead>
       <tbody>${bakerRows}</tbody>
@@ -1461,15 +1478,7 @@ function openOrderModal(id, viewOnly=false){
       <thead><tr><th>Item</th><th>Qty</th></tr></thead>
       <tbody>${o.items.map(i=>`<tr><td class="fw-bold">${i.name}</td><td>${i.qty}</td></tr>`).join('')}</tbody>
     </table>` : `
-    ${o.declineReason && o.status==='Pending' ? `
-      <div style="margin-bottom:16px;padding:12px 16px;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;display:flex;gap:10px;align-items:flex-start">
-        <span style="font-size:18px;flex-shrink:0">👨‍🍳</span>
-        <div>
-          <div style="font-size:12px;font-weight:700;color:#EA580C;margin-bottom:2px">SENT BACK BY THE BAKER</div>
-          <div style="font-size:13px">${o.declineReason}</div>
-          <div style="font-size:11px;color:var(--text-2);margin-top:2px">${o.declinedBy || 'Baker'}${o.declinedAt ? ' · ' + fmtDateTime(o.declinedAt) : ''}</div>
-        </div>
-      </div>` : ''}
+    ${sendBackBanner}
     ${infoGrid}
     <table class="data-table">
       <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Subtotal</th></tr></thead>
@@ -1791,8 +1800,10 @@ function confirmOrderAction(){
     });
     return;
   } else if(o.status==='Pending'){
-    // Deduct raw ingredients on confirmation (soldToday already counted at placement)
-    o.items.forEach(item=>{
+    // Deduct raw ingredients on confirmation (soldToday already counted at placement).
+    // Guarded: an order sent back by the baker returns to Pending with its
+    // ingredients already taken out, and must not be deducted twice.
+    if(!o.stockDeducted) o.items.forEach(item=>{
       const p = DB.products.find(pp=>pp.name===item.name || pp.id===item.id);
       if(p){
         if(p.recipe){
@@ -1812,6 +1823,7 @@ function confirmOrderAction(){
     const _soConfirm = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
     const _soMatchC = _soConfirm.find(x => x.id === o.id);
     if(_soMatchC){ _soMatchC.status = 'Confirmed'; localStorage.setItem('sl_store_orders', JSON.stringify(_soConfirm)); }
+    o.stockDeducted = true;
     // Re-confirming clears any earlier send-back, so the banner doesn't linger
     delete o.declineReason; delete o.declinedBy; delete o.declinedAt;
     updateOrderStatus(o.id,'Confirmed');
@@ -1910,6 +1922,59 @@ function bakerDeclineOrder(id){
   });
 }
 
+/* Packer is mid-way through another order — push this one to the back of
+   the packing queue. Status is untouched. */
+function packerDeferOrder(id){
+  const o = DB.orders.find(oo=>oo.id===id);
+  if(!o) return;
+  showConfirm({
+    title: 'Pack this later?',
+    message: `Order ${o.id} moves to the back of the packing queue. Nothing changes for the customer.`,
+    okText: 'Send to back',
+    okClass: 'btn-secondary',
+    icon: 'bx-down-arrow-circle',
+    onConfirm: () => {
+      o.queuedAt   = new Date().toISOString();
+      o.deferCount = (o.deferCount || 0) + 1;
+      saveDB(); renderOrders(); updateBadges();
+      toast('Moved to the back of the queue', 'success');
+    }
+  });
+}
+
+/* Something is wrong with what came out of the kitchen — hand it back one
+   step to the baker rather than all the way to Pending, so the order
+   keeps its place in the workflow and no stock is re-counted. */
+function packerSendBackToBaker(id){
+  const o = DB.orders.find(oo=>oo.id===id);
+  if(!o) return;
+  showConfirm({
+    title: 'Send back to the baker?',
+    message: `Order ${o.id} goes back to the baker's queue to be remade. Use this when what was baked can't be packed — to pack it later instead, use "send to back of queue".`,
+    okText: 'Send back',
+    okClass: 'btn-danger',
+    icon: 'bx-x',
+    inputLabel: 'Reason (the baker will see this)',
+    inputPlaceholder: 'e.g. brownies came out broken',
+    onConfirm: (reason) => {
+      o.status        = 'Confirmed';
+      o.declineReason = reason || 'No reason given';
+      o.declinedBy    = `${currentUser.fname} ${currentUser.lname}`.trim();
+      o.declinedAt    = new Date().toISOString();
+      o.queuedAt      = new Date().toISOString();   // rejoins the bake queue at the back
+      delete o.preparingSubStatus;
+
+      const _so = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
+      const _soMatch = _so.find(x => x.id === o.id);
+      if(_soMatch){ _soMatch.status = 'Confirmed'; localStorage.setItem('sl_store_orders', JSON.stringify(_so)); }
+      syncStatusToCustomer(o, 'Confirmed');
+
+      saveDB(); renderOrders(); updateBadges();
+      toast('Sent back to the baker', 'success');
+    }
+  });
+}
+
 function bakerDoneBaking(id){
   const o = DB.orders.find(oo=>oo.id===id);
   if(!o) return;
@@ -1922,6 +1987,8 @@ function bakerDoneBaking(id){
     icon: 'bx-check-double',
     onConfirm: () => {
       delete o.preparingSubStatus;
+      // Remade — clear the packer's note so it doesn't follow the order back
+      delete o.declineReason; delete o.declinedBy; delete o.declinedAt;
       o.status = 'Ready for Packing';
       const _soRfp = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
       const _soMatchRfp = _soRfp.find(x => x.id === o.id);
