@@ -102,11 +102,6 @@ function removeItem(name){
   renderCart();
 }
 
-// SAVE CONTACT METHOD
-function saveContactMethod(val){
-  localStorage.setItem("contactMethod", val);
-}
-
 // SAVE TIME SLOT
 function saveTimeSlot(val){
   localStorage.setItem("preferredTime", val);
@@ -247,14 +242,11 @@ function checkout(){
 
   const preferredDate = document.getElementById("preferredDate").value.trim();
   const preferredTime = document.getElementById("preferredTime").value.trim();
-  const contactMethod = document.getElementById("contactMethod").value.trim();
   const dateError = document.getElementById("dateError");
   const timeError = document.getElementById("timeError");
-  const contactError = document.getElementById("contactError");
 
   dateError.innerText = "";
   timeError.innerText = "";
-  contactError.innerText = "";
 
   let hasError = false;
 
@@ -276,11 +268,6 @@ function checkout(){
 
   if(!preferredTime){
     timeError.innerText = "Please select a preferred delivery time.";
-    hasError = true;
-  }
-
-  if(!contactMethod){
-    contactError.innerText = "Please enter your preferred contact method.";
     hasError = true;
   }
 
@@ -325,10 +312,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   } catch(e) {}
 
   renderCart();
-
-  // restore saved contact method
-  const saved = localStorage.getItem("contactMethod");
-  if(saved) document.getElementById("contactMethod").value = saved;
 
   // flatpickr date picker
   const maxDate = new Date();

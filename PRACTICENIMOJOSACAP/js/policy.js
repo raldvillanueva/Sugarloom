@@ -19,7 +19,7 @@ const POLICIES = {
       <p>All orders are subject to availability. We accept GCash and Cash on Delivery (COD) as payment methods. COD is limited to orders not exceeding ₱2,000. Orders are confirmed only after payment verification or admin approval.</p>
 
       <h4>4. Delivery</h4>
-      <p>We deliver within Cainta and nearby areas. A delivery fee of ₱50 applies to all orders. Preferred delivery dates are subject to our availability and may be adjusted. We will contact you through your preferred contact method to confirm.</p>
+      <p>We deliver within Cainta and nearby areas. A delivery fee of ₱50 applies to all orders. Preferred delivery dates are subject to our availability and may be adjusted. We will email you to confirm and to keep you updated on your order.</p>
 
       <h4>5. Cancellations & Refunds</h4>
       <p>Orders may be cancelled before they are confirmed by our team. Once confirmed, cancellations are no longer accepted as products are made to order. Refunds are issued only in cases of wrong or damaged items upon delivery.</p>
@@ -48,7 +48,7 @@ const POLICIES = {
         <li>Name, email address, and phone number</li>
         <li>Delivery address and postal code</li>
         <li>Order history and preferences</li>
-        <li>Preferred contact method and delivery date</li>
+        <li>Preferred delivery date and time</li>
       </ul>
 
       <h4>2. How We Use Your Information</h4>

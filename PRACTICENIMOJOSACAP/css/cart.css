@@ -420,41 +420,6 @@ body {
   line-height: 1.5;
 }
 
-/* CONTACT METHOD */
-.contact-wrap {
-  margin-top: 16px;
-}
-
-.contact-wrap label {
-  display: block;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  line-height: 1.4;
-}
-
-.contact-wrap textarea {
-  width: 100%;
-  padding: 11px 14px;
-  border: 1.5px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg-2);
-  color: var(--text);
-  font-size: 14px;
-  font-family: 'Inter', sans-serif;
-  outline: none;
-  box-sizing: border-box;
-  resize: vertical;
-  min-height: 80px;
-  transition: border-color var(--transition);
-}
-
-.contact-wrap textarea:focus {
-  border-color: var(--pink);
-  background: #fff;
-}
-
 /* DATE PICKER */
 .date-picker-wrap {
   margin-top: 16px;

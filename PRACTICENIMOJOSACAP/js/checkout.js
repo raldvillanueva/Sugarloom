@@ -201,7 +201,6 @@ async function placeOrder(){
   const selectedPayment = document.querySelector('input[name="payment"]:checked')?.value || 'Cash on Delivery';
   const preferredDate   = localStorage.getItem('preferredDate') || null;
   const preferredTime   = localStorage.getItem('preferredTime') || null;
-  const contactMethod   = localStorage.getItem('contactMethod') || null;
 
   const orderData = {
     id:            orderId,
@@ -216,8 +215,7 @@ async function placeOrder(){
     date:          new Date().toISOString(),
     payment:       selectedPayment,
     ...(preferredDate && { preferredDate }),
-    ...(preferredTime && { preferredTime }),
-    ...(contactMethod && { contactMethod })
+    ...(preferredTime && { preferredTime })
   };
 
   // Save order to Supabase (shared between customer and admin)
@@ -237,7 +235,7 @@ async function placeOrder(){
   localStorage.removeItem('cart');
   localStorage.removeItem('preferredDate');
   localStorage.removeItem('preferredTime');
-  localStorage.removeItem('contactMethod');
+  localStorage.removeItem('contactMethod');   // clear any value left from before the field was removed
 
   showMsg('Order placed successfully 🎉', 'success');
   setTimeout(() => { window.location.href = '../pages/orders.html'; }, 1500);
