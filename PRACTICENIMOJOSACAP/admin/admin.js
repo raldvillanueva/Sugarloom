@@ -1030,6 +1030,10 @@ function renderOrders(){
   const isPacker = currentUser.role === 'Packer';
   const isAdmin  = currentUser.role === 'Administrator';
 
+  // Sweep past-due orders into Archived before building any of the lists
+  const sweptNow = archiveOverdueOrders();
+  if(sweptNow) toast(`${sweptNow} past-due order${sweptNow===1?'':'s'} moved to Archived`, 'warning');
+
   // Role alert banners
   const bakerAlert  = document.getElementById('baker-alert');
   const packerAlert = document.getElementById('packer-alert');
@@ -1178,9 +1182,12 @@ function renderOrders(){
     const deferTag = isBakeQueue && o.deferCount
       ? `<span class="queue-defer" title="Sent to the back ${o.deferCount} time${o.deferCount===1?'':'s'}">↻${o.deferCount}</span>`
       : '';
+    const overdueTag = o.autoArchived
+      ? `<span class="auto-archived-tag" title="${o.archivedReason || 'Delivery date has passed'}">PAST DUE</span>`
+      : '';
     return `
     <tr class="${isBakeQueue && idx===0 ? 'queue-next-row' : ''}">
-      <td class="fw-bold">${queueTag}${o.id}${deferTag}</td>
+      <td class="fw-bold">${queueTag}${o.id}${deferTag}${overdueTag}</td>
       <td>${o.customer}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
       <td class="fw-bold">₱${o.total.toLocaleString()}</td>
@@ -1260,7 +1267,45 @@ function toggleIngRow(id){
 
 function unarchiveOrder(id){
   const o = DB.orders.find(oo=>oo.id===id);
-  if(o){ o.archived=false; saveDB(); renderOrders(); updateBadges(); toast('Order restored','success'); }
+  if(o){
+    o.archived=false;
+    /* Without this the overdue sweep would re-archive it on the very next
+       render and the button would look broken. */
+    if(o.autoArchived){ o.noAutoArchive = true; delete o.autoArchived; delete o.archivedReason; }
+    saveDB(); renderOrders(); updateBadges(); toast('Order restored','success');
+  }
+}
+
+/* =============================================
+   OVERDUE SWEEP
+   Orders whose delivery date has already passed move to Archived, so the
+   working tabs only show what can still be acted on. Same date rule the
+   dashboard uses for its OVERDUE badge: the delivery day itself counts as
+   still live, only the day after does it go. Reversible — restoring one
+   from the Archived tab keeps it out of the sweep for good.
+   ============================================= */
+function archiveOverdueOrders(){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const swept = [];
+
+  DB.orders.forEach(o => {
+    if(o.archived || o.noAutoArchive) return;
+    if(!o.preferredDate) return;              // no delivery date promised — leave it alone
+
+    const d = new Date(o.preferredDate);
+    if(isNaN(d.getTime())) return;
+    d.setHours(0,0,0,0);
+    if(d >= today) return;                    // today or later is still live
+
+    o.archived       = true;
+    o.autoArchived   = true;
+    o.archivedAt     = new Date().toISOString();
+    o.archivedReason = `Delivery date ${d.toLocaleDateString('en-PH',{month:'short',day:'numeric',year:'numeric'})} has passed`;
+    swept.push(o.id);
+  });
+
+  if(swept.length) saveDB();
+  return swept.length;
 }
 
 function filterOrders(status, btn){
