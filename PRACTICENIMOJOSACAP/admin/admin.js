@@ -16,6 +16,7 @@ function toggleLoginPw(){
    ------------------------------------------------------------ */
 function sendStatusEmail(order, status){
   if(!order.customerEmail || order.customerEmail === 'guest') return;
+  if(!apiAvailable()) return;   // no backend reachable — see js/api-config.js
 
   const messages = {
     'Confirmed':      'Great news! Your order has been confirmed. We\'re preparing to bake your treats fresh.',
@@ -28,7 +29,7 @@ function sendStatusEmail(order, status){
     'Pending':        'Your cancellation request was not accepted. Your order is back to Pending.'
   };
 
-  fetch('http://localhost:5000/send-order-notification', {
+  fetch(apiUrl('/send-order-notification'), {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -320,8 +321,9 @@ function fpSendOTP(){
   if(!email){ fpShowMsg('fp-msg','Enter your email first'); return; }
   const exists = DB.users.find(u=>u.email.toLowerCase()===email.toLowerCase());
   if(!exists){ fpShowMsg('fp-msg','No admin account found for this email'); return; }
+  if(!apiAvailable()){ fpShowMsg('fp-msg','Password reset needs the mail server running. Ask an administrator.'); return; }
 
-  fetch('http://127.0.0.1:5000/send-otp',{
+  fetch(apiUrl('/send-otp'),{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ email })
   })
@@ -342,8 +344,9 @@ function fpVerifyOTP(){
   const email = document.getElementById('fp-email').value.trim();
   const otp   = document.getElementById('fp-otp').value.trim();
   if(!otp){ fpShowMsg('fp-msg2','Enter the OTP code'); return; }
+  if(!apiAvailable()){ fpShowMsg('fp-msg2','Password reset needs the mail server running.'); return; }
 
-  fetch('http://127.0.0.1:5000/verify-otp',{
+  fetch(apiUrl('/verify-otp'),{
     method:'POST', headers:{'Content-Type':'application/json'},
     body: JSON.stringify({ email, otp })
   })
@@ -398,9 +401,10 @@ function showApp(){
   if(currentUser.role !== 'Administrator'){
     document.getElementById('users-nav').style.display = 'none';
     document.getElementById('content-nav').style.display = 'none';
+    document.getElementById('messages-nav').style.display = 'none';
   }
   if(isStaff){
-    ['dashboard','products','customers','inventory','reports','reviews','content'].forEach(v => {
+    ['dashboard','products','customers','inventory','reports','reviews','content','messages'].forEach(v => {
       const el = document.querySelector(`.nav-item[data-view="${v}"]`);
       if(el) el.style.display = 'none';
     });
@@ -517,6 +521,7 @@ function switchView(view){
   if(view==='users')      renderUsers();
   if(view==='reviews')    renderAdminReviews();
   if(view==='content')    renderContent();
+  if(view==='messages')   renderInquiries();
 }
 
 function toggleSidebar(){
@@ -3354,6 +3359,10 @@ function buildNotifs(){
 }
 
 function updateBadges(){
+  // Unread message count, so new enquiries are visible without opening the tab
+  if(!_inquiries.length) loadInquiries().then(updateInquiryBadge);
+  else updateInquiryBadge();
+
   const allTracking = _trackingCache;
 
   // Single red dot for Orders — lights up whenever anything needs attention
@@ -3556,6 +3565,104 @@ function rejectAdminReview(key, index){
 }
 
 function escHTML(str){ return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* =============================================
+   MESSAGES (contact form enquiries)
+   ============================================= */
+let _inquiries = [];
+let _inqFilter = 'new';
+
+async function loadInquiries(){
+  try {
+    const { data, error } = await _supa.from('inquiries').select('id, date, data').order('date', { ascending: false });
+    if(error) throw error;
+    _inquiries = (data || []).map(r => ({ id: r.id, date: r.date, ...(r.data || {}) }));
+  } catch(err){
+    console.error('Could not load messages:', err);
+    _inquiries = [];
+  }
+}
+
+function filterInquiries(f){
+  _inqFilter = f;
+  ['new','done','all'].forEach(x => document.getElementById('inq-tab-'+x)?.classList.toggle('active', x === f));
+  renderInquiries(true);
+}
+
+async function renderInquiries(skipFetch){
+  if(!skipFetch) await loadInquiries();
+
+  const list = _inquiries.filter(i =>
+    _inqFilter === 'all'  ? true :
+    _inqFilter === 'done' ? i.handled : !i.handled
+  );
+
+  const box = document.getElementById('inquiries-list');
+  if(!list.length){
+    box.innerHTML = `<div class="card" style="text-align:center;padding:48px;color:var(--text-2)">No ${_inqFilter === 'all' ? '' : _inqFilter + ' '}messages</div>`;
+    updateInquiryBadge();
+    return;
+  }
+
+  box.innerHTML = list.map(i => `
+    <div class="card" style="margin-bottom:12px;padding:18px 22px">
+      <div style="display:flex;justify-content:space-between;gap:16px;align-items:flex-start">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+            <span style="font-weight:700;font-size:14px">${escHTML(i.name)}</span>
+            <span class="pill ${i.handled ? 'fulfilled' : 'pending'}">${i.handled ? 'Handled' : 'New'}</span>
+            <span style="font-size:11px;color:var(--text-2)">${fmtDateTime(i.date)}</span>
+          </div>
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:8px">${escHTML(i.contact)}</div>
+          <p style="font-size:14px;line-height:1.6;margin:0;white-space:pre-wrap">${escHTML(i.message)}</p>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          ${/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(i.contact || '')
+            ? `<a class="btn-secondary sm" href="mailto:${escHTML(i.contact)}?subject=Re:%20your%20message%20to%20SugarLoom%20Ph"><i class='bx bx-reply'></i> Reply</a>` : ''}
+          <button class="btn-secondary sm" onclick="toggleInquiryHandled('${i.id}')">
+            ${i.handled ? 'Mark as new' : 'Mark handled'}
+          </button>
+          <button class="btn-icon danger" onclick="deleteInquiry('${i.id}')" title="Delete"><i class='bx bx-trash'></i></button>
+        </div>
+      </div>
+    </div>`).join('');
+
+  updateInquiryBadge();
+}
+
+async function toggleInquiryHandled(id){
+  const i = _inquiries.find(x => x.id === id);
+  if(!i) return;
+  i.handled = !i.handled;
+  await _supa.from('inquiries')
+    .update({ data: { name: i.name, contact: i.contact, message: i.message, handled: i.handled } })
+    .eq('id', id)
+    .catch(console.error);
+  renderInquiries(true);
+}
+
+function deleteInquiry(id){
+  showConfirm({
+    title: 'Delete message',
+    message: 'Delete this message for good? This cannot be undone.',
+    okText: 'Delete',
+    icon: 'bx-trash',
+    onConfirm: async () => {
+      await _supa.from('inquiries').delete().eq('id', id).catch(console.error);
+      _inquiries = _inquiries.filter(x => x.id !== id);
+      renderInquiries(true);
+      toast('Message deleted', 'success');
+    }
+  });
+}
+
+function updateInquiryBadge(){
+  const badge = document.getElementById('inq-badge');
+  if(!badge) return;
+  const n = _inquiries.filter(i => !i.handled).length;
+  badge.textContent = n;
+  badge.style.display = n ? '' : 'none';
+}
 
 /* =============================================
    BOOT

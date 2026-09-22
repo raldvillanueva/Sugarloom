@@ -1,0 +1,30 @@
+# Deploys js/server.js (order emails, admin OTP, AI chatbot) to Render.
+#
+#   1. Push this file.
+#   2. render.com → New → Blueprint → pick the Sugarloom repo.
+#   3. Fill in the three secrets when prompted (they are marked sync:false
+#      so they are never stored in this file).
+#   4. Copy the service URL it gives you, e.g.
+#      https://sugarloom-api.onrender.com
+#   5. Paste that into HOSTED_API in js/api-config.js, commit, push.
+#
+# Render's free tier sleeps an idle service, so the first request after a
+# quiet spell takes ~30 seconds. Fine for a demo; wake it before you
+# present by loading the URL in a tab.
+
+services:
+  - type: web
+    name: sugarloom-api
+    runtime: node
+    plan: free
+    rootDir: PRACTICENIMOJOSACAP
+    buildCommand: npm install
+    startCommand: node js/server.js
+    healthCheckPath: /
+    envVars:
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false

@@ -10,13 +10,22 @@ app.use(express.json());
 let otpStore = {};
 
 /* ── EMAIL SETUP ── */
+/* Credentials come from the environment only. They used to be hardcoded
+   here as fallbacks, in a public repository — never put them back. Copy
+   .env.example to .env and fill it in locally, or set the same variables
+   in your host's dashboard. */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
-    user: process.env.EMAIL_USER || "villanuevagerald73@gmail.com",
-    pass: process.env.EMAIL_PASS || "krncdvhwboknalrm"
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
 });
+
+const MAIL_READY = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+if (!MAIL_READY) {
+  console.warn("⚠️  EMAIL_USER / EMAIL_PASS are not set — email sending is disabled.");
+}
 
 /* ─────────────────────────────────────────
    EXISTING ROUTES
@@ -54,7 +63,10 @@ app.post("/verify-otp", (req, res) => {
 });
 
 /* GEMINI CHAT */
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "API DITO LAGAY");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+if (!process.env.GEMINI_API_KEY) {
+  console.warn("⚠️  GEMINI_API_KEY is not set — /chat will fail and the site falls back to its built-in replies.");
+}
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 app.post("/chat", async (req, res) => {

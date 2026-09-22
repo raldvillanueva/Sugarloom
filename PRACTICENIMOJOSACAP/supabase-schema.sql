@@ -77,6 +77,15 @@ create table if not exists site_content (
   data jsonb not null default '{}'::jsonb
 );
 
+-- Messages sent from the "Send us a quick message" form (Admin → Messages)
+create table if not exists inquiries (
+  id   text primary key,
+  date timestamptz default now(),
+  data jsonb not null
+);
+
+create index if not exists idx_inquiries_date on inquiries (date desc);
+
 -- ── Disable RLS for now (re-enable with proper policies before going live) ──
 alter table products       disable row level security;
 alter table ingredients    disable row level security;
@@ -88,3 +97,4 @@ alter table reviews        disable row level security;
 alter table order_tracking disable row level security;
 alter table profiles       disable row level security;
 alter table site_content   disable row level security;
+alter table inquiries      disable row level security;

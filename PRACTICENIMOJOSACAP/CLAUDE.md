@@ -32,6 +32,7 @@ Supabase (project `ruclytedzkdbranurfcq`) holds everything, mostly as
 - `profiles` — customer details, keyed to Supabase Auth users
 - `admin_users` — staff accounts, separate from Supabase Auth
 - `site_content` — editable homepage copy (Admin → Content)
+- `inquiries` — contact-form messages (Admin → Messages)
 - `reviews` — customer reviews awaiting approval
 
 Row Level Security is **disabled** on every table (see the bottom of
@@ -61,21 +62,28 @@ guards against deducting twice for the same bake.
 Orders whose delivery date has passed are archived automatically.
 Restoring one exempts it from that sweep.
 
-## Not hosted
+## The backend
 
-`js/server.js` is an Express app that is **not deployed anywhere**.
-Netlify serves static files only. Anything calling `http://localhost:5000`
-therefore fails on the live site — and cannot be made to work from it,
-because browsers block an https page from fetching http://localhost as
-mixed content.
+`js/server.js` is an Express app handling order emails, the admin
+forgot-password OTP, and the AI chatbot. Netlify serves static files
+only, so it has to be hosted separately — `render.yaml` at the repo root
+deploys it in a few clicks.
 
-Still pointing at it, and degrading gracefully rather than erroring:
+Every call to it goes through `apiUrl()` in `js/api-config.js`. **After
+hosting, paste the service URL into `HOSTED_API` there and nothing else
+changes.** Until that is set, the front end only calls the server when
+the page itself is open on localhost; on the deployed site those features
+degrade instead of erroring:
 
-- order status emails (`sendStatusEmail`) — silently skipped
-- admin **forgot password** OTP — normal admin login is local and unaffected
-- the AI chatbot — falls back to keyword replies in `js/homepage.js`
+- order status emails — skipped
+- admin forgot-password OTP — says it needs the mail server (normal admin
+  login is local and unaffected)
+- the AI chatbot — answers from the keyword replies in `js/homepage.js`
 
-Lalamove used to be in this list; it now runs in the browser via
+Secrets come from the environment only — see `.env.example`. Never add
+them back as fallbacks in the code.
+
+Lalamove is not part of this: it runs in the browser via
 `admin/lalamove-sim.js`, which simulates booking and delivery so it works
 on the deployed site with nothing to start up.
 

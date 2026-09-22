@@ -401,6 +401,12 @@ async function sendMessage(){
 
   const typingId = addTypingIndicator();
 
+  if(!CHAT_API_URL){
+    removeTypingIndicator(typingId);
+    addBotMessage(offlineReply(text));
+    return;
+  }
+
   try {
     const res = await fetch(CHAT_API_URL, {
       method: "POST",
@@ -423,7 +429,7 @@ async function sendMessage(){
    Keyword answers covering what the AI backend is briefed to handle:
    products, ordering, payment, delivery, cancellation and hours. Used
    whenever the backend can't be reached. */
-const CHAT_API_URL = "http://localhost:5000/chat";
+const CHAT_API_URL = apiUrl("/chat");
 
 const OFFLINE_REPLIES = [
   { keys: ["price","magkano","how much","presyo","cost"],

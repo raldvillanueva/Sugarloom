@@ -121,6 +121,10 @@
       <a class="nav-item" data-view="reports" onclick="switchView('reports')">
         <i class='bx bxs-bar-chart-alt-2'></i><span>Reports</span>
       </a>
+      <a class="nav-item" id="messages-nav" data-view="messages" onclick="switchView('messages')">
+        <i class='bx bxs-envelope'></i><span>Messages</span>
+        <span class="badge" id="inq-badge" style="display:none;background:#f59e0b">0</span>
+      </a>
       <a class="nav-item" id="content-nav" data-view="content" onclick="switchView('content')">
         <i class='bx bxs-edit-alt'></i><span>Content</span>
       </a>
@@ -633,6 +637,25 @@
         </div>
       </section>
 
+      <!-- ========== MESSAGES ========== -->
+      <section id="view-messages" class="view">
+        <div class="page-header">
+          <div>
+            <h1>Messages</h1>
+            <p>Enquiries sent from the contact form on the website.</p>
+          </div>
+          <button class="btn-outline" onclick="renderInquiries()"><i class='bx bx-refresh'></i> Refresh</button>
+        </div>
+
+        <div class="tab-bar">
+          <button class="tab-btn active" id="inq-tab-new"  onclick="filterInquiries('new')">New</button>
+          <button class="tab-btn"        id="inq-tab-done" onclick="filterInquiries('done')">Handled</button>
+          <button class="tab-btn"        id="inq-tab-all"  onclick="filterInquiries('all')">All</button>
+        </div>
+
+        <div id="inquiries-list"></div>
+      </section>
+
       <!-- ========== CONTENT (CMS) ========== -->
       <section id="view-content" class="view">
         <div class="page-header">
@@ -1056,6 +1079,7 @@
   <div class="cal-days" id="cal-days"></div>
 </div>
 
+<script src="../js/api-config.js"></script>
 <script src="lalamove-sim.js"></script>
 <script src="admin.js"></script>
 <script src="cms.js"></script>
