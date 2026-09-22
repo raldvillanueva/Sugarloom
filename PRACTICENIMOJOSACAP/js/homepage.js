@@ -402,7 +402,7 @@ async function sendMessage(){
   const typingId = addTypingIndicator();
 
   try {
-    const res = await fetch("http://localhost:5000/chat", {
+    const res = await fetch(CHAT_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: text })
@@ -411,10 +411,51 @@ async function sendMessage(){
     removeTypingIndicator(typingId);
     addBotMessage(data.reply);
   } catch(err) {
-    console.error("Chat error:", err);
+    /* The AI backend only answers on localhost, and an https page can't
+       call it at all, so on the deployed site this always fails. Answer
+       from the built-in replies instead of showing an error. */
     removeTypingIndicator(typingId);
-    addBotMessage("Sorry, I couldn't connect to the assistant 😅");
+    addBotMessage(offlineReply(text));
   }
+}
+
+/* ── OFFLINE ASSISTANT ──
+   Keyword answers covering what the AI backend is briefed to handle:
+   products, ordering, payment, delivery, cancellation and hours. Used
+   whenever the backend can't be reached. */
+const CHAT_API_URL = "http://localhost:5000/chat";
+
+const OFFLINE_REPLIES = [
+  { keys: ["price","magkano","how much","presyo","cost"],
+    reply: "Our prices range from ₱70 to ₱250 depending on the product. Cookies and brownies start at ₱70–₱80, cupcakes at ₱75, and gift boxes are ₱250." },
+  { keys: ["deliver","shipping","ship","padala","rider","lalamove"],
+    reply: "We deliver within Cainta and nearby areas, with same-day delivery depending on your location. A ₱50 delivery fee applies. You can pick your preferred delivery date and time at checkout." },
+  { keys: ["pay","payment","gcash","cod","cash on delivery","bayad"],
+    reply: "We accept GCash and Cash on Delivery. COD is limited to orders not exceeding ₱2,000." },
+  { keys: ["cancel","refund","return","palit"],
+    reply: "You can cancel an order before our team confirms it. Once confirmed, we can't cancel since everything is made to order. Refunds are given for wrong or damaged items on delivery." },
+  { keys: ["hour","open","close","time","oras","schedule"],
+    reply: "We're open Monday to Saturday, 8:00 AM to 5:00 PM. Orders placed outside those hours are handled the next business day." },
+  { keys: ["custom","personalize","gift","event","bulk","order box"],
+    reply: "Yes! We love doing custom boxes — mix and match whatever you like. Just tell us what you need through our contact form." },
+  { keys: ["fresh","expire","store","keep","last","tagal"],
+    reply: "Our cookies stay fresh up to 5 days at room temperature in an airtight container, or about 2 weeks frozen. Reheat 5–8 minutes in a low oven for that fresh-baked taste." },
+  { keys: ["allergen","allergy","nuts","dairy","gluten","ingredient"],
+    reply: "Most of our items contain wheat, dairy and eggs, and some contain soy. Each product page lists its ingredients — do check there before ordering." },
+  { keys: ["available","stock","meron","sold out","order"],
+    reply: "Everything on our shop page is available to order, and we bake fresh daily. Browse the products page to see today's line-up." },
+  { keys: ["hello","hi","hey","kumusta","good morning","good afternoon"],
+    reply: "Hello! 👋 Welcome to SugarLoom Ph. Ask me about our products, prices, delivery or ordering." },
+  { keys: ["thank","salamat","thanks"],
+    reply: "You're very welcome! 🍪 Let us know if you need anything else." }
+];
+
+function offlineReply(text){
+  const msg = (text || "").toLowerCase();
+  const hit = OFFLINE_REPLIES.find(r => r.keys.some(k => msg.includes(k)));
+  if(hit) return hit.reply;
+  return "I can help with our products, prices, delivery, payment, cancellations and opening hours. " +
+         "For anything else, message us at sugarloomph@gmail.com and we'll reply within 24 hours on weekdays. 🍪";
 }
 
 // ADD USER MESSAGE

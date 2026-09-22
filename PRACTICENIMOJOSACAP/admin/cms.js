@@ -204,33 +204,8 @@ function cmsFieldHtml(f) {
     </div>`;
 }
 
-/* Shrinks a picked photo before it is stored. The homepage fetches this
-   row on every visit, so a straight-off-the-phone 4MB photo would be paid
-   for by every customer. Scales the long edge down to CMS_IMG_MAX_PX and
-   re-encodes as JPEG. */
-const CMS_IMG_MAX_PX = 1600;
-const CMS_IMG_QUALITY = 0.82;
-
-function shrinkImage(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('Could not read that file'));
-    reader.onload = () => {
-      const img = new Image();
-      img.onerror = () => reject(new Error('That file is not an image'));
-      img.onload = () => {
-        const scale = Math.min(1, CMS_IMG_MAX_PX / Math.max(img.width, img.height));
-        const canvas = document.createElement('canvas');
-        canvas.width  = Math.round(img.width  * scale);
-        canvas.height = Math.round(img.height * scale);
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', CMS_IMG_QUALITY));
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(file);
-  });
-}
+/* shrinkImage() lives in admin.js so both the product modal and this
+   editor share one resizing rule. */
 
 function cmsImageField(key) {
   return document.querySelector(`[data-image-field="${key}"]`);

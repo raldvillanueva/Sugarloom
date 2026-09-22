@@ -1,73 +1,103 @@
-# Agent Instructions
+# SugarLoom Ph
 
-You're working inside the **WAT framework** (Workflows, Agents, Tools). This architecture separates concerns so that probabilistic AI handles reasoning while deterministic code handles execution. That separation is what makes this system reliable.
+Online store and admin panel for a home-based bakery in Cainta, Metro
+Manila. Plain HTML, CSS and JavaScript with no build step — files are
+served exactly as they sit on disk.
 
-## The WAT Architecture
+## Layout
 
-**Layer 1: Workflows (The Instructions)**
-- Markdown SOPs stored in `workflows/`
-- Each workflow defines the objective, required inputs, which tools to use, expected outputs, and how to handle edge cases
-- Written in plain language, the same way you'd brief someone on your team
-
-**Layer 2: Agents (The Decision-Maker)**
-- This is your role. You're responsible for intelligent coordination.
-- Read the relevant workflow, run tools in the correct sequence, handle failures gracefully, and ask clarifying questions when needed
-- You connect intent to execution without trying to do everything yourself
-- Example: If you need to pull data from a website, don't attempt it directly. Read `workflows/scrape_website.md`, figure out the required inputs, then execute `tools/scrape_single_site.py`
-
-**Layer 3: Tools (The Execution)**
-- Python scripts in `tools/` that do the actual work
-- API calls, data transformations, file operations, database queries
-- Credentials and API keys are stored in `.env`
-- These scripts are consistent, testable, and fast
-
-**Why this matters:** When AI tries to handle every step directly, accuracy drops fast. If each step is 90% accurate, you're down to 59% success after just five steps. By offloading execution to deterministic scripts, you stay focused on orchestration and decision-making where you excel.
-
-## How to Operate
-
-**1. Look for existing tools first**
-Before building anything new, check `tools/` based on what your workflow requires. Only create new scripts when nothing exists for that task.
-
-**2. Learn and adapt when things fail**
-When you hit an error:
-- Read the full error message and trace
-- Fix the script and retest (if it uses paid API calls or credits, check with me before running again)
-- Document what you learned in the workflow (rate limits, timing quirks, unexpected behavior)
-- Example: You get rate-limited on an API, so you dig into the docs, discover a batch endpoint, refactor the tool to use it, verify it works, then update the workflow so this never happens again
-
-**3. Keep workflows current**
-Workflows should evolve as you learn. When you find better methods, discover constraints, or encounter recurring issues, update the workflow. That said, don't create or overwrite workflows without asking unless I explicitly tell you to. These are your instructions and need to be preserved and refined, not tossed after one use.
-
-## The Self-Improvement Loop
-
-Every failure is a chance to make the system stronger:
-1. Identify what broke
-2. Fix the tool
-3. Verify the fix works
-4. Update the workflow with the new approach
-5. Move on with a more robust system
-
-This loop is how the framework improves over time.
-
-## File Structure
-
-**What goes where:**
-- **Deliverables**: Final outputs go to cloud services (Google Sheets, Slides, etc.) where I can access them directly
-- **Intermediates**: Temporary processing files that can be regenerated
-
-**Directory layout:**
 ```
-.tmp/           # Temporary files (scraped data, intermediate exports). Regenerated as needed.
-tools/          # Python scripts for deterministic execution
-workflows/      # Markdown SOPs defining what to do and how
-.env            # API keys and environment variables (NEVER store secrets anywhere else)
-credentials.json, token.json  # Google OAuth (gitignored)
+pages/          Customer pages (homepage, products, cart, checkout, orders, login)
+js/             Customer-side scripts, one per page, plus shared helpers
+css/            Customer-side styles, one per page
+admin/          The whole admin panel (admin.html + admin.js + admin.css)
+Images/         Static images committed to the repo
+ChatBot/        Node dependencies for the chatbot backend
+js/server.js    Express backend — email, OTP, Gemini chat (see "Not hosted")
+supabase-schema.sql  Every table; run it in the Supabase SQL editor
 ```
 
-**Core principle:** Local files are just for processing. Anything I need to see or use lives in cloud services. Everything in `.tmp/` is disposable.
+The git repository root is the **parent** folder, and this directory is a
+subfolder of it. Netlify's publish directory is set to this folder, which
+is why the deployed site serves `pages/…` from the site root.
 
-## Bottom Line
+## Data
 
-You sit between what I want (workflows) and what actually gets done (tools). Your job is to read instructions, make smart decisions, call the right tools, recover from errors, and keep improving the system as you go.
+Supabase (project `ruclytedzkdbranurfcq`) holds everything, mostly as
+`id` plus a `jsonb` blob:
 
-Stay pragmatic. Stay reliable. Keep learning.
+- `products`, `ingredients` — catalogue and stock, managed in the admin panel
+- `orders`, `transactions`, `stock_log` — order flow and audit trail
+- `order_tracking` — Lalamove delivery state per order
+- `profiles` — customer details, keyed to Supabase Auth users
+- `admin_users` — staff accounts, separate from Supabase Auth
+- `site_content` — editable homepage copy (Admin → Content)
+- `reviews` — customer reviews awaiting approval
+
+Row Level Security is **disabled** on every table (see the bottom of
+`supabase-schema.sql`). The anon key in `js/supabase-config.js` therefore
+has full read and write access. Fine for coursework, not for real
+customer data.
+
+`localStorage` is used alongside this for the cart, the logged-in
+customer, and a `sl_store_orders` hand-off between the shop and the admin
+panel.
+
+## Order flow
+
+```
+Pending → Confirmed → Preparing/baking → Ready for Packing
+        → Preparing/packing → packed → readyForBook → Fulfilled
+```
+
+Roles see only their own stage. Baker works the **Confirmed** queue,
+Packer the **Ready for Packing** queue; both run oldest-first and both
+can send an order to the back or hand it back a step with a reason.
+
+**Ingredients are deducted when baking starts**, not at confirmation, and
+are returned if the order is later cancelled. `order.stockDeducted`
+guards against deducting twice for the same bake.
+
+Orders whose delivery date has passed are archived automatically.
+Restoring one exempts it from that sweep.
+
+## Not hosted
+
+`js/server.js` is an Express app that is **not deployed anywhere**.
+Netlify serves static files only. Anything calling `http://localhost:5000`
+therefore fails on the live site — and cannot be made to work from it,
+because browsers block an https page from fetching http://localhost as
+mixed content.
+
+Still pointing at it, and degrading gracefully rather than erroring:
+
+- order status emails (`sendStatusEmail`) — silently skipped
+- admin **forgot password** OTP — normal admin login is local and unaffected
+- the AI chatbot — falls back to keyword replies in `js/homepage.js`
+
+Lalamove used to be in this list; it now runs in the browser via
+`admin/lalamove-sim.js`, which simulates booking and delivery so it works
+on the deployed site with nothing to start up.
+
+## Conventions
+
+- No framework, no bundler, no npm scripts for the front end. Edit and reload.
+- Scripts are loaded with plain `<script>` tags; everything shares one global scope.
+  `admin.html` loads `lalamove-sim.js`, then `admin.js`, then `cms.js` — helpers
+  defined in an earlier file are used by later ones.
+- Phone numbers are stored as 10 digits starting with 9 (`9171234567`) and
+  displayed with a `+63` prefix.
+- Prices are plain numbers in pesos; format with `toLocaleString()` at render time.
+- Homepage copy is tagged `data-cms="key"` and swapped by `js/content.js`,
+  with the text in the HTML as the fallback. To make something editable,
+  tag it and add a matching field to `CMS_SECTIONS` in `admin/cms.js`.
+- Uploaded pictures are resized by `shrinkImage()` before being stored,
+  since they live inside database rows.
+
+## Known gaps
+
+- No RLS; the anon key can read and write every table.
+- Admin passwords are stored and compared in plain text in `admin_users`.
+- Customer names and addresses are interpolated straight into admin HTML,
+  so a crafted name could inject markup into the panel.
+- Email delivery needs `js/server.js` hosted somewhere.

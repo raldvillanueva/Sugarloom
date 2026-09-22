@@ -1,0 +1,10 @@
+# Normalise line endings so Windows checkouts don't show whole files as changed
+* text=auto
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.mp4 binary
+*.zip binary

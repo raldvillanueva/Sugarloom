@@ -949,18 +949,55 @@ function openProductModal(id){
   openModal('product-modal');
 }
 
-function handleProductImgUpload(e){
+/* Shrinks a picked photo before it is stored. Product and homepage images
+   are kept inside the database row and shipped to every visitor, so a
+   straight-from-the-phone 4MB photo is paid for by every customer. Scales
+   the long edge down and re-encodes as JPEG. Shared with cms.js. */
+const IMG_MAX_PX  = 1600;
+const IMG_QUALITY = 0.82;
+
+function shrinkImage(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('That file is not an image'));
+      img.onload = () => {
+        const scale  = Math.min(1, IMG_MAX_PX / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', IMG_QUALITY));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleProductImgUpload(e){
   const file = e.target.files[0];
   if(!file) return;
-  const reader = new FileReader();
-  reader.onload = ev => {
-    document.getElementById('pm-img').value = ev.target.result;
+
+  const nameEl = document.getElementById('pm-img-filename');
+  nameEl.textContent = 'Resizing…';
+
+  try {
+    const dataUrl = await shrinkImage(file);
+    document.getElementById('pm-img').value = dataUrl;
     const preview = document.getElementById('pm-img-preview');
-    preview.src = ev.target.result;
+    preview.src = dataUrl;
     preview.style.display = '';
-    document.getElementById('pm-img-filename').textContent = file.name;
-  };
-  reader.readAsDataURL(file);
+    nameEl.textContent = file.name;
+  } catch(err){
+    console.error('product image upload failed:', err);
+    nameEl.textContent = '';
+    toast('Could not read that picture — try a JPG or PNG', 'danger');
+  } finally {
+    e.target.value = '';   // let the same file be picked again
+  }
 }
 
 function saveProduct(){
@@ -1813,6 +1850,8 @@ function confirmOrderAction(){
 
         // Restore soldToday since order was deducted at placement
         restoreDailyLimit(o);
+        // Put back any ingredients already taken out for baking
+        const putBack = restoreIngredientsFor(o);
 
         // Clear from sl_store_orders so syncStoreOrders() doesn't re-trigger
         const storeOrders = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
@@ -1820,8 +1859,8 @@ function confirmOrderAction(){
         if(so){ so.status = 'Cancelled'; localStorage.setItem('sl_store_orders', JSON.stringify(storeOrders)); }
 
         syncStatusToCustomer(o, 'Cancelled');
-        saveDB(); closeModal('order-modal'); renderOrders(); updateBadges();
-        toast('Cancellation accepted', 'success');
+        saveDB(); closeModal('order-modal'); renderOrders(); updateBadges(); renderInventory();
+        toast(putBack.length ? 'Cancellation accepted — ingredients returned to stock' : 'Cancellation accepted', 'success');
       }
     });
     return;
@@ -1835,9 +1874,11 @@ function confirmOrderAction(){
         o.cancelledByBuyer = false;
         // Restore soldToday since order was deducted at placement
         restoreDailyLimit(o);
+        // Put back any ingredients already taken out for baking
+        const putBack = restoreIngredientsFor(o);
         syncStatusToCustomer(o, 'Cancelled');
-        saveDB(); closeModal('order-modal'); renderOrders(); updateBadges();
-        toast('Order cancellation accepted', 'success');
+        saveDB(); closeModal('order-modal'); renderOrders(); updateBadges(); renderInventory();
+        toast(putBack.length ? 'Cancellation accepted — ingredients returned to stock' : 'Order cancellation accepted', 'success');
       }
     });
     return;
@@ -1890,6 +1931,31 @@ function deductIngredientsFor(o){
 
   o.stockDeducted = true;
   return used;
+}
+
+/* Puts an order's ingredients back. Cancelling after baking has started
+   used to write the stock off permanently, leaving inventory lower than
+   what was really in the storeroom. */
+function restoreIngredientsFor(o){
+  if(!o.stockDeducted) return [];
+
+  const back = [];
+  o.items.forEach(item=>{
+    const p = DB.products.find(pp=>pp.name===item.name || pp.id===item.id);
+    if(!p || !p.recipe) return;
+    p.recipe.forEach(r=>{
+      const ing = DB.ingredients.find(i=>i.id===r.ingredientId);
+      if(!ing) return;
+      const before = ing.stock;
+      const amount = r.qty * item.qty;
+      ing.stock = before + amount;
+      back.push({ name: ing.name, amount, unit: ing.unit });
+      logStock({ type:'ingredient', itemId:ing.id, itemName:ing.name, unit:ing.unit, op:'return', before, after:ing.stock, note:'Order cancelled', ref:o.id });
+    });
+  });
+
+  delete o.stockDeducted;
+  return back;
 }
 
 function prepareOrderAction(){
@@ -2025,6 +2091,9 @@ function packerSendBackToBaker(id){
       o.declinedAt    = new Date().toISOString();
       o.queuedAt      = new Date().toISOString();   // rejoins the bake queue at the back
       delete o.preparingSubStatus;
+      /* It is being made again, which really does use another batch of
+         ingredients, so let the re-bake deduct afresh. */
+      delete o.stockDeducted;
 
       const _so = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
       const _soMatch = _so.find(x => x.id === o.id);
