@@ -2,6 +2,10 @@
 --  SugarLoom Ph — Row Level Security
 --  Run in: Supabase Dashboard → SQL Editor → New Query
 --
+--  ⚠ CHECK THE PROJECT FIRST. This site uses project ruclytedzkdbranurfcq
+--  (see js/supabase-config.js). If the SQL editor is open on a different
+--  project you will get: relation "products" does not exist.
+--
 --  Safe to run more than once.
 --
 --  READ THIS FIRST
@@ -61,17 +65,30 @@ create policy "own profile: update"
 do $$
 declare
   t text;
+  missing text[] := '{}';
 begin
   foreach t in array array[
     'products', 'ingredients', 'admin_users', 'orders', 'transactions',
     'stock_log', 'order_tracking', 'site_content', 'inquiries', 'reviews'
   ] loop
-    execute format('alter table %I enable row level security', t);
-    execute format('drop policy if exists "app access" on %I', t);
+    -- Skip anything that isn't here rather than aborting the whole script,
+    -- which would leave some tables locked and others untouched.
+    if to_regclass('public.' || quote_ident(t)) is null then
+      missing := missing || t;
+      continue;
+    end if;
+
+    execute format('alter table public.%I enable row level security', t);
+    execute format('drop policy if exists "app access" on public.%I', t);
     execute format(
-      'create policy "app access" on %I for all to anon, authenticated using (true) with check (true)', t
+      'create policy "app access" on public.%I for all to anon, authenticated using (true) with check (true)', t
     );
   end loop;
+
+  if array_length(missing, 1) > 0 then
+    raise warning 'Skipped tables that do not exist here: %', array_to_string(missing, ', ');
+    raise warning 'If that list is long, you are probably in the wrong Supabase project. The app uses ruclytedzkdbranurfcq — check the project selector, then run supabase-schema.sql if the tables really are absent.';
+  end if;
 end $$;
 
 
