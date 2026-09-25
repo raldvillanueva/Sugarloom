@@ -1527,3 +1527,38 @@ body.dark .tab-btn.active { background: #1A1A2E; box-shadow: 0 1px 4px rgba(0,0,
 .llm-demo-note { font-size: 12px; color: var(--text-2); flex: 1; min-width: 160px; }
 .llm-demo-actions { display: flex; gap: 6px; }
 .llm-demo-actions button[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Best Sellers picker — search and category filters */
+.cms-pick-filters {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 18px;
+}
+#cms-pick-search {
+  flex: 0 1 240px;
+  border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  padding: 8px 12px; font-size: 13px; font-family: inherit;
+  background: #fff; color: var(--text-1);
+  transition: border-color var(--transition);
+}
+#cms-pick-search:focus { border-color: var(--primary); outline: none; }
+
+.cms-pick-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+.cms-pill {
+  padding: 6px 12px;
+  border: 1.5px solid var(--border); border-radius: 20px;
+  background: #fff; color: var(--text-2);
+  font-size: 12px; font-weight: 600; font-family: inherit;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+.cms-pill:hover { border-color: var(--text-2); color: var(--text-1); }
+.cms-pill.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+/* Beats .cms-pick's display:flex, which is declared later than .hidden */
+.cms-pick.hidden { display: none; }
+
+.cms-pick-empty {
+  font-size: 13px; color: var(--text-2);
+  padding: 18px 2px 0;
+}
+.cms-pick-empty.hidden { display: none; }

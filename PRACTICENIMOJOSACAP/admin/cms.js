@@ -277,12 +277,30 @@ function bestSellerPickerHtml() {
     ...cmsProducts.filter(p => !chosen.includes(p.id))
   ];
 
+  const categories = [...new Set(cmsProducts.map(p => p.category).filter(Boolean))].sort();
+
   return `
+    <div class="cms-pick-filters">
+      <input type="search" id="cms-pick-search" placeholder="Search products…"
+             oninput="applyPickerFilter()" autocomplete="off">
+      <div class="cms-pick-pills" id="cms-pick-pills">
+        <button type="button" class="cms-pill active" data-cat="all"      onclick="setPickerCategory(this)">All</button>
+        <button type="button" class="cms-pill"        data-cat="__picked" onclick="setPickerCategory(this)">Picked</button>
+        ${categories.map(c => `<button type="button" class="cms-pill" data-cat="${cmsEscape(c)}" onclick="setPickerCategory(this)">${cmsEscape(c)}</button>`).join('')}
+        <button type="button" class="cms-pill" data-cat="__hidden" onclick="setPickerCategory(this)">Hidden</button>
+      </div>
+    </div>
+
     <div class="cms-picker" id="cms-best-sellers">
       ${ordered.map(p => {
         const on = chosen.includes(p.id);
+        /* Filtering hides rows with CSS only — the checkboxes stay in the
+           DOM so a tick is never lost by narrowing the list. */
         return `
-          <label class="cms-pick ${on ? 'on' : ''}">
+          <label class="cms-pick ${on ? 'on' : ''}"
+                 data-name="${cmsEscape((p.name || '').toLowerCase())}"
+                 data-cat="${cmsEscape(p.category || '')}"
+                 data-active="${p.active ? '1' : '0'}">
             <input type="checkbox" value="${cmsEscape(p.id)}" ${on ? 'checked' : ''}
                    onchange="updateBestSellerPicks()">
             <img src="${cmsEscape(p.img || '')}" alt="" onerror="this.style.visibility='hidden'">
@@ -291,12 +309,45 @@ function bestSellerPickerHtml() {
           </label>`;
       }).join('')}
     </div>
+    <p class="cms-pick-empty hidden" id="cms-pick-empty">No products match that filter.</p>
     <p class="cms-pick-count" id="cms-pick-count"></p>`;
+}
+
+let _pickerCategory = 'all';
+
+function setPickerCategory(btn){
+  _pickerCategory = btn.dataset.cat;
+  document.querySelectorAll('#cms-pick-pills .cms-pill')
+    .forEach(b => b.classList.toggle('active', b === btn));
+  applyPickerFilter();
+}
+
+function applyPickerFilter(){
+  const term = (document.getElementById('cms-pick-search')?.value || '').trim().toLowerCase();
+  let shown = 0;
+
+  document.querySelectorAll('#cms-best-sellers .cms-pick').forEach(row => {
+    const matchesText = !term || row.dataset.name.includes(term);
+    const matchesCat =
+      _pickerCategory === 'all'      ? true :
+      _pickerCategory === '__picked' ? row.querySelector('input').checked :
+      _pickerCategory === '__hidden' ? row.dataset.active === '0' :
+                                       row.dataset.cat === _pickerCategory;
+
+    const show = matchesText && matchesCat;
+    row.classList.toggle('hidden', !show);
+    if(show) shown++;
+  });
+
+  document.getElementById('cms-pick-empty')?.classList.toggle('hidden', shown > 0);
 }
 
 function updateBestSellerPicks() {
   const boxes = [...document.querySelectorAll('#cms-best-sellers input[type="checkbox"]')];
   boxes.forEach(b => b.closest('.cms-pick').classList.toggle('on', b.checked));
+
+  // Under the "Picked" filter, unticking should drop the row out of view
+  if(_pickerCategory === '__picked') applyPickerFilter();
 
   const n = boxes.filter(b => b.checked).length;
   document.getElementById('cms-pick-count').textContent = n
