@@ -29,10 +29,20 @@ function loadCheckout(){
     `;
   });
 
-  let total = subtotal + currentDeliveryFee();
+  const outOfRange = Boolean(_deliveryQuote?.outOfRange);
+  const fee   = currentDeliveryFee();
+  let   total = subtotal + (outOfRange ? 0 : fee);
 
   document.getElementById("subtotal").innerText = subtotal;
   document.getElementById("total").innerText = total;
+
+  /* Keep the summary honest — it used to show a hardcoded ₱50 even when
+     the address was out of range and no delivery was possible. */
+  const deliveryEl = document.getElementById("summary-delivery");
+  if(deliveryEl){
+    deliveryEl.innerHTML = outOfRange ? 'Unavailable' : '&#8369;' + fee;
+    deliveryEl.classList.toggle('summary-unavailable', outOfRange);
+  }
 
   updatePlaceOrderBtn(total);
 }
@@ -69,7 +79,7 @@ async function refreshDeliveryQuote(){
     _deliveryQuote = null;
     if(row)  row.innerHTML = '&#8369;50.00';
     if(note) note.textContent = 'Enter your address for an exact rate';
-    renderSummary();
+    loadCheckout();
     return;
   }
 
@@ -96,7 +106,7 @@ async function refreshDeliveryQuote(){
     if(note) note.textContent = 'Standard rate — add your city so we can price it exactly';
   }
 
-  renderSummary();
+  loadCheckout();
 }
 
 /* "Santa Lucia, Pasig Second District, Pasig, Eastern Manila District,
@@ -182,6 +192,15 @@ async function placeOrder(){
   const postal      = document.getElementById("postal").value.trim();
   const region      = document.getElementById("region").value.trim();
 
+  /* Refuse out-of-range deliveries here as well as greying the button.
+     A disabled button is a hint, not a guarantee — it can be re-enabled
+     from the console, and the quote may still have been in flight when
+     the customer clicked. */
+  if(_deliveryQuote?.outOfRange){
+    showMsg(`Sorry, ${_deliveryQuote.km} km is outside our delivery area. We deliver up to 25 km from Pasig City.`, 'error');
+    document.getElementById('address')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    return;
+  }
 
   let cart = JSON.parse(localStorage.getItem("cart")) || [];
 
