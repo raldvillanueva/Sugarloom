@@ -56,16 +56,22 @@ function writeGeocodeCache(cache) {
   try { localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache)); } catch {}
 }
 
-/* Towns and cities we deliver around. Subdivision and village names are
-   mostly absent from OpenStreetMap, so when the full address draws a
-   blank we fall back to the barangay or the town — which is easily
-   accurate enough to put a delivery in the right price band. */
-const KNOWN_PLACES = [
-  'Cainta', 'Taytay', 'Antipolo', 'Angono', 'Binangonan', 'Rodriguez', 'San Mateo',
-  'Pasig', 'Marikina', 'Quezon City', 'Mandaluyong', 'San Juan', 'Makati',
-  'Manila', 'Taguig', 'Pateros', 'Caloocan', 'Parañaque', 'Las Piñas',
-  'Muntinlupa', 'Pasay', 'Valenzuela', 'Malabon', 'Navotas'
-];
+/* Towns we deliver to. Subdivision and village names are mostly absent
+   from OpenStreetMap, so when the full address draws a blank we fall
+   back to the barangay or the town — easily accurate enough to put a
+   delivery in the right price band.
+
+   Taken from SERVICE_AREA (js/service-area.js) so the dropdown and the
+   geocoder can't drift apart. The literal is only a fallback for pages
+   that don't load that file. */
+const KNOWN_PLACES = typeof SERVICE_AREA !== 'undefined'
+  ? Object.values(SERVICE_AREA).flat().map(([name]) => name)
+  : [
+      'Cainta', 'Taytay', 'Antipolo', 'Angono', 'Binangonan', 'Rodriguez', 'San Mateo',
+      'Pasig', 'Marikina', 'Quezon City', 'Mandaluyong', 'San Juan', 'Makati',
+      'Manila', 'Taguig', 'Pateros', 'Caloocan', 'Parañaque', 'Las Piñas',
+      'Muntinlupa', 'Pasay', 'Valenzuela', 'Malabon', 'Navotas'
+    ];
 
 function tidy(s) {
   /* No trailing \b after the optional dot — otherwise "Brgy." keeps its
@@ -79,7 +85,7 @@ function tidy(s) {
 }
 
 /* Progressively broader guesses, most precise first. */
-function addressCandidates({ street, city, postal }) {
+function addressCandidates({ street, city, postal, region }) {
   const s = tidy(street);
   const c = tidy(city);
   const p = String(postal || '').trim();
@@ -101,9 +107,11 @@ function addressCandidates({ street, city, postal }) {
     if (v.length > 2 && !out.some(o => o.q.toLowerCase() === v.toLowerCase())) out.push({ q: v, precision });
   };
 
-  add([s, c, p].filter(Boolean).join(', '), 'exact');
+  const reg = String(region || '').trim();
+  add([s, c, reg, p].filter(Boolean).join(', '), 'exact');
   add(s, 'exact');
   if (brgyName && place) add(`Barangay ${brgyName}, ${place}`, 'barangay');
+  add([place, reg].filter(Boolean).join(', '), 'city');
   add(place, 'city');
   add(p, 'city');
 

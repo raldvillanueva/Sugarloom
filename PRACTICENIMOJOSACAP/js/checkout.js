@@ -54,7 +54,8 @@ function deliveryAddressParts(){
   return {
     street: document.getElementById('address')?.value.trim() || '',
     city:   document.getElementById('city')?.value.trim() || '',
-    postal: document.getElementById('postal')?.value.trim() || ''
+    postal: document.getElementById('postal')?.value.trim() || '',
+    region: document.getElementById('region')?.value.trim() || ''
   };
 }
 
@@ -62,7 +63,7 @@ async function refreshDeliveryQuote(){
   const parts = deliveryAddressParts();
   const row   = document.getElementById('shipping-fee');
   const note  = document.getElementById('shipping-note');
-  const joined = [parts.street, parts.city, parts.postal].filter(Boolean).join(' ');
+  const joined = [parts.street, parts.city, parts.postal, parts.region].filter(Boolean).join(' ');
 
   if(joined.length < 6){
     _deliveryQuote = null;
@@ -355,6 +356,53 @@ function showMsg(text, type="error"){
   setTimeout(() => { msg.classList.remove("show"); }, 2500);
 }
 
+/* Region drives City, and City fills in the postcode. Set up before
+   prefillFromProfile() so a saved address has options to select. */
+function setupServiceAreaSelects(){
+  const regionEl = document.getElementById('region');
+  const cityEl   = document.getElementById('city');
+  const postalEl = document.getElementById('postal');
+  if(!regionEl || !cityEl) return;
+
+  fillRegionSelect(regionEl, regionEl.value);
+  fillCitySelect(cityEl, regionEl.value, cityEl.value);
+
+  regionEl.addEventListener('change', () => {
+    fillCitySelect(cityEl, regionEl.value, '');
+    if(postalEl) postalEl.value = '';
+    scheduleDeliveryQuote();
+  });
+
+  cityEl.addEventListener('change', () => {
+    // Fill the postcode from the city, which is where "1001Cainta" came from
+    const code = postalFor(regionEl.value, cityEl.value);
+    if(postalEl && code) postalEl.value = code;
+    scheduleDeliveryQuote();
+  });
+
+  // Keep the postcode to four digits whatever gets pasted or autofilled
+  postalEl?.addEventListener('input', () => {
+    postalEl.value = postalEl.value.replace(/\D/g, '').slice(0, 4);
+  });
+}
+
+/* A saved address only stored the city, so work the region back out
+   from it and select both. */
+function applySavedCity(city){
+  const regionEl = document.getElementById('region');
+  const cityEl   = document.getElementById('city');
+  const postalEl = document.getElementById('postal');
+  if(!city || !regionEl || !cityEl) return;
+
+  const region = regionForCity(city);
+  if(!region) return;                   // saved somewhere we no longer serve
+
+  regionEl.value = region;
+  fillCitySelect(cityEl, region, city);
+  const code = postalFor(region, city);
+  if(postalEl && !postalEl.value && code) postalEl.value = code;
+}
+
 function prefillFromProfile(){
   const user = JSON.parse(localStorage.getItem("loggedInUser"));
 
@@ -376,7 +424,7 @@ function prefillFromProfile(){
   const addresses = user.addresses || [];
   if(addresses.length > 0){
     document.getElementById("address").value = addresses[0].address || "";
-    document.getElementById("city").value = addresses[0].city || "";
+    applySavedCity(addresses[0].city);
   }
 }
 
@@ -399,10 +447,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadCheckout();
   prefillFromProfile();
 
+  setupServiceAreaSelects();
+
   /* Price the delivery from the address, and re-price whenever it
      changes. prefillFromProfile() may have filled it already, so quote
      once on load too. */
-  ['address', 'city', 'postal'].forEach(id => {
+  ['address', 'city', 'postal', 'region'].forEach(id => {
     const el = document.getElementById(id);
     if(el){
       el.addEventListener('input', scheduleDeliveryQuote);
