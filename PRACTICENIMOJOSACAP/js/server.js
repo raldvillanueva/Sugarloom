@@ -1,5 +1,6 @@
 const express    = require("express");
 const cors       = require("cors");
+const crypto     = require("crypto");
 const nodemailer = require("nodemailer");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -254,6 +255,116 @@ app.post("/send-order-notification", async (req, res) => {
 /* HEALTH CHECK */
 app.get("/", (_req, res) => res.send("Server is running ✅"));
 
+/* ═════════════════════════════════════════
+   LALAMOVE
+   Two modes behind one pair of routes.
+
+   Set LALAMOVE_API_KEY and LALAMOVE_API_SECRET and the routes call the
+   real Lalamove Partner API v3. Leave them unset and they answer from
+   the simulator below, so the site still demonstrates the flow.
+
+   Signing happens here and only here. The API secret must never reach
+   the browser, and Lalamove does not allow browser calls anyway, so
+   this server is a required part of a real integration, not a
+   convenience.
+
+   Signature format (Lalamove API v3):
+     raw  = <timestamp>\r\n<METHOD>\r\n<PATH>\r\n\r\n<BODY>
+     sig  = lowercase hex HMAC-SHA256(raw, API_SECRET)
+     hdr  = Authorization: hmac <KEY>:<timestamp>:<sig>
+   plus Market and Request-ID headers.
+   ═════════════════════════════════════════ */
+
+const LALAMOVE_KEY    = process.env.LALAMOVE_API_KEY;
+const LALAMOVE_SECRET = process.env.LALAMOVE_API_SECRET;
+const LALAMOVE_MARKET = process.env.LALAMOVE_MARKET || "PH";
+const LALAMOVE_SERVICE = process.env.LALAMOVE_SERVICE || "MOTORCYCLE";
+const LALAMOVE_ENV_LABEL = process.env.LALAMOVE_ENV === "production" ? "production" : "sandbox";
+const LALAMOVE_BASE   = process.env.LALAMOVE_ENV === "production"
+  ? "https://rest.lalamove.com"
+  : "https://rest.sandbox.lalamove.com";
+
+/* The bakery's own address — the pickup point for every delivery. */
+const PICKUP = {
+  lat:     process.env.LALAMOVE_PICKUP_LAT,
+  lng:     process.env.LALAMOVE_PICKUP_LNG,
+  address: process.env.LALAMOVE_PICKUP_ADDRESS,
+  name:    process.env.LALAMOVE_PICKUP_NAME  || "SugarLoom Ph",
+  phone:   process.env.LALAMOVE_PICKUP_PHONE || "+639171234567"
+};
+
+const LALAMOVE_LIVE = Boolean(LALAMOVE_KEY && LALAMOVE_SECRET && PICKUP.lat && PICKUP.lng);
+
+console.log(LALAMOVE_LIVE
+  ? `🛵 Lalamove: LIVE against ${LALAMOVE_BASE} (market ${LALAMOVE_MARKET})`
+  : "🛵 Lalamove: simulated — set LALAMOVE_API_KEY, LALAMOVE_API_SECRET and LALAMOVE_PICKUP_LAT/LNG to go live");
+
+function lalamoveHeaders(method, path, body) {
+  const timestamp = Date.now().toString();
+  const raw       = `${timestamp}\r\n${method}\r\n${path}\r\n\r\n${body}`;
+  const signature = crypto.createHmac("sha256", LALAMOVE_SECRET).update(raw).digest("hex");
+
+  return {
+    "Content-Type":  "application/json",
+    "Authorization": `hmac ${LALAMOVE_KEY}:${timestamp}:${signature}`,
+    "Market":        LALAMOVE_MARKET,
+    "Request-ID":    crypto.randomUUID()
+  };
+}
+
+async function lalamoveCall(method, path, bodyObj) {
+  const body = bodyObj ? JSON.stringify(bodyObj) : "";
+  const res  = await fetch(LALAMOVE_BASE + path, {
+    method,
+    headers: lalamoveHeaders(method, path, body),
+    ...(body ? { body } : {})
+  });
+
+  const text = await res.text();
+  let json;
+  try { json = text ? JSON.parse(text) : {}; } catch { json = { raw: text }; }
+
+  if (!res.ok) {
+    console.error(`Lalamove ${method} ${path} → ${res.status}`, json);
+    const detail = json?.errors?.[0]?.message || json?.message || `HTTP ${res.status}`;
+    throw new Error(detail);
+  }
+  return json;
+}
+
+/* Quotation first, then the order — Lalamove requires a quotationId. */
+async function lalamoveBook({ customerName, customerPhone, deliveryAddress, lat, lng }) {
+  const quote = await lalamoveCall("POST", "/v3/quotations", {
+    data: {
+      serviceType: LALAMOVE_SERVICE,
+      language:    "en_PH",
+      stops: [
+        { coordinates: { lat: String(PICKUP.lat), lng: String(PICKUP.lng) }, address: PICKUP.address },
+        { coordinates: { lat: String(lat),        lng: String(lng)        }, address: deliveryAddress }
+      ]
+    }
+  });
+
+  const q       = quote.data;
+  const stopIds = (q.stops || []).map(s => s.stopId);
+
+  const order = await lalamoveCall("POST", "/v3/orders", {
+    data: {
+      quotationId: q.quotationId,
+      sender:    { stopId: stopIds[0], name: PICKUP.name, phone: PICKUP.phone },
+      recipients:[{ stopId: stopIds[1], name: customerName, phone: customerPhone, remarks: "SugarLoom Ph order" }],
+      isPODEnabled: true
+    }
+  });
+
+  return {
+    orderRef:  order.data.orderId,
+    shareLink: order.data.shareLink || null,
+    price:     q.priceBreakdown?.total || null,
+    currency:  q.priceBreakdown?.currency || "PHP"
+  };
+}
+
 /* ─────────────────────────────────────────
    LALAMOVE DEMO ROUTES
    (Simulates real Lalamove responses — no API key needed)
@@ -285,10 +396,27 @@ function getDemoStatus(bookedAt) {
  * Body: { customerName, customerPhone, deliveryAddress }
  * Returns a simulated Lalamove booking response.
  */
-app.post("/lalamove/create-order", (req, res) => {
-  const { customerName, customerPhone, deliveryAddress } = req.body;
+app.post("/lalamove/create-order", async (req, res) => {
+  const { customerName, customerPhone, deliveryAddress, lat, lng } = req.body;
   if (!customerName || !customerPhone || !deliveryAddress) {
     return res.json({ success: false, error: "Missing required fields." });
+  }
+
+  if (LALAMOVE_LIVE) {
+    if (!lat || !lng) {
+      return res.json({
+        success: false,
+        error: "Lalamove needs the delivery coordinates. Send lat and lng with the booking."
+      });
+    }
+    try {
+      const booking = await lalamoveBook({ customerName, customerPhone, deliveryAddress, lat, lng });
+      console.log("🛵 Lalamove booking placed:", booking.orderRef);
+      return res.json({ success: true, live: true, ...booking });
+    } catch (err) {
+      console.error("❌ Lalamove booking failed:", err.message);
+      return res.json({ success: false, error: err.message });
+    }
   }
 
   const orderRef = "LLM-" + Date.now();
@@ -298,6 +426,7 @@ app.post("/lalamove/create-order", (req, res) => {
 
   res.json({
     success:   true,
+    live:      false,
     orderRef:  orderRef,
     shareLink: "https://share.lalamove.com/demo/" + orderRef,
     price:     "80.00",
@@ -309,14 +438,45 @@ app.post("/lalamove/create-order", (req, res) => {
  * GET /lalamove/track/:orderRef
  * Returns simulated tracking status that progresses over time.
  */
-app.get("/lalamove/track/:orderRef", (req, res) => {
-  const booking = demoBookings[req.params.orderRef];
+app.get("/lalamove/track/:orderRef", async (req, res) => {
+  const ref = req.params.orderRef;
+
+  if (LALAMOVE_LIVE) {
+    try {
+      const out = await lalamoveCall("GET", `/v3/orders/${encodeURIComponent(ref)}`);
+      const d   = out.data || {};
+
+      /* Driver details are a separate call, and only exist once one has
+         been assigned — a missing driver is normal, not an error. */
+      let driver = null;
+      if (d.driverId) {
+        try {
+          const dr = await lalamoveCall("GET", `/v3/orders/${encodeURIComponent(ref)}/drivers/${encodeURIComponent(d.driverId)}`);
+          driver = { name: dr.data?.name, phone: dr.data?.phone, plate: dr.data?.plateNumber };
+        } catch (e) {
+          console.warn("driver lookup failed:", e.message);
+        }
+      }
+
+      return res.json({ success: true, live: true, status: d.status, driver, shareLink: d.shareLink || null });
+    } catch (err) {
+      console.error("❌ Lalamove tracking failed:", err.message);
+      return res.json({ success: false, error: err.message });
+    }
+  }
+
+  const booking = demoBookings[ref];
   if (!booking) return res.json({ success: false, error: "Order not found." });
 
   const { status, driver } = getDemoStatus(booking.bookedAt);
-  console.log("📍 Demo tracking:", req.params.orderRef, "→", status);
+  console.log("📍 Demo tracking:", ref, "→", status);
 
-  res.json({ success: true, status, driver });
+  res.json({ success: true, live: false, status, driver });
+});
+
+/* Lets the admin panel show whether it is talking to the real API */
+app.get("/lalamove/mode", (_req, res) => {
+  res.json({ live: LALAMOVE_LIVE, env: LALAMOVE_ENV_LABEL, market: LALAMOVE_MARKET });
 });
 
 const PORT = process.env.PORT || 5000;

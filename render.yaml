@@ -28,3 +28,18 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # Leave the Lalamove pair unset to keep deliveries simulated
+      - key: LALAMOVE_API_KEY
+        sync: false
+      - key: LALAMOVE_API_SECRET
+        sync: false
+      - key: LALAMOVE_ENV
+        value: sandbox
+      - key: LALAMOVE_MARKET
+        value: PH
+      - key: LALAMOVE_PICKUP_LAT
+        sync: false
+      - key: LALAMOVE_PICKUP_LNG
+        sync: false
+      - key: LALAMOVE_PICKUP_ADDRESS
+        sync: false
