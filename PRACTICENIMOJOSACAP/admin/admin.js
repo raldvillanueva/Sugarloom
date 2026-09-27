@@ -1205,8 +1205,11 @@ function renderOrders(){
      packed first. queuedAt is only set when someone sends an order to the
      back, so untouched orders keep their original place. Everywhere else
      stays newest-first. */
-  const isBakeQueue = isBaker  && orderFilter === 'Confirmed';
-  const isPackQueue = isPacker && orderFilter === 'Ready for Packing';
+  /* The admin sees the same queues the staff work from, so the order on
+     screen matches what the kitchen is actually doing, and can reorder
+     them — which the staff cannot. */
+  const isBakeQueue = (isBaker  || isAdmin) && orderFilter === 'Confirmed';
+  const isPackQueue = (isPacker || isAdmin) && orderFilter === 'Ready for Packing';
   const isQueue     = isBakeQueue || isPackQueue;
   const queueTime = o => new Date(o.queuedAt || o.date).getTime();
   list = isQueue
@@ -1274,6 +1277,9 @@ function renderOrders(){
           ${isAdmin && !o.archived && (o.status==='Fulfilled'||o.status==='Cancelled')?`<button class="btn-icon danger" onclick="archiveOrder('${o.id}')" title="Archive"><i class='bx bx-archive-in'></i></button>`:isAdmin && o.archived?`<button class="btn-icon success" onclick="unarchiveOrder('${o.id}')" title="Unarchive"><i class='bx bx-archive-out'></i></button>`:''}
           ${isAdmin && o.status==='Pending'&&!o.archived?`<button class="btn-icon success" onclick="openOrderModal('${o.id}')" title="Confirm"><i class='bx bx-check'></i></button>`:''}
           ${(isAdmin||isBaker) && o.status==='Confirmed'&&!o.archived?`<button class="btn-icon success" onclick="openOrderModal('${o.id}')" title="Prepare Order"><i class='bx bx-dish'></i></button>`:''}
+          ${isAdmin && isQueue && !o.archived && list.length>1?`
+            <button class="btn-icon edit" onclick="adminQueueToFront('${o.id}')" title="Prioritise — move to the front of the queue"><i class='bx bx-up-arrow-circle'></i></button>
+            <button class="btn-icon warn" onclick="adminQueueToBack('${o.id}')"  title="Move to the back of the queue"><i class='bx bx-down-arrow-circle'></i></button>`:''}
           ${isBaker && o.status==='Confirmed'&&!o.archived&&list.length>1?`<button class="btn-icon warn" onclick="bakerDeferOrder('${o.id}')" title="Not yet — send to back of queue"><i class='bx bx-down-arrow-circle'></i></button>`:''}
           ${isBaker && o.status==='Confirmed'&&!o.archived?`<button class="btn-icon danger" onclick="bakerDeclineOrder('${o.id}')" title="Can't bake this — send back to the admin"><i class='bx bx-x'></i></button>`:''}
           ${(isAdmin||isBaker) && o.status==='Preparing' && o.preparingSubStatus==='baking' && !o.archived?`<button class="btn-icon success" onclick="bakerDoneBaking('${o.id}')" title="Done Baking" style="background:var(--success-light);color:var(--success)"><i class='bx bx-check-double'></i></button>`:''}
@@ -2029,6 +2035,40 @@ function startPackingAction(){
   sendStatusEmail(o, 'Packing');
   saveDB(); closeModal('order-modal'); renderOrders(); updateBadges();
   toast('Order marked as Packing — passed to Packer', 'success');
+}
+
+/* ── ADMIN QUEUE CONTROL ──
+   Staff can only push an order back; the admin can also pull one
+   forward, for the rush order that has to jump the line. Both work by
+   moving queuedAt, the same field the queue sorts on, so there is one
+   ordering rule rather than two competing ones. */
+function queuePeers(order){
+  return DB.orders.filter(o => !o.archived && o.status === order.status);
+}
+
+const queueStamp = o => new Date(o.queuedAt || o.date).getTime();
+
+function adminQueueToFront(id){
+  const o = DB.orders.find(oo => oo.id === id);
+  if(!o) return;
+
+  const earliest = Math.min(...queuePeers(o).map(queueStamp));
+  o.queuedAt = new Date(earliest - 1000).toISOString();
+
+  saveDB(); renderOrders(); updateBadges();
+  toast(`${o.id} moved to the front of the queue`, 'success');
+}
+
+function adminQueueToBack(id){
+  const o = DB.orders.find(oo => oo.id === id);
+  if(!o) return;
+
+  const latest = Math.max(...queuePeers(o).map(queueStamp));
+  o.queuedAt   = new Date(Math.max(latest, Date.now()) + 1000).toISOString();
+  o.deferCount = (o.deferCount || 0) + 1;
+
+  saveDB(); renderOrders(); updateBadges();
+  toast(`${o.id} moved to the back of the queue`, 'success');
 }
 
 /* Baker is mid-way through something else — push this order to the back
