@@ -1617,3 +1617,8 @@ body.dark .tab-btn.active { background: #1A1A2E; box-shadow: 0 1px 4px rgba(0,0,
   text-align: right; font-size: 15px; margin-top: 12px;
   padding-top: 12px; border-top: 1px solid var(--border);
 }
+
+/* Whole order row opens its details */
+.order-row { cursor: pointer; transition: background var(--transition); }
+.order-row:hover { background: var(--bg); }
+.order-row.queue-next-row:hover { background: #FFF9E8; }

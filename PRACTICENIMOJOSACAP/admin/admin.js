@@ -1263,7 +1263,8 @@ function renderOrders(){
       ? `<span class="auto-archived-tag" title="${o.archivedReason || 'Delivery date has passed'}">PAST DUE</span>`
       : '';
     return `
-    <tr class="${isQueue && idx===0 ? 'queue-next-row' : ''}">
+    <tr class="order-row ${isQueue && idx===0 ? 'queue-next-row' : ''}"
+        onclick="openOrderModal('${o.id}', true)" title="Click to view details">
       <td class="fw-bold">${queueTag}${o.id}${deferTag}${overdueTag}</td>
       <td>${escHTML(o.customer)}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
@@ -1310,9 +1311,9 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
       primary = { label: 'Refund',        icon: 'bx-money-withdraw', cls: 'btn-secondary', fn: `openRefundModal('${o.id}')` };
   }
 
-  // Everything else, with words on it
+  /* Everything else, with words on it. No "View details" here — clicking
+     anywhere on the row does that now. */
   const menu = [];
-  menu.push({ label: 'View details', icon: 'bx-show', fn: `openOrderModal('${o.id}', true)` });
 
   if(isAdmin && live)
     menu.push({ label: 'Edit order', icon: 'bx-edit', fn: `openOrderEditModal('${o.id}')` });
@@ -1343,10 +1344,13 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
   const refunded = isAdmin && o.status === 'Cancelled' && live && o.payment === 'GCash' && o.refunded
     ? `<span class="refund-done-badge" title="Refund processed">Refunded</span>` : '';
 
+  /* stopPropagation so using a button doesn't also open the row's
+     details modal underneath it. */
   return `
-    <div class="row-actions">
+    <div class="row-actions" onclick="event.stopPropagation()">
       ${refunded}
       ${primary ? `<button class="${primary.cls} sm" onclick="${primary.fn}"><i class='bx ${primary.icon}'></i> ${primary.label}</button>` : ''}
+      ${menu.length ? `
       <div class="row-menu-wrap">
         <button class="btn-icon row-menu-btn" title="More actions" onclick="toggleRowMenu(event, '${o.id}')"><i class='bx bx-dots-vertical-rounded'></i></button>
         <div class="row-menu hidden" id="rowmenu-${o.id}">
@@ -1355,7 +1359,7 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
               <i class='bx ${m.icon}'></i> ${m.label}
             </button>`).join('')}
         </div>
-      </div>
+      </div>` : ''}
     </div>`;
 }
 
@@ -1474,8 +1478,6 @@ function filterOrders(status, btn){
   renderOrders();
   const clearBtn = document.getElementById('clear-pending-btn');
   if(clearBtn) clearBtn.style.display = (status === 'Pending' && currentUser.role === 'Administrator') ? '' : 'none';
-  const newBtn = document.getElementById('new-order-btn');
-  if(newBtn) newBtn.style.display = currentUser.role === 'Administrator' ? '' : 'none';
 }
 
 function clearAllPending(){
@@ -2228,89 +2230,6 @@ function saveOrderEdit(){
 
   saveDB(); closeModal('order-edit-modal'); renderOrders(); updateBadges();
   toast('Order updated', 'success');
-}
-
-/* ── CREATE: walk-in order ── */
-function openNewOrderModal(){
-  document.getElementById('no-customer').value = '';
-  document.getElementById('no-phone').value    = '';
-  document.getElementById('no-address').value  = '';
-  document.getElementById('no-date').value     = todayDate();
-  document.getElementById('no-payment').value  = 'Cash on Delivery';
-
-  const opts = DB.products.filter(p => p.active)
-    .map(p => `<option value="${escHTML(p.id)}">${escHTML(p.name)} — ₱${p.price}</option>`).join('');
-  document.getElementById('no-product').innerHTML = '<option value="">Choose a product…</option>' + opts;
-
-  _newOrderItems = [];
-  renderNewOrderItems();
-  openModal('new-order-modal');
-}
-
-let _newOrderItems = [];
-
-function addNewOrderItem(){
-  const sel = document.getElementById('no-product');
-  const qty = Math.max(1, parseInt(document.getElementById('no-qty').value) || 1);
-  const p   = DB.products.find(pp => pp.id === sel.value);
-  if(!p){ toast('Pick a product first', 'danger'); return; }
-
-  const existing = _newOrderItems.find(it => it.id === p.id);
-  if(existing) existing.qty += qty;
-  else _newOrderItems.push({ id: p.id, name: p.name, qty, price: p.price, img: p.img || '' });
-
-  sel.value = '';
-  document.getElementById('no-qty').value = 1;
-  renderNewOrderItems();
-}
-
-function removeNewOrderItem(id){
-  _newOrderItems = _newOrderItems.filter(it => it.id !== id);
-  renderNewOrderItems();
-}
-
-function renderNewOrderItems(){
-  const total = _newOrderItems.reduce((s, it) => s + it.price * it.qty, 0);
-  document.getElementById('no-items').innerHTML = _newOrderItems.length
-    ? _newOrderItems.map(it => `
-        <div class="oe-item">
-          <span class="oe-item-name">${escHTML(it.name)}</span>
-          <span class="oe-item-price">₱${it.price} × ${it.qty}</span>
-          <span class="oe-item-price fw-bold">₱${(it.price * it.qty).toLocaleString()}</span>
-          <button class="btn-icon danger" title="Remove" onclick="removeNewOrderItem('${escHTML(it.id)}')"><i class='bx bx-trash'></i></button>
-        </div>`).join('')
-    : '<p class="cms-hint">No items added yet.</p>';
-  document.getElementById('no-total').textContent = '₱' + total.toLocaleString();
-}
-
-async function saveNewOrder(){
-  const customer = document.getElementById('no-customer').value.trim();
-  if(!customer){ toast('Customer name is required', 'danger'); return; }
-  if(!_newOrderItems.length){ toast('Add at least one item', 'danger'); return; }
-
-  const order = {
-    id:            'WALK-' + Date.now(),
-    customer,
-    customerEmail: 'guest',
-    phone:         document.getElementById('no-phone').value.trim(),
-    address:       document.getElementById('no-address').value.trim(),
-    items:         _newOrderItems.map(it => ({ ...it })),
-    total:         _newOrderItems.reduce((s, it) => s + it.price * it.qty, 0),
-    type:          'Walk-in',
-    status:        'Pending',
-    date:          new Date().toISOString(),
-    payment:       document.getElementById('no-payment').value,
-    preferredDate: document.getElementById('no-date').value || null
-  };
-
-  DB.orders.unshift(order);
-  await _supa.from('orders').upsert({
-    id: order.id, customer_email: order.customerEmail,
-    status: order.status, date: order.date, data: order
-  }, { onConflict: 'id' }).catch(console.error);
-
-  saveDB(); closeModal('new-order-modal'); renderOrders(); updateBadges();
-  toast('Walk-in order created', 'success');
 }
 
 /* ── ADMIN QUEUE CONTROL ──
