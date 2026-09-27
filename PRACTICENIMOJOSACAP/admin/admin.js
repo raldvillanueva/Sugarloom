@@ -1272,31 +1272,108 @@ function renderOrders(){
       <td>${fmtDate(o.date)}</td>
       <td><span class="pill ${sp.cls}">${sp.label}</span></td>
       <td>
-        <div class="td-actions">
-          <button class="btn-icon edit" onclick="openOrderModal('${o.id}', true)" title="View"><i class='bx bx-show'></i></button>
-          ${isAdmin && !o.archived && (o.status==='Fulfilled'||o.status==='Cancelled')?`<button class="btn-icon danger" onclick="archiveOrder('${o.id}')" title="Archive"><i class='bx bx-archive-in'></i></button>`:isAdmin && o.archived?`<button class="btn-icon success" onclick="unarchiveOrder('${o.id}')" title="Unarchive"><i class='bx bx-archive-out'></i></button>`:''}
-          ${isAdmin && o.status==='Pending'&&!o.archived?`<button class="btn-icon success" onclick="openOrderModal('${o.id}')" title="Confirm"><i class='bx bx-check'></i></button>`:''}
-          ${(isAdmin||isBaker) && o.status==='Confirmed'&&!o.archived?`<button class="btn-icon success" onclick="openOrderModal('${o.id}')" title="Prepare Order"><i class='bx bx-dish'></i></button>`:''}
-          ${isAdmin && isQueue && !o.archived && list.length>1?`
-            <button class="btn-icon edit" onclick="adminQueueToFront('${o.id}')" title="Prioritise — move to the front of the queue"><i class='bx bx-up-arrow-circle'></i></button>
-            <button class="btn-icon warn" onclick="adminQueueToBack('${o.id}')"  title="Move to the back of the queue"><i class='bx bx-down-arrow-circle'></i></button>`:''}
-          ${isBaker && o.status==='Confirmed'&&!o.archived&&list.length>1?`<button class="btn-icon warn" onclick="bakerDeferOrder('${o.id}')" title="Not yet — send to back of queue"><i class='bx bx-down-arrow-circle'></i></button>`:''}
-          ${isBaker && o.status==='Confirmed'&&!o.archived?`<button class="btn-icon danger" onclick="bakerDeclineOrder('${o.id}')" title="Can't bake this — send back to the admin"><i class='bx bx-x'></i></button>`:''}
-          ${(isAdmin||isBaker) && o.status==='Preparing' && o.preparingSubStatus==='baking' && !o.archived?`<button class="btn-icon success" onclick="bakerDoneBaking('${o.id}')" title="Done Baking" style="background:var(--success-light);color:var(--success)"><i class='bx bx-check-double'></i></button>`:''}
-          ${(isAdmin||isPacker) && o.status==='Ready for Packing'&&!o.archived?`<button class="btn-icon success" onclick="packerStartPacking('${o.id}')" title="Start Packing" style="background:#EDE9FE;color:#7C3AED"><i class='bx bx-package'></i></button>`:''}
-          ${isPacker && o.status==='Ready for Packing'&&!o.archived&&list.length>1?`<button class="btn-icon warn" onclick="packerDeferOrder('${o.id}')" title="Not yet — send to back of queue"><i class='bx bx-down-arrow-circle'></i></button>`:''}
-          ${isPacker && o.status==='Ready for Packing'&&!o.archived?`<button class="btn-icon danger" onclick="packerSendBackToBaker('${o.id}')" title="Can't pack this — send back to the baker"><i class='bx bx-x'></i></button>`:''}
-          ${(isAdmin||isPacker) && o.status==='Preparing' && o.preparingSubStatus==='packing' && !o.archived?`<button class="btn-icon success" onclick="packerDonePacking('${o.id}')" title="Done Packing"><i class='bx bx-check-double'></i></button>`:''}
-          ${(isAdmin||isPacker) && o.status==='Preparing' && o.preparingSubStatus==='packed' && !o.archived?`<button class="btn-icon success" onclick="packerReadyForBook('${o.id}')" title="Ready for Book"><i class='bx bx-map-pin'></i></button>`:''}
-          ${isAdmin && o.status==='Preparing' && o.preparingSubStatus==='readyForBook' && !o.archived?`<button class="btn-icon edit" onclick="openOrderModal('${o.id}')" title="Book Lalamove"><i class='bx bx-map'></i></button>`:''}
-          ${isAdmin && o.status==='Cancel Requested'&&!o.archived?`<button class="btn-icon danger" onclick="openOrderModal('${o.id}')" title="Review Cancel Request"><i class='bx bx-x-circle'></i></button>`:''}
-          ${isAdmin && o.status==='Cancelled'&&!o.archived&&o.payment==='GCash'&&!o.refunded?`<button class="btn-icon warn" onclick="openRefundModal('${o.id}')" title="Process Refund"><i class='bx bx-money-withdraw'></i></button>`:''}
-          ${isAdmin && o.status==='Cancelled'&&!o.archived&&o.payment==='GCash'&&o.refunded?`<span class="refund-done-badge" title="Refund processed">Refunded</span>`:''}
-        </div>
+        ${orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder: isQueue && list.length > 1 })}
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-2)">No orders found</td></tr>';
 }
+
+/* ── ROW ACTIONS ──
+   One labelled button for the single thing this order needs next, and
+   everything else behind a ⋮ menu with words on it. The row used to show
+   up to six unlabelled icons side by side, which nobody could tell
+   apart at a glance. */
+function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
+  const live = !o.archived;
+  const sub  = o.preparingSubStatus;
+
+  // The one step this order is waiting for
+  let primary = null;
+  if(live){
+    if(o.status === 'Pending' && isAdmin)
+      primary = { label: 'Confirm',       icon: 'bx-check',        cls: 'btn-primary',   fn: `openOrderModal('${o.id}')` };
+    else if(o.status === 'Confirmed' && (isAdmin || isBaker))
+      primary = { label: 'Start baking',  icon: 'bx-dish',         cls: 'btn-primary',   fn: `openOrderModal('${o.id}')` };
+    else if(o.status === 'Preparing' && sub === 'baking' && (isAdmin || isBaker))
+      primary = { label: 'Done baking',   icon: 'bx-check-double', cls: 'btn-primary',   fn: `bakerDoneBaking('${o.id}')` };
+    else if(o.status === 'Ready for Packing' && (isAdmin || isPacker))
+      primary = { label: 'Start packing', icon: 'bx-package',      cls: 'btn-primary',   fn: `packerStartPacking('${o.id}')` };
+    else if(o.status === 'Preparing' && sub === 'packing' && (isAdmin || isPacker))
+      primary = { label: 'Done packing',  icon: 'bx-check-double', cls: 'btn-primary',   fn: `packerDonePacking('${o.id}')` };
+    else if(o.status === 'Preparing' && sub === 'packed' && (isAdmin || isPacker))
+      primary = { label: 'Ready to book', icon: 'bx-map-pin',      cls: 'btn-primary',   fn: `packerReadyForBook('${o.id}')` };
+    else if(o.status === 'Preparing' && sub === 'readyForBook' && isAdmin)
+      primary = { label: 'Book delivery', icon: 'bx-map',          cls: 'btn-primary',   fn: `openOrderModal('${o.id}')` };
+    else if(o.status === 'Cancel Requested' && isAdmin)
+      primary = { label: 'Review',        icon: 'bx-x-circle',     cls: 'btn-danger',    fn: `openOrderModal('${o.id}')` };
+    else if(o.status === 'Cancelled' && isAdmin && o.payment === 'GCash' && !o.refunded)
+      primary = { label: 'Refund',        icon: 'bx-money-withdraw', cls: 'btn-secondary', fn: `openRefundModal('${o.id}')` };
+  }
+
+  // Everything else, with words on it
+  const menu = [];
+  menu.push({ label: 'View details', icon: 'bx-show', fn: `openOrderModal('${o.id}', true)` });
+
+  if(isAdmin && live)
+    menu.push({ label: 'Edit order', icon: 'bx-edit', fn: `openOrderEditModal('${o.id}')` });
+
+  if(isAdmin && canReorder){
+    menu.push({ label: 'Move to front of queue', icon: 'bx-up-arrow-circle',   fn: `adminQueueToFront('${o.id}')` });
+    menu.push({ label: 'Move to back of queue',  icon: 'bx-down-arrow-circle', fn: `adminQueueToBack('${o.id}')` });
+  }
+
+  if(isBaker && o.status === 'Confirmed' && live){
+    if(canReorder) menu.push({ label: 'Not yet — bake later', icon: 'bx-down-arrow-circle', fn: `bakerDeferOrder('${o.id}')` });
+    menu.push({ label: "Can't bake — send back", icon: 'bx-undo', danger: true, fn: `bakerDeclineOrder('${o.id}')` });
+  }
+
+  if(isPacker && o.status === 'Ready for Packing' && live){
+    if(canReorder) menu.push({ label: 'Not yet — pack later', icon: 'bx-down-arrow-circle', fn: `packerDeferOrder('${o.id}')` });
+    menu.push({ label: "Can't pack — send to baker", icon: 'bx-undo', danger: true, fn: `packerSendBackToBaker('${o.id}')` });
+  }
+
+  if(isAdmin && live && (o.status === 'Fulfilled' || o.status === 'Cancelled'))
+    menu.push({ label: 'Archive', icon: 'bx-archive-in', fn: `archiveOrder('${o.id}')` });
+  if(isAdmin && o.archived)
+    menu.push({ label: 'Restore from archive', icon: 'bx-archive-out', fn: `unarchiveOrder('${o.id}')` });
+
+  if(isAdmin)
+    menu.push({ label: 'Delete order', icon: 'bx-trash', danger: true, fn: `deleteOrder('${o.id}')` });
+
+  const refunded = isAdmin && o.status === 'Cancelled' && live && o.payment === 'GCash' && o.refunded
+    ? `<span class="refund-done-badge" title="Refund processed">Refunded</span>` : '';
+
+  return `
+    <div class="row-actions">
+      ${refunded}
+      ${primary ? `<button class="${primary.cls} sm" onclick="${primary.fn}"><i class='bx ${primary.icon}'></i> ${primary.label}</button>` : ''}
+      <div class="row-menu-wrap">
+        <button class="btn-icon row-menu-btn" title="More actions" onclick="toggleRowMenu(event, '${o.id}')"><i class='bx bx-dots-vertical-rounded'></i></button>
+        <div class="row-menu hidden" id="rowmenu-${o.id}">
+          ${menu.map(m => `
+            <button class="row-menu-item ${m.danger ? 'danger' : ''}" onclick="closeRowMenus(); ${m.fn}">
+              <i class='bx ${m.icon}'></i> ${m.label}
+            </button>`).join('')}
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleRowMenu(ev, id){
+  ev.stopPropagation();
+  const menu = document.getElementById('rowmenu-' + id);
+  const wasOpen = menu && !menu.classList.contains('hidden');
+  closeRowMenus();
+  if(menu && !wasOpen) menu.classList.remove('hidden');
+}
+
+function closeRowMenus(){
+  document.querySelectorAll('.row-menu').forEach(m => m.classList.add('hidden'));
+}
+
+document.addEventListener('click', e => {
+  if(!e.target.closest('.row-menu-wrap')) closeRowMenus();
+});
 
 function archiveOrder(id){
   showConfirm({
@@ -1397,6 +1474,8 @@ function filterOrders(status, btn){
   renderOrders();
   const clearBtn = document.getElementById('clear-pending-btn');
   if(clearBtn) clearBtn.style.display = (status === 'Pending' && currentUser.role === 'Administrator') ? '' : 'none';
+  const newBtn = document.getElementById('new-order-btn');
+  if(newBtn) newBtn.style.display = currentUser.role === 'Administrator' ? '' : 'none';
 }
 
 function clearAllPending(){
@@ -2035,6 +2114,203 @@ function startPackingAction(){
   sendStatusEmail(o, 'Packing');
   saveDB(); closeModal('order-modal'); renderOrders(); updateBadges();
   toast('Order marked as Packing — passed to Packer', 'success');
+}
+
+/* ═══════════════════════════════════════════
+   ORDER CRUD (admin)
+   Create a walk-in order, edit an existing one, delete for good.
+   Archive is still the everyday way to clear finished orders — delete
+   is here for test rows and genuine mistakes, and is irreversible.
+   ═══════════════════════════════════════════ */
+
+function deleteOrder(id){
+  const o = DB.orders.find(oo => oo.id === id);
+  if(!o) return;
+
+  showConfirm({
+    title: 'Delete order',
+    message: `Permanently delete ${o.id} (${o.customer}, ₱${Number(o.total||0).toLocaleString()})? This cannot be undone. To keep the record but clear it from the lists, use Archive instead.`,
+    okText: 'Delete for good',
+    okClass: 'btn-danger',
+    icon: 'bx-trash',
+    onConfirm: async () => {
+      // Ingredients already taken out for a bake go back on the shelf
+      const putBack = restoreIngredientsFor(o);
+
+      DB.orders = DB.orders.filter(oo => oo.id !== id);
+      await _supa.from('orders').delete().eq('id', id).catch(console.error);
+      await _supa.from('order_tracking').delete().eq('order_id', id).catch(console.error);
+
+      const store = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
+      localStorage.setItem('sl_store_orders', JSON.stringify(store.filter(x => x.id !== id)));
+
+      saveDB(); renderOrders(); updateBadges(); renderInventory();
+      toast(putBack.length ? 'Order deleted — ingredients returned to stock' : 'Order deleted', 'success');
+    }
+  });
+}
+
+let _editingOrderId = null;
+
+function openOrderEditModal(id){
+  const o = DB.orders.find(oo => oo.id === id);
+  if(!o) return;
+  _editingOrderId = id;
+
+  document.getElementById('oe-title').textContent = 'Edit ' + o.id;
+  document.getElementById('oe-customer').value = o.customer || '';
+  document.getElementById('oe-phone').value    = o.phone || '';
+  document.getElementById('oe-address').value  = o.address || '';
+  document.getElementById('oe-date').value     = o.preferredDate ? String(o.preferredDate).slice(0,10) : '';
+  document.getElementById('oe-time').value     = o.preferredTime || '';
+  document.getElementById('oe-payment').value  = o.payment || 'GCash';
+
+  renderOrderEditItems(o.items || []);
+  openModal('order-edit-modal');
+}
+
+function renderOrderEditItems(items){
+  document.getElementById('oe-items').innerHTML = items.map((it, i) => `
+    <div class="oe-item" data-idx="${i}">
+      <span class="oe-item-name">${escHTML(it.name)}</span>
+      <span class="oe-item-price">₱${Number(it.price||0).toLocaleString()}</span>
+      <input type="number" min="0" value="${Number(it.qty)||1}" data-oe-qty
+             onchange="recalcOrderEditTotal()" oninput="recalcOrderEditTotal()">
+      <button class="btn-icon danger" title="Remove item" onclick="removeOrderEditItem(${i})"><i class='bx bx-trash'></i></button>
+    </div>`).join('') || '<p class="cms-hint">No items left — the order must have at least one.</p>';
+  recalcOrderEditTotal();
+}
+
+function currentOrderEditItems(){
+  const o = DB.orders.find(oo => oo.id === _editingOrderId);
+  if(!o) return [];
+  return [...document.querySelectorAll('#oe-items .oe-item')].map(row => {
+    const src = o.items[Number(row.dataset.idx)];
+    return { ...src, qty: Math.max(0, parseInt(row.querySelector('[data-oe-qty]').value) || 0) };
+  }).filter(it => it.qty > 0);
+}
+
+function recalcOrderEditTotal(){
+  const total = currentOrderEditItems().reduce((s, it) => s + (Number(it.price)||0) * it.qty, 0);
+  document.getElementById('oe-total').textContent = '₱' + total.toLocaleString();
+}
+
+function removeOrderEditItem(idx){
+  const o = DB.orders.find(oo => oo.id === _editingOrderId);
+  if(!o) return;
+  const kept = o.items.filter((_, i) => i !== idx);
+  o.items = kept;                 // staged; only persisted on Save
+  renderOrderEditItems(kept);
+}
+
+function saveOrderEdit(){
+  const o = DB.orders.find(oo => oo.id === _editingOrderId);
+  if(!o) return;
+
+  const items = currentOrderEditItems();
+  if(!items.length){ toast('An order needs at least one item', 'danger'); return; }
+
+  const customer = document.getElementById('oe-customer').value.trim();
+  if(!customer){ toast('Customer name is required', 'danger'); return; }
+
+  o.customer      = customer;
+  o.phone         = document.getElementById('oe-phone').value.trim();
+  o.address       = document.getElementById('oe-address').value.trim();
+  o.preferredDate = document.getElementById('oe-date').value || null;
+  o.preferredTime = document.getElementById('oe-time').value || null;
+  o.payment       = document.getElementById('oe-payment').value;
+  o.items         = items;
+  o.total         = items.reduce((s, it) => s + (Number(it.price)||0) * it.qty, 0);
+
+  /* A changed delivery date can pull an order back out of the overdue
+     sweep, so clear the flags that would otherwise re-archive it. */
+  delete o.autoArchived; delete o.archivedReason;
+
+  saveDB(); closeModal('order-edit-modal'); renderOrders(); updateBadges();
+  toast('Order updated', 'success');
+}
+
+/* ── CREATE: walk-in order ── */
+function openNewOrderModal(){
+  document.getElementById('no-customer').value = '';
+  document.getElementById('no-phone').value    = '';
+  document.getElementById('no-address').value  = '';
+  document.getElementById('no-date').value     = todayDate();
+  document.getElementById('no-payment').value  = 'Cash on Delivery';
+
+  const opts = DB.products.filter(p => p.active)
+    .map(p => `<option value="${escHTML(p.id)}">${escHTML(p.name)} — ₱${p.price}</option>`).join('');
+  document.getElementById('no-product').innerHTML = '<option value="">Choose a product…</option>' + opts;
+
+  _newOrderItems = [];
+  renderNewOrderItems();
+  openModal('new-order-modal');
+}
+
+let _newOrderItems = [];
+
+function addNewOrderItem(){
+  const sel = document.getElementById('no-product');
+  const qty = Math.max(1, parseInt(document.getElementById('no-qty').value) || 1);
+  const p   = DB.products.find(pp => pp.id === sel.value);
+  if(!p){ toast('Pick a product first', 'danger'); return; }
+
+  const existing = _newOrderItems.find(it => it.id === p.id);
+  if(existing) existing.qty += qty;
+  else _newOrderItems.push({ id: p.id, name: p.name, qty, price: p.price, img: p.img || '' });
+
+  sel.value = '';
+  document.getElementById('no-qty').value = 1;
+  renderNewOrderItems();
+}
+
+function removeNewOrderItem(id){
+  _newOrderItems = _newOrderItems.filter(it => it.id !== id);
+  renderNewOrderItems();
+}
+
+function renderNewOrderItems(){
+  const total = _newOrderItems.reduce((s, it) => s + it.price * it.qty, 0);
+  document.getElementById('no-items').innerHTML = _newOrderItems.length
+    ? _newOrderItems.map(it => `
+        <div class="oe-item">
+          <span class="oe-item-name">${escHTML(it.name)}</span>
+          <span class="oe-item-price">₱${it.price} × ${it.qty}</span>
+          <span class="oe-item-price fw-bold">₱${(it.price * it.qty).toLocaleString()}</span>
+          <button class="btn-icon danger" title="Remove" onclick="removeNewOrderItem('${escHTML(it.id)}')"><i class='bx bx-trash'></i></button>
+        </div>`).join('')
+    : '<p class="cms-hint">No items added yet.</p>';
+  document.getElementById('no-total').textContent = '₱' + total.toLocaleString();
+}
+
+async function saveNewOrder(){
+  const customer = document.getElementById('no-customer').value.trim();
+  if(!customer){ toast('Customer name is required', 'danger'); return; }
+  if(!_newOrderItems.length){ toast('Add at least one item', 'danger'); return; }
+
+  const order = {
+    id:            'WALK-' + Date.now(),
+    customer,
+    customerEmail: 'guest',
+    phone:         document.getElementById('no-phone').value.trim(),
+    address:       document.getElementById('no-address').value.trim(),
+    items:         _newOrderItems.map(it => ({ ...it })),
+    total:         _newOrderItems.reduce((s, it) => s + it.price * it.qty, 0),
+    type:          'Walk-in',
+    status:        'Pending',
+    date:          new Date().toISOString(),
+    payment:       document.getElementById('no-payment').value,
+    preferredDate: document.getElementById('no-date').value || null
+  };
+
+  DB.orders.unshift(order);
+  await _supa.from('orders').upsert({
+    id: order.id, customer_email: order.customerEmail,
+    status: order.status, date: order.date, data: order
+  }, { onConflict: 'id' }).catch(console.error);
+
+  saveDB(); closeModal('new-order-modal'); renderOrders(); updateBadges();
+  toast('Walk-in order created', 'success');
 }
 
 /* ── ADMIN QUEUE CONTROL ──
