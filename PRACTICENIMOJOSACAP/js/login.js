@@ -22,6 +22,32 @@ function showPanel(id) {
   }
 }
 
+/* Details captured at sign-up, held until there is a session allowed to
+   write them. Keyed by email because the user id isn't known until the
+   account exists. */
+const PENDING_PROFILE_KEY = 'sl_pending_profile';
+
+function stashProfile(email, profile) {
+  try {
+    const all = JSON.parse(localStorage.getItem(PENDING_PROFILE_KEY) || '{}');
+    all[email.toLowerCase()] = profile;
+    localStorage.setItem(PENDING_PROFILE_KEY, JSON.stringify(all));
+  } catch (e) { console.warn('could not stash profile:', e); }
+}
+
+function takeStashedProfile(email) {
+  try {
+    const all = JSON.parse(localStorage.getItem(PENDING_PROFILE_KEY) || '{}');
+    const key = String(email || '').toLowerCase();
+    const found = all[key];
+    if (found) {
+      delete all[key];
+      localStorage.setItem(PENDING_PROFILE_KEY, JSON.stringify(all));
+    }
+    return found || null;
+  } catch { return null; }
+}
+
 /* Load Supabase profile and cache it in localStorage for other pages */
 async function storeSession(supaUser) {
   const { data: row } = await _supa
@@ -30,7 +56,16 @@ async function storeSession(supaUser) {
     .eq('id', supaUser.id)
     .single();
 
-  const profile = row?.data || {};
+  let profile = row?.data || {};
+
+  /* First sign-in after registering: there is a session now, so the
+     name and phone given at sign-up can finally be saved. */
+  const pending = takeStashedProfile(supaUser.email);
+  if (pending && !profile.fname && !profile.phone) {
+    profile = { ...pending, ...profile };
+    const { error } = await _supa.from('profiles').upsert({ id: supaUser.id, data: profile });
+    if (error) console.warn('could not save profile on first sign-in:', error.message);
+  }
   const loggedInUser = {
     email:     supaUser.email,
     fname:     profile.fname || '',
@@ -196,10 +231,19 @@ async function register() {
     return;
   }
 
-  await _supa.from('profiles').upsert({
-    id:   data.user.id,
-    data: { fname, lname, phone, addresses: [] }
-  });
+  const profile = { fname, lname, phone, addresses: [] };
+
+  /* The profiles table is owner-only: a row may only be written by the
+     signed-in user it belongs to. Sign-up with email confirmation gives
+     us a user but no session yet, so this write is rejected — auth.uid()
+     is still null. Keep the details and write them at first sign-in,
+     when there is a session to authorise it. */
+  if (data.session) {
+    const { error: pErr } = await _supa.from('profiles').upsert({ id: data.user.id, data: profile });
+    if (pErr) { console.warn('profile save deferred to first sign-in:', pErr.message); stashProfile(email, profile); }
+  } else {
+    stashProfile(email, profile);
+  }
 
   showMsg('Account created! Check your email to verify, then sign in.');
   setTimeout(() => { window.location.href = 'login.html'; }, 2000);
