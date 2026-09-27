@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="../css/checkout.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="../js/supabase-config.js"></script>
+  <script src="../js/delivery-fee.js"></script>
   <script src="../js/checkout.js" defer></script>
 </head>
 <body>
@@ -138,8 +139,11 @@
       <h2>Shipping method</h2>
       <label class="shipping-option">
         <input type="radio" name="shipping" checked>
-        <span class="shipping-name">Local delivery</span>
-        <span class="shipping-price">&#8369;180.00</span>
+        <span class="shipping-name">
+          Local delivery
+          <small id="shipping-note">Enter your address for an exact rate</small>
+        </span>
+        <span class="shipping-price" id="shipping-fee">&#8369;50.00</span>
       </label>
       <a href="#" class="instructions-link" onclick="toggleInstructions(event)">Add delivery instructions</a>
       <textarea id="deliveryInstructions" class="instructions-area hidden" placeholder="Delivery instructions (optional)"></textarea>

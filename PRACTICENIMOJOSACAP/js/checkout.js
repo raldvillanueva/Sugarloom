@@ -29,7 +29,7 @@ function loadCheckout(){
     `;
   });
 
-  let total = subtotal + 50;
+  let total = subtotal + currentDeliveryFee();
 
   document.getElementById("subtotal").innerText = subtotal;
   document.getElementById("total").innerText = total;
@@ -37,11 +37,66 @@ function loadCheckout(){
   updatePlaceOrderBtn(total);
 }
 
+/* The delivery fee depends on how far the address is from the bakery.
+   Until one has been quoted, fall back to the old flat rate. */
+let _deliveryQuote = null;
+let _quoteTimer    = null;
+
+/* Re-price whenever the address settles. Debounced so we make one
+   geocoding request per address, not one per keystroke — Nominatim is
+   free and asks to be used sparingly. */
+function scheduleDeliveryQuote(){
+  clearTimeout(_quoteTimer);
+  _quoteTimer = setTimeout(refreshDeliveryQuote, 700);
+}
+
+function fullDeliveryAddress(){
+  const street = document.getElementById('address')?.value.trim() || '';
+  const city   = document.getElementById('city')?.value.trim() || '';
+  const postal = document.getElementById('postal')?.value.trim() || '';
+  return [street, city, postal].filter(Boolean).join(', ');
+}
+
+async function refreshDeliveryQuote(){
+  const address = fullDeliveryAddress();
+  const row = document.getElementById('shipping-fee');
+  const note = document.getElementById('shipping-note');
+
+  if(address.length < 6){
+    _deliveryQuote = null;
+    if(row)  row.innerHTML = '&#8369;50.00';
+    if(note) note.textContent = 'Enter your address for an exact rate';
+    renderSummary();
+    return;
+  }
+
+  if(note) note.textContent = 'Checking distance…';
+  _deliveryQuote = await quoteDelivery(address);
+
+  if(_deliveryQuote.outOfRange){
+    if(row)  row.textContent = 'Unavailable';
+    if(note) note.textContent = `Sorry — ${_deliveryQuote.km} km away is outside our delivery area.`;
+  } else if(_deliveryQuote.located){
+    if(row)  row.innerHTML = '&#8369;' + _deliveryQuote.fee.toFixed(2);
+    if(note) note.textContent = `${_deliveryQuote.km} km from our kitchen`;
+  } else {
+    if(row)  row.innerHTML = '&#8369;' + _deliveryQuote.fee.toFixed(2);
+    if(note) note.textContent = "We couldn't place that address — standard rate applied";
+  }
+
+  renderSummary();
+}
+
+function currentDeliveryFee(){
+  if(_deliveryQuote && typeof _deliveryQuote.fee === 'number') return _deliveryQuote.fee;
+  return 50;
+}
+
 function updatePlaceOrderBtn(total){
   if(total === undefined){
     let cart = JSON.parse(localStorage.getItem("cart")) || [];
     let subtotal = cart.reduce((sum, item) => sum + item.price * (item.qty || 1), 0);
-    total = subtotal + 50;
+    total = subtotal + currentDeliveryFee();
   }
 
   const btn = document.querySelector('.place-order-btn');
@@ -51,7 +106,10 @@ function updatePlaceOrderBtn(total){
   const isCOD = document.querySelector('input[name="payment"]:checked')?.value === 'Cash on Delivery';
   const qr = document.getElementById("gcash-qr");
 
-  if(isCOD && total > 2000){
+  if(_deliveryQuote?.outOfRange){
+    btn.disabled = true;                       // too far to deliver
+    if(notice) notice.style.display = 'none';
+  } else if(isCOD && total > 2000){
     btn.disabled = true;
     if(notice) notice.style.display = 'block';
   } else {
@@ -194,7 +252,8 @@ async function placeOrder(){
 
   let subtotal = 0;
   cart.forEach(item => { subtotal += item.price * (item.qty || 1); });
-  let total = subtotal + 50;
+  const deliveryFee = currentDeliveryFee();
+  let total = subtotal + deliveryFee;
 
   const currentUser     = JSON.parse(localStorage.getItem('loggedInUser'));
   const orderId         = 'WEB-' + Date.now();
@@ -214,6 +273,12 @@ async function placeOrder(){
     status:        'Pending',
     date:          new Date().toISOString(),
     payment:       selectedPayment,
+    deliveryFee,
+    /* Distance and coordinates from the address lookup. The coordinates
+       are what a real Lalamove booking needs — it works in lat/lng, not
+       text addresses. */
+    ...(_deliveryQuote?.km != null && { distanceKm: _deliveryQuote.km }),
+    ...(_deliveryQuote?.coords && { deliveryCoords: _deliveryQuote.coords }),
     ...(preferredDate && { preferredDate }),
     ...(preferredTime && { preferredTime })
   };
@@ -315,6 +380,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   loadCheckout();
   prefillFromProfile();
+
+  /* Price the delivery from the address, and re-price whenever it
+     changes. prefillFromProfile() may have filled it already, so quote
+     once on load too. */
+  ['address', 'city', 'postal'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){
+      el.addEventListener('input', scheduleDeliveryQuote);
+      el.addEventListener('change', scheduleDeliveryQuote);
+    }
+  });
+  refreshDeliveryQuote();
 
   const cart = JSON.parse(localStorage.getItem("cart")) || [];
   const countEl = document.getElementById("checkoutCartCount");
