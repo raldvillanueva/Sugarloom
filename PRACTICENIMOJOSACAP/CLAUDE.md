@@ -1,8 +1,14 @@
 # SugarLoom Ph
 
-Online store and admin panel for a home-based bakery in Cainta, Metro
-Manila. Plain HTML, CSS and JavaScript with no build step — files are
-served exactly as they sit on disk.
+Online store and admin panel for a home-based bakery in Pinagbuhatan,
+Pasig City, delivering across Metro Manila and Rizal. Plain HTML, CSS
+and JavaScript with no build step — files are served exactly as they sit
+on disk.
+
+The shop's coordinates live in `js/delivery-fee.js` (`BAKERY`) and drive
+every delivery fee. `js/service-area.js` holds the regions and cities
+offered at checkout, and the geocoder reads its town list from there
+too — add a new delivery area in that one file.
 
 ## Layout
 

@@ -435,7 +435,7 @@ const OFFLINE_REPLIES = [
   { keys: ["price","magkano","how much","presyo","cost"],
     reply: "Our prices range from ₱70 to ₱250 depending on the product. Cookies and brownies start at ₱70–₱80, cupcakes at ₱75, and gift boxes are ₱250." },
   { keys: ["deliver","shipping","ship","padala","rider","lalamove"],
-    reply: "We deliver within Cainta and nearby areas, with same-day delivery depending on your location. A ₱50 delivery fee applies. You can pick your preferred delivery date and time at checkout." },
+    reply: "We bake in Pinagbuhatan, Pasig City and deliver across Metro Manila and Rizal, same-day depending on your location. The delivery fee depends on distance — it starts at ₱50 and you'll see the exact amount at checkout once you enter your address." },
   { keys: ["pay","payment","gcash","cod","cash on delivery","bayad"],
     reply: "We accept GCash and Cash on Delivery. COD is limited to orders not exceeding ₱2,000." },
   { keys: ["cancel","refund","return","palit"],

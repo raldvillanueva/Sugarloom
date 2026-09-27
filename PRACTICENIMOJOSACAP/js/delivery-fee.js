@@ -14,9 +14,10 @@
    needs lat/lng rather than a text address, so this is also the missing
    piece for that whenever it gets switched on. */
 
-/* Where the rider collects. Same place as LALAMOVE_PICKUP_* on the
-   server — keep the two in step if the bakery ever moves. */
-const BAKERY = { lat: 14.5786, lng: 121.1222, label: 'Cainta, Rizal' };
+/* Where the rider collects. Every delivery fee is measured from here,
+   so if the bakery moves this is the first thing to change — and keep
+   LALAMOVE_PICKUP_LAT/LNG on the server in step with it. */
+const BAKERY = { lat: 14.5572974, lng: 121.0909923, label: 'Pinagbuhatan, Pasig City' };
 
 /* Fee bands, cheapest first. `upToKm: Infinity` catches everything else. */
 const DELIVERY_BANDS = [

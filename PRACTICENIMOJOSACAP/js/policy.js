@@ -19,7 +19,7 @@ const POLICIES = {
       <p>All orders are subject to availability. We accept GCash and Cash on Delivery (COD) as payment methods. COD is limited to orders not exceeding ₱2,000. Orders are confirmed only after payment verification or admin approval.</p>
 
       <h4>4. Delivery</h4>
-      <p>We deliver within Cainta and nearby areas. A delivery fee of ₱50 applies to all orders. Preferred delivery dates are subject to our availability and may be adjusted. We will email you to confirm and to keep you updated on your order.</p>
+      <p>We bake in Pinagbuhatan, Pasig City and deliver across Metro Manila and Rizal. The delivery fee depends on how far you are from our kitchen, starting at ₱50 and shown at checkout before you pay; we do not deliver beyond 25km. Preferred delivery dates are subject to our availability and may be adjusted. We will email you to confirm and to keep you updated on your order.</p>
 
       <h4>5. Cancellations & Refunds</h4>
       <p>Orders may be cancelled before they are confirmed by our team. Once confirmed, cancellations are no longer accepted as products are made to order. Refunds are issued only in cases of wrong or damaged items upon delivery.</p>
