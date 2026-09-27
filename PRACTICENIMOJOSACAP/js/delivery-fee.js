@@ -56,50 +56,119 @@ function writeGeocodeCache(cache) {
   try { localStorage.setItem(GEOCODE_CACHE_KEY, JSON.stringify(cache)); } catch {}
 }
 
-async function geocodeAddress(address) {
-  const key = address.trim().toLowerCase();
-  if (!key) return null;
+/* Towns and cities we deliver around. Subdivision and village names are
+   mostly absent from OpenStreetMap, so when the full address draws a
+   blank we fall back to the barangay or the town — which is easily
+   accurate enough to put a delivery in the right price band. */
+const KNOWN_PLACES = [
+  'Cainta', 'Taytay', 'Antipolo', 'Angono', 'Binangonan', 'Rodriguez', 'San Mateo',
+  'Pasig', 'Marikina', 'Quezon City', 'Mandaluyong', 'San Juan', 'Makati',
+  'Manila', 'Taguig', 'Pateros', 'Caloocan', 'Parañaque', 'Las Piñas',
+  'Muntinlupa', 'Pasay', 'Valenzuela', 'Malabon', 'Navotas'
+];
 
-  const cache = readGeocodeCache();
-  if (cache[key]) return cache[key];
+function tidy(s) {
+  /* No trailing \b after the optional dot — otherwise "Brgy." keeps its
+     full stop and becomes "Barangay.", which then fails to match the
+     barangay pattern below. */
+  return String(s || '')
+    .replace(/\bbrgy\.?\s*/ig, 'Barangay ')
+    .replace(/\bblk\.?\s*/ig, 'Block ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
-  /* Bias the search to the Philippines so "Cainta" doesn't match
-     somewhere on the other side of the world. */
+/* Progressively broader guesses, most precise first. */
+function addressCandidates({ street, city, postal }) {
+  const s = tidy(street);
+  const c = tidy(city);
+  const p = String(postal || '').trim();
+  /* Prefer a town named in the street line over the city field. People
+     often leave the city box wrong — this address said "Pasig City" in
+     the street and "Cainta" in the city box, two towns apart. */
+  const findPlace = text => KNOWN_PLACES.find(k => new RegExp(`\\b${k}\\b`, 'i').test(text));
+  const place = findPlace(s) || findPlace(c) || c;
+
+  // "Barangay Santa Lucia Pasig City" → "Santa Lucia"
+  const brgy = s.match(/Barangay\s+([A-Za-zÑñ]+(?:\s+[A-Za-zÑñ]+)?)/i);
+  const brgyName = brgy
+    ? brgy[1].replace(new RegExp(`\\s*(${KNOWN_PLACES.join('|')})\\s*$`, 'i'), '').trim()
+    : '';
+
+  const out = [];
+  const add = (q, precision) => {
+    const v = String(q || '').replace(/(^[,\s]+|[,\s]+$)/g, '');
+    if (v.length > 2 && !out.some(o => o.q.toLowerCase() === v.toLowerCase())) out.push({ q: v, precision });
+  };
+
+  add([s, c, p].filter(Boolean).join(', '), 'exact');
+  add(s, 'exact');
+  if (brgyName && place) add(`Barangay ${brgyName}, ${place}`, 'barangay');
+  add(place, 'city');
+  add(p, 'city');
+
+  return out.slice(0, 5);
+}
+
+async function nominatim(query) {
   const url = 'https://nominatim.openstreetmap.org/search'
             + '?format=json&limit=1&countrycodes=ph'
-            + '&q=' + encodeURIComponent(address);
+            + '&q=' + encodeURIComponent(query);
+  const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+  if (!res.ok) throw new Error('geocoder returned ' + res.status);
+  const hits = await res.json();
+  if (!hits.length) return null;
+  return {
+    lat: parseFloat(hits[0].lat),
+    lng: parseFloat(hits[0].lon),
+    matched: hits[0].display_name
+  };
+}
 
-  try {
-    const res  = await fetch(url, { headers: { 'Accept': 'application/json' } });
-    if (!res.ok) throw new Error('geocoder returned ' + res.status);
-    const hits = await res.json();
-    if (!hits.length) return null;
+async function geocodeAddress(parts) {
+  const tries = addressCandidates(parts);
+  if (!tries.length) return null;
 
-    const coords = { lat: parseFloat(hits[0].lat), lng: parseFloat(hits[0].lon) };
-    cache[key] = coords;
-    writeGeocodeCache(cache);
-    return coords;
-  } catch (err) {
-    console.warn('Could not geocode address:', err);
-    return null;
+  const cacheKey = tries[0].q.toLowerCase();
+  const cache = readGeocodeCache();
+  if (cache[cacheKey]) return cache[cacheKey];
+
+  for (let i = 0; i < tries.length; i++) {
+    const { q, precision } = tries[i];
+    try {
+      const hit = await nominatim(q);
+      if (hit) {
+        const found = { ...hit, precision, query: q };
+        cache[cacheKey] = found;
+        writeGeocodeCache(cache);
+        return found;
+      }
+    } catch (err) {
+      console.warn('geocode attempt failed:', q, err.message);
+    }
+    // Nominatim asks for no more than one request a second
+    if (i < tries.length - 1) await new Promise(r => setTimeout(r, 1100));
   }
+  return null;
 }
 
 /* ── the thing checkout calls ──
    Always resolves. If the address can't be placed, it falls back to the
    flat fee rather than blocking the order. */
-async function quoteDelivery(address) {
-  if (!address || address.trim().length < 6) {
+async function quoteDelivery(parts) {
+  const joined = [parts.street, parts.city, parts.postal].filter(Boolean).join(' ');
+  if (joined.trim().length < 6) {
     return { fee: FALLBACK_FEE, km: null, coords: null, label: 'Standard', located: false };
   }
 
-  const coords = await geocodeAddress(address);
-  if (!coords) {
+  const hit = await geocodeAddress(parts);
+  if (!hit) {
     return { fee: FALLBACK_FEE, km: null, coords: null, label: 'Standard', located: false };
   }
 
-  const km   = haversineKm(BAKERY, coords);
-  const band = bandFor(km);
+  const coords = { lat: hit.lat, lng: hit.lng };
+  const km     = haversineKm(BAKERY, coords);
+  const band   = bandFor(km);
 
   return {
     fee:     band.fee,                  // null when out of range
@@ -107,6 +176,8 @@ async function quoteDelivery(address) {
     coords,
     label:   band.label,
     located: true,
+    precision: hit.precision,           // exact | barangay | city
+    matched:   hit.matched,             // what the geocoder actually found
     outOfRange: band.fee === null
   };
 }

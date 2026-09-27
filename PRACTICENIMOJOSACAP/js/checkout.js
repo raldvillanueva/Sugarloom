@@ -50,19 +50,21 @@ function scheduleDeliveryQuote(){
   _quoteTimer = setTimeout(refreshDeliveryQuote, 700);
 }
 
-function fullDeliveryAddress(){
-  const street = document.getElementById('address')?.value.trim() || '';
-  const city   = document.getElementById('city')?.value.trim() || '';
-  const postal = document.getElementById('postal')?.value.trim() || '';
-  return [street, city, postal].filter(Boolean).join(', ');
+function deliveryAddressParts(){
+  return {
+    street: document.getElementById('address')?.value.trim() || '',
+    city:   document.getElementById('city')?.value.trim() || '',
+    postal: document.getElementById('postal')?.value.trim() || ''
+  };
 }
 
 async function refreshDeliveryQuote(){
-  const address = fullDeliveryAddress();
-  const row = document.getElementById('shipping-fee');
-  const note = document.getElementById('shipping-note');
+  const parts = deliveryAddressParts();
+  const row   = document.getElementById('shipping-fee');
+  const note  = document.getElementById('shipping-note');
+  const joined = [parts.street, parts.city, parts.postal].filter(Boolean).join(' ');
 
-  if(address.length < 6){
+  if(joined.length < 6){
     _deliveryQuote = null;
     if(row)  row.innerHTML = '&#8369;50.00';
     if(note) note.textContent = 'Enter your address for an exact rate';
@@ -71,20 +73,36 @@ async function refreshDeliveryQuote(){
   }
 
   if(note) note.textContent = 'Checking distance…';
-  _deliveryQuote = await quoteDelivery(address);
+  _deliveryQuote = await quoteDelivery(parts);
+  const q = _deliveryQuote;
 
-  if(_deliveryQuote.outOfRange){
+  if(q.outOfRange){
     if(row)  row.textContent = 'Unavailable';
-    if(note) note.textContent = `Sorry — ${_deliveryQuote.km} km away is outside our delivery area.`;
-  } else if(_deliveryQuote.located){
-    if(row)  row.innerHTML = '&#8369;' + _deliveryQuote.fee.toFixed(2);
-    if(note) note.textContent = `${_deliveryQuote.km} km from our kitchen`;
+    if(note) note.textContent = `Sorry — ${q.km} km away is outside our delivery area`;
+  } else if(q.located){
+    if(row) row.innerHTML = '&#8369;' + q.fee.toFixed(2);
+    /* Say how the address was matched. Subdivision names usually aren't
+       on the map, so a barangay or town match is the normal case, not a
+       failure — the customer should see why the number is what it is. */
+    if(note){
+      const where = shortPlace(q.matched);
+      note.textContent = q.precision === 'exact'
+        ? `${q.km} km from our kitchen`
+        : `${q.km} km — based on ${where}`;
+    }
   } else {
-    if(row)  row.innerHTML = '&#8369;' + _deliveryQuote.fee.toFixed(2);
-    if(note) note.textContent = "We couldn't place that address — standard rate applied";
+    if(row)  row.innerHTML = '&#8369;' + q.fee.toFixed(2);
+    if(note) note.textContent = 'Standard rate — add your city so we can price it exactly';
   }
 
   renderSummary();
+}
+
+/* "Santa Lucia, Pasig Second District, Pasig, Eastern Manila District,
+   Metro Manila, Philippines" → "Santa Lucia, Pasig" */
+function shortPlace(displayName){
+  if(!displayName) return 'your area';
+  return displayName.split(',').slice(0, 2).map(s => s.trim()).join(', ');
 }
 
 function currentDeliveryFee(){
