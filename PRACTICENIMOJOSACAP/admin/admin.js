@@ -449,6 +449,7 @@ async function syncStoreOrders(){
 
   for (const row of rows) {
     const order    = row.data;
+    if (!order || _deletedOrderIds.has(order.id)) continue;   // just deleted — don't bring it back
     const existing = DB.orders.find(o => o.id === order.id);
 
     if (!existing) {
@@ -2125,6 +2126,11 @@ function startPackingAction(){
    is here for test rows and genuine mistakes, and is irreversible.
    ═══════════════════════════════════════════ */
 
+/* Ids deleted this session. syncStoreOrders() skips them, so the poll
+   can't resurrect an order between the local removal and the next
+   fetch. */
+const _deletedOrderIds = new Set();
+
 function deleteOrder(id){
   const o = DB.orders.find(oo => oo.id === id);
   if(!o) return;
@@ -2136,12 +2142,30 @@ function deleteOrder(id){
     okClass: 'btn-danger',
     icon: 'bx-trash',
     onConfirm: async () => {
+      /* Tombstone first. syncStoreOrders() runs every 3 seconds and adds
+         back any Supabase order it can't find locally — without this it
+         can re-add the order mid-delete, and the next saveDB() uploads it
+         again, undoing the whole thing. */
+      _deletedOrderIds.add(id);
+
+      /* supabase-js resolves with { error } instead of rejecting, so a
+         .catch() here would never fire and a failed delete would look
+         like a success. Check the error. */
+      const { error } = await _supa.from('orders').delete().eq('id', id);
+      if(error){
+        _deletedOrderIds.delete(id);
+        console.error('delete order failed:', error);
+        toast('Could not delete: ' + error.message, 'danger');
+        return;
+      }
+
+      const { error: trackErr } = await _supa.from('order_tracking').delete().eq('order_id', id);
+      if(trackErr) console.error('could not clear tracking row:', trackErr);
+
       // Ingredients already taken out for a bake go back on the shelf
       const putBack = restoreIngredientsFor(o);
-
       DB.orders = DB.orders.filter(oo => oo.id !== id);
-      await _supa.from('orders').delete().eq('id', id).catch(console.error);
-      await _supa.from('order_tracking').delete().eq('order_id', id).catch(console.error);
+      delete _trackingCache[id];
 
       const store = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
       localStorage.setItem('sl_store_orders', JSON.stringify(store.filter(x => x.id !== id)));
@@ -3869,10 +3893,14 @@ async function toggleInquiryHandled(id){
   const i = _inquiries.find(x => x.id === id);
   if(!i) return;
   i.handled = !i.handled;
-  await _supa.from('inquiries')
+  const { error } = await _supa.from('inquiries')
     .update({ data: { name: i.name, contact: i.contact, message: i.message, handled: i.handled } })
-    .eq('id', id)
-    .catch(console.error);
+    .eq('id', id);
+  if(error){
+    i.handled = !i.handled;                 // put it back, the save did not stick
+    console.error('could not update message:', error);
+    toast('Could not save that change', 'danger');
+  }
   renderInquiries(true);
 }
 
@@ -3883,7 +3911,12 @@ function deleteInquiry(id){
     okText: 'Delete',
     icon: 'bx-trash',
     onConfirm: async () => {
-      await _supa.from('inquiries').delete().eq('id', id).catch(console.error);
+      const { error } = await _supa.from('inquiries').delete().eq('id', id);
+      if(error){
+        console.error('could not delete message:', error);
+        toast('Could not delete: ' + error.message, 'danger');
+        return;
+      }
       _inquiries = _inquiries.filter(x => x.id !== id);
       renderInquiries(true);
       toast('Message deleted', 'success');
