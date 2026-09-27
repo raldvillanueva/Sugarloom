@@ -1622,3 +1622,15 @@ body.dark .tab-btn.active { background: #1A1A2E; box-shadow: 0 1px 4px rgba(0,0,
 .order-row { cursor: pointer; transition: background var(--transition); }
 .order-row:hover { background: var(--bg); }
 .order-row.queue-next-row:hover { background: #FFF9E8; }
+
+/* Cash-on-delivery orders worth verifying before baking */
+.cod-risk {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: .04em;
+  vertical-align: middle;
+}
+.cod-risk.high  { background: var(--danger-light);  color: var(--danger); }
+.cod-risk.watch { background: var(--warning-light); color: var(--warning); }

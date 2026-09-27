@@ -121,6 +121,40 @@ function currentDeliveryFee(){
   return 50;
 }
 
+/* The signed-in customer's track record, loaded once on page load. */
+let _customerRecord = { fulfilled: 0, cancelled: 0, known: false };
+
+/* Grey out the COD option itself rather than letting someone pick it
+   and only then discover the order won't go through. */
+function applyCodAvailability(cod, total){
+  const row   = document.getElementById('pay-cod');
+  const radio = row?.querySelector('input[name="payment"]');
+  if(!row || !radio) return;
+
+  row.classList.toggle('pay-row-disabled', !cod.allowed);
+  radio.disabled = !cod.allowed;
+  row.title = cod.allowed ? '' : cod.reason;
+
+  let why = document.getElementById('cod-why');
+  if(!cod.allowed){
+    if(!why){
+      why = document.createElement('div');
+      why.id = 'cod-why';
+      why.className = 'cod-why';
+      row.insertAdjacentElement('afterend', why);
+    }
+    why.textContent = cod.reason;
+  } else if(why){
+    why.remove();
+  }
+
+  // Switch them to GCash if COD was selected and has just become unavailable
+  if(!cod.allowed && radio.checked){
+    const gcash = document.querySelector('input[name="payment"][value="GCash"]');
+    if(gcash){ gcash.checked = true; }
+  }
+}
+
 function updatePlaceOrderBtn(total){
   if(total === undefined){
     let cart = JSON.parse(localStorage.getItem("cart")) || [];
@@ -135,12 +169,15 @@ function updatePlaceOrderBtn(total){
   const isCOD = document.querySelector('input[name="payment"]:checked')?.value === 'Cash on Delivery';
   const qr = document.getElementById("gcash-qr");
 
+  const cod = judgeCod(total, _customerRecord);
+  applyCodAvailability(cod, total);
+
   if(_deliveryQuote?.outOfRange){
     btn.disabled = true;                       // too far to deliver
     if(notice) notice.style.display = 'none';
-  } else if(isCOD && total > 2000){
+  } else if(isCOD && !cod.allowed){
     btn.disabled = true;
-    if(notice) notice.style.display = 'block';
+    if(notice){ notice.textContent = cod.reason; notice.style.display = 'block'; }
   } else {
     btn.disabled = false;
     if(notice) notice.style.display = 'none';
@@ -200,6 +237,19 @@ async function placeOrder(){
     showMsg(`Sorry, ${_deliveryQuote.km} km is outside our delivery area. We deliver up to 25 km from Pasig City.`, 'error');
     document.getElementById('address')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     return;
+  }
+
+  /* Check COD eligibility again at submit. The greyed-out radio is a
+     hint; this is the part that actually holds. */
+  {
+    const chosen = document.querySelector('input[name="payment"]:checked')?.value;
+    const cart   = JSON.parse(localStorage.getItem('cart')) || [];
+    const sum    = cart.reduce((s, i) => s + i.price * (i.qty || 1), 0) + currentDeliveryFee();
+    const cod    = judgeCod(sum, _customerRecord);
+    if(chosen === 'Cash on Delivery' && !cod.allowed){
+      showMsg(cod.reason, 'error');
+      return;
+    }
   }
 
   let cart = JSON.parse(localStorage.getItem("cart")) || [];
@@ -467,6 +517,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   prefillFromProfile();
 
   setupServiceAreaSelects();
+
+  /* Load the customer's track record so COD eligibility can be judged
+     before they pick a payment method. */
+  const signedIn = JSON.parse(localStorage.getItem('loggedInUser') || 'null');
+  if(signedIn?.email){
+    _customerRecord = await customerOrderRecord(signedIn.email);
+    loadCheckout();
+  }
 
   /* Price the delivery from the address, and re-price whenever it
      changes. prefillFromProfile() may have filled it already, so quote

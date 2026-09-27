@@ -1263,10 +1263,16 @@ function renderOrders(){
     const overdueTag = o.autoArchived
       ? `<span class="auto-archived-tag" title="${o.archivedReason || 'Delivery date has passed'}">PAST DUE</span>`
       : '';
+
+    /* Worth a phone call before anyone starts baking */
+    const risk = o.status === 'Pending' ? codRiskFor(o) : null;
+    const riskTag = risk
+      ? `<span class="cod-risk ${risk.level}" title="Cash on Delivery — ${risk.note}. Worth confirming by phone before baking.">${risk.level === 'high' ? 'VERIFY' : 'NEW'}</span>`
+      : '';
     return `
     <tr class="order-row ${isQueue && idx===0 ? 'queue-next-row' : ''}"
         onclick="openOrderModal('${o.id}', true)" title="Click to view details">
-      <td class="fw-bold">${queueTag}${o.id}${deferTag}${overdueTag}</td>
+      <td class="fw-bold">${queueTag}${o.id}${deferTag}${overdueTag}${riskTag}</td>
       <td>${escHTML(o.customer)}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
       <td class="fw-bold">₱${o.total.toLocaleString()}</td>
@@ -1379,6 +1385,35 @@ function closeRowMenus(){
 document.addEventListener('click', e => {
   if(!e.target.closest('.row-menu-wrap')) closeRowMenus();
 });
+
+/* ── COD RISK ──
+   Flags a pending Cash on Delivery order that is worth confirming by
+   phone first: a first-time buyer placing a large one, or anyone who
+   has walked away from orders before. Reads the history already in
+   DB.orders, so it costs nothing.
+
+   Thresholds mirror COD_POLICY in js/cod-policy.js. */
+const ADMIN_COD_TRUST_THRESHOLD = 800;
+
+function codRiskFor(order){
+  if(order.payment !== 'Cash on Delivery') return null;
+
+  const email = order.customerEmail;
+  if(!email || email === 'guest') return { level: 'high', note: 'Guest order' };
+
+  let fulfilled = 0, cancelled = 0;
+  DB.orders.forEach(o => {
+    if(o.customerEmail !== email || o.id === order.id) return;
+    if(o.status === 'Fulfilled') fulfilled++;
+    if(o.status === 'Cancelled' && (o.cancelledByBuyer || o.cancelRequestedByBuyer)) cancelled++;
+  });
+
+  if(cancelled >= 1) return { level: 'high',  note: `${cancelled} previous cancellation${cancelled > 1 ? 's' : ''}` };
+  if(fulfilled === 0 && Number(order.total) >= ADMIN_COD_TRUST_THRESHOLD)
+    return { level: 'high',  note: 'first order, large COD' };
+  if(fulfilled === 0) return { level: 'watch', note: 'first-time customer' };
+  return null;
+}
 
 function archiveOrder(id){
   showConfirm({

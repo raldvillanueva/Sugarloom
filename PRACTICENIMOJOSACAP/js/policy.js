@@ -16,7 +16,7 @@ const POLICIES = {
       <p>SugarLoomPh is a home-based bakery specializing in handcrafted cookies, brownies, and cupcakes. All products are made to order and baked fresh.</p>
 
       <h4>3. Orders & Payments</h4>
-      <p>All orders are subject to availability. We accept GCash and Cash on Delivery (COD) as payment methods. COD is limited to orders not exceeding ₱2,000. Orders are confirmed only after payment verification or admin approval.</p>
+      <p>All orders are subject to availability. We accept GCash and Cash on Delivery (COD) as payment methods. COD is limited to orders not exceeding ₱2,000, and on a first order to ₱800 — once you have completed an order with us, the full COD limit applies. COD may be withdrawn from accounts that repeatedly cancel confirmed orders. Orders are confirmed only after payment verification or admin approval.</p>
 
       <h4>4. Delivery</h4>
       <p>We bake in Pinagbuhatan, Pasig City and deliver across Metro Manila and Rizal. The delivery fee depends on how far you are from our kitchen, starting at ₱50 and shown at checkout before you pay; we do not deliver beyond 25km. Preferred delivery dates are subject to our availability and may be adjusted. We will email you to confirm and to keep you updated on your order.</p>

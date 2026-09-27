@@ -709,3 +709,17 @@ body {
 
 /* Delivery unavailable — address outside the service area */
 .summary-unavailable { color: #d32f2f; font-weight: 600; }
+
+/* COD unavailable for this order */
+.pay-row-disabled { opacity: .5; cursor: not-allowed; }
+.pay-row-disabled input { cursor: not-allowed; }
+.cod-why {
+  margin: 6px 0 10px;
+  padding: 10px 14px;
+  background: #fff8e1;
+  border-left: 4px solid #f59e0b;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #92400e;
+  line-height: 1.5;
+}
