@@ -211,54 +211,8 @@ async function submitOTP() {
   setTimeout(() => { window.location.href = 'homepage.html'; }, 1200);
 }
 
-/* ── PASSWORD STRENGTH (register.html) ── */
-const PW_RULES = [
-  { id: 'len',   label: 'At least 8 characters',  test: v => v.length >= 8 },
-  { id: 'upper', label: 'One uppercase letter',   test: v => /[A-Z]/.test(v) },
-  { id: 'lower', label: 'One lowercase letter',   test: v => /[a-z]/.test(v) },
-  { id: 'num',   label: 'One number',             test: v => /[0-9]/.test(v) },
-  { id: 'sym',   label: 'One special character',  test: v => /[^A-Za-z0-9]/.test(v) }
-];
-
-const PW_LEVELS = ['weak', 'weak', 'weak', 'fair', 'good', 'strong'];
-const PW_LABELS = { weak: 'Weak password', fair: 'Fair password', good: 'Good password', strong: 'Strong password' };
-
-function unmetPasswordRules(pw) {
-  return PW_RULES.filter(r => !r.test(pw));
-}
-
-function updatePasswordUI() {
-  const pw    = document.getElementById('password').value;
-  const cf    = document.getElementById('confirm').value;
-  const meter = document.getElementById('pw-meter');
-
-  meter.classList.toggle('hidden', pw === '');
-
-  let passed = 0;
-  PW_RULES.forEach(r => {
-    const ok = r.test(pw);
-    if (ok) passed++;
-    const li = meter.querySelector(`[data-rule="${r.id}"]`);
-    li.classList.toggle('ok', ok);
-    li.querySelector('i').className = ok ? 'bx bx-check' : 'bx bx-circle';
-  });
-
-  const level = PW_LEVELS[passed];
-  meter.dataset.level = level;
-  meter.querySelectorAll('.pw-bar span').forEach((seg, i) => seg.classList.toggle('on', i < passed));
-  document.getElementById('pw-label').textContent = PW_LABELS[level];
-
-  const matchEl = document.getElementById('pw-match');
-  matchEl.classList.toggle('hidden', cf === '');
-  if (cf === '') return;
-
-  const same = pw === cf;
-  matchEl.classList.toggle('ok', same);
-  matchEl.classList.toggle('bad', !same);
-  matchEl.innerHTML = same
-    ? "<i class='bx bx-check'></i>Passwords match"
-    : "<i class='bx bx-x'></i>Passwords do not match";
-}
+/* Password rules and the strength meter live in js/password-rules.js,
+   shared with the reset page so both enforce the same policy. */
 
 /* ── REGISTER (register.html) ── */
 async function register() {
@@ -334,12 +288,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const pwInput = document.getElementById('password');
   const cfInput = document.getElementById('confirm');
   if (pwInput && cfInput) {
-    document.getElementById('pw-reqs').innerHTML = PW_RULES
-      .map(r => `<li class="pw-req" data-rule="${r.id}"><i class='bx bx-circle'></i>${r.label}</li>`)
-      .join('');
-
-    pwInput.addEventListener('input', updatePasswordUI);
-    cfInput.addEventListener('input', updatePasswordUI);
+    setupPasswordMeter({
+      passwordId: 'password', confirmId: 'confirm',
+      meterId: 'pw-meter', labelId: 'pw-label', reqsId: 'pw-reqs', matchId: 'pw-match'
+    });
     cfInput.addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
   }
 
