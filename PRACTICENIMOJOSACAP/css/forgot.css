@@ -151,3 +151,32 @@ body {
 }
 .sent-note strong { color: #333; word-break: break-all; }
 .sent-note a { color: #1B5CE0; }
+
+/* ── OTP BOXES — one per digit (js/otp-input.js) ── */
+.otp-inputs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.otp-inputs .otp-box {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 600;
+  padding: 14px 0;
+  border: 1.5px solid #E0E0E0;
+  border-radius: 10px;
+  background: #fff;
+  color: #111;
+  caret-color: #1B5CE0;
+  margin: 0;
+}
+.otp-inputs .otp-box.filled { border-color: #B9CCF5; }
+.otp-inputs .otp-box:focus {
+  border-color: #1B5CE0;
+  border-width: 2px;
+  padding: 13.5px 0;   /* keeps the box from growing when the border thickens */
+  outline: none;
+}

@@ -44,7 +44,7 @@ async function sendOTP() {
   if (label) label.textContent = email;
   document.getElementById('step1').classList.add('hidden');
   document.getElementById('step2').classList.remove('hidden');
-  document.getElementById('otp')?.focus();
+  focusFirstOtpBox(FP_OTP);
   return true;
 }
 
@@ -53,6 +53,8 @@ async function sendOTP() {
    step. If it fails, fall back to step 1 with the address filled in so
    it can be corrected rather than retyped. */
 document.addEventListener('DOMContentLoaded', async () => {
+  setupOtpBoxes(FP_OTP, { onComplete: verifyOTP });
+
   const carried = sessionStorage.getItem('sl_reset_email');
   if (!carried) return;
   sessionStorage.removeItem('sl_reset_email');
@@ -86,17 +88,29 @@ async function resendResetOTP() {
 }
 
 /* STEP 2 — verify OTP */
-async function verifyOTP() {
-  const otp = document.getElementById('otp').value.trim();
-  if (!otp) { showMsg('Enter OTP'); return; }
+const FP_OTP = 'fp-otp-inputs';
+let _fpVerifying = false;
 
+async function verifyOTP() {
+  const otp = otpBoxValue(FP_OTP);
+
+  if (_fpVerifying) return;                       // the boxes auto-submit when full
+  if (otp.length < 6) { showMsg('Enter the 6-digit code'); return; }
+
+  _fpVerifying = true;
   const { error } = await _supa.auth.verifyOtp({
     email: _fpEmail,
     token: otp,
     type:  'email'
   });
+  _fpVerifying = false;
 
-  if (error) { showMsg('Invalid OTP'); return; }
+  if (error) {
+    clearOtpBoxes(FP_OTP);
+    focusFirstOtpBox(FP_OTP);
+    showMsg('Invalid code. Please try again.');
+    return;
+  }
 
   showMsg('OTP verified', 'success');
   document.getElementById('step2').classList.add('hidden');

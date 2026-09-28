@@ -360,76 +360,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  initOtpBoxes();
+  setupOtpBoxes('otp-inputs', { onComplete: submitOTP });
 });
 
-/* ── OTP BOXES ── */
-function otpBoxes() {
-  return Array.from(document.querySelectorAll('#otp-inputs .otp-box'));
-}
-
-function otpValue() {
-  return otpBoxes().map(b => b.value).join('');
-}
-
-function clearOtp() {
-  otpBoxes().forEach(b => { b.value = ''; b.classList.remove('filled'); });
-}
-
-/* Spread a string of digits across the boxes from `start`, then park the
-   caret on the last one filled. */
-function fillOtpFrom(start, digits) {
-  const boxes = otpBoxes();
-  digits.split('').forEach((d, i) => {
-    const box = boxes[start + i];
-    if (box) { box.value = d; box.classList.add('filled'); }
-  });
-  const last = Math.min(start + digits.length, boxes.length - 1);
-  boxes[last].focus();
-  boxes[last].select();
-}
-
-function initOtpBoxes() {
-  const boxes = otpBoxes();
-  if (!boxes.length) return;
-
-  boxes.forEach((box, i) => {
-    box.addEventListener('input', () => {
-      const digits = box.value.replace(/\D/g, '');
-      box.value = '';
-      box.classList.remove('filled');
-      if (!digits) return;
-
-      /* A phone keyboard's autofill can drop the whole code into one box */
-      fillOtpFrom(i, digits);
-
-      if (otpValue().length === boxes.length) submitOTP();
-    });
-
-    box.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { submitOTP(); return; }
-
-      if (e.key === 'Backspace' && !box.value && i > 0) {
-        e.preventDefault();
-        boxes[i - 1].value = '';
-        boxes[i - 1].classList.remove('filled');
-        boxes[i - 1].focus();
-        return;
-      }
-      if (e.key === 'ArrowLeft'  && i > 0)               boxes[i - 1].focus();
-      if (e.key === 'ArrowRight' && i < boxes.length - 1) boxes[i + 1].focus();
-    });
-
-    box.addEventListener('paste', e => {
-      e.preventDefault();
-      const text = (e.clipboardData || window.clipboardData).getData('text');
-      const digits = text.replace(/\D/g, '').slice(0, boxes.length - i);
-      if (!digits) return;
-
-      fillOtpFrom(i, digits);
-      if (otpValue().length === boxes.length) submitOTP();
-    });
-
-    box.addEventListener('focus', () => box.select());
-  });
-}
+/* ── OTP BOXES ──
+   Behaviour lives in js/otp-input.js, shared with the reset page. */
+const OTP_BOXES = 'otp-inputs';
+const otpBoxes = () => otpBoxesIn(OTP_BOXES);
+const otpValue = () => otpBoxValue(OTP_BOXES);
+const clearOtp = () => clearOtpBoxes(OTP_BOXES);

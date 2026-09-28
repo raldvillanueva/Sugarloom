@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="../css/forgot.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="../js/supabase-config.js"></script>
+  <script src="../js/otp-input.js" defer></script>
   <script src="../js/forgot.js" defer></script>
 </head>
 <body>
@@ -24,7 +25,14 @@
 
   <div id="step2" class="hidden">
     <p class="sent-note">We sent a 6-digit code to <strong id="otp-sent-to"></strong></p>
-    <input id="otp" placeholder="Enter OTP" inputmode="numeric" maxlength="6">
+    <div class="otp-inputs" id="fp-otp-inputs">
+      <input class="otp-box" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="Digit 1">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 2">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 3">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 5">
+      <input class="otp-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6">
+    </div>
     <button onclick="verifyOTP()">Verify OTP</button>
     <p class="sent-note"><a onclick="resendResetOTP()" style="cursor:pointer;text-decoration:underline">Didn't get it? Send again</a></p>
   </div>
