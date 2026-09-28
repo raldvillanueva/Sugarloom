@@ -40,7 +40,27 @@
     <p class="terms-text" style="margin-top:10px">Don't have an account? <a onclick="window.location.href='register.html'" style="cursor:pointer;color:#5e4fd6;font-weight:600">Create account</a></p>
     </div>
 
-    <!-- PANEL 2: OTP Code -->
+    <!-- PANEL 2: Password -->
+    <div id="panel-password" class="hidden">
+      <h2 class="auth-title">Enter your password</h2>
+      <p class="auth-sub otp-sent-to">Signing in as <span id="password-email"></span></p>
+
+      <div style="position:relative">
+        <input id="password" type="password" placeholder="Password" style="padding-right:42px">
+        <button type="button" id="pw-eye" onclick="toggleLoginPassword()"
+                style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#888;padding:0;display:flex;align-items:center">
+          <i class='bx bx-hide' id="pw-eye-icon" style="font-size:18px"></i>
+        </button>
+      </div>
+      <div id="password-error" class="err-msg hidden"></div>
+
+      <button class="btn-continue" onclick="submitPassword()" id="password-btn">Continue</button>
+
+      <p class="resend-link"><a onclick="forgotPassword()">Forgot your password?</a></p>
+      <p class="back-link"><a onclick="showPanel('panel-main')">← Use a different email</a></p>
+    </div>
+
+    <!-- PANEL 3: OTP Code -->
     <div id="panel-otp" class="hidden">
       <h2 class="auth-title">Enter code</h2>
       <p class="auth-sub otp-sent-to">Sent to <span id="email-display"></span></p>

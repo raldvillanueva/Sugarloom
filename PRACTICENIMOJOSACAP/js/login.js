@@ -9,7 +9,7 @@ function showMsg(text) {
 }
 
 function showPanel(id) {
-  ['panel-main', 'panel-otp'].forEach(p => {
+  ['panel-main', 'panel-password', 'panel-otp'].forEach(p => {
     const el = document.getElementById(p);
     if (el) el.classList.add('hidden');
   });
@@ -78,7 +78,14 @@ async function storeSession(supaUser) {
   localStorage.setItem('loggedInUser', JSON.stringify(loggedInUser));
 }
 
-/* ── OTP LOGIN (main panel in login.html) ── */
+/* ── SIGN IN ──
+   Two steps: password, then a code emailed to the same address. The
+   password is checked by Supabase; the session that finally signs you
+   in is the one minted by verifying the code. */
+
+/* Guards the code step so it can't be reached without passing the
+   password step first. */
+let _otpUnlocked = false;
 
 function flashError(el, text, ms = 3000) {
   el.textContent = text;
@@ -90,24 +97,71 @@ function sendEmailOtp(email) {
   return _supa.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
 }
 
-async function goToPassword() {
+/* Step 1 — collect the email, then ask for the password. */
+function goToPassword() {
   const email = document.getElementById('email').value.trim();
   const errEl = document.getElementById('email-error');
 
   if (!email) return flashError(errEl, 'Please enter your email address');
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return flashError(errEl, 'Enter a valid email address');
 
-  // Show OTP panel immediately
+  document.getElementById('password-email').textContent = email;
+  document.getElementById('password').value = '';
+  showPanel('panel-password');
+  document.getElementById('password').focus();
+}
+
+function toggleLoginPassword() {
+  const input = document.getElementById('password');
+  const icon  = document.getElementById('pw-eye-icon');
+  const show  = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  if (icon) icon.className = show ? 'bx bx-show' : 'bx bx-hide';
+}
+
+/* Step 2 — check the password, then send the emailed code.
+   Supabase verifies the password server-side and hands back a session.
+   That session is discarded straight away: the real one is created only
+   once the emailed code is verified, so signing in takes both the
+   password and access to the inbox. */
+async function submitPassword() {
+  const email = document.getElementById('email').value.trim();
+  const pw    = document.getElementById('password').value;
+  const errEl = document.getElementById('password-error');
+  const btn   = document.getElementById('password-btn');
+
+  if (!pw) return flashError(errEl, 'Please enter your password');
+
+  btn.disabled = true;
+  btn.textContent = 'Checking...';
+
+  const { error: pwError } = await _supa.auth.signInWithPassword({ email, password: pw });
+
+  if (pwError) {
+    btn.disabled = false;
+    btn.textContent = 'Continue';
+    const m = (pwError.message || '').toLowerCase();
+    return flashError(errEl,
+      m.includes('confirm')     ? 'Please verify your email first — check your inbox.' :
+      m.includes('credentials') ? 'Incorrect email or password.' :
+                                  pwError.message, 4000);
+  }
+
+  // Password is right. Drop that session — the code still has to be entered.
+  await _supa.auth.signOut();
+
+  btn.textContent = 'Sending code...';
+  const { error: otpError } = await sendEmailOtp(email);
+  btn.disabled = false;
+  btn.textContent = 'Continue';
+
+  if (otpError) {
+    return flashError(errEl, 'Password accepted, but the code could not be sent. Try again.', 4000);
+  }
+
+  _otpUnlocked = true;
   document.getElementById('email-display').textContent = email;
   showPanel('panel-otp');
-
-  const { error } = await sendEmailOtp(email);
-
-  if (error) {
-    showPanel('panel-main');
-    flashError(errEl, error.message.includes('not found') || error.message.includes('registered')
-      ? 'No account found. Please register first.'
-      : 'Failed to send code. Try again.', 4000);
-  }
 }
 
 async function resendOTP() {
@@ -139,6 +193,7 @@ async function submitOTP() {
   const errEl = document.getElementById('otp-error');
 
   if (_otpSubmitting) return;
+  if (!_otpUnlocked) return flashError(errEl, 'Please enter your password first');
   if (otp.length < 6) return flashError(errEl, 'Enter the 6-digit code');
 
   _otpSubmitting = true;
@@ -262,6 +317,10 @@ document.addEventListener('DOMContentLoaded', () => {
   if (document.getElementById('panel-otp')) {
     document.getElementById('email')?.addEventListener('keydown', e => {
       if (e.key === 'Enter') goToPassword();
+    });
+    // Sign-in page only — register.html also has a #password, but no OTP panel
+    document.getElementById('password')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') submitPassword();
     });
   }
 
