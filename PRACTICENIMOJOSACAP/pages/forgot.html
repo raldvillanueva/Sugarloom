@@ -18,9 +18,15 @@
   <button onclick="sendOTP()">Send OTP</button>
   </div>
 
+  <div id="auto-sending" class="hidden">
+    <p class="sent-note">Sending a code to your email…</p>
+  </div>
+
   <div id="step2" class="hidden">
-    <input id="otp" placeholder="Enter OTP">
+    <p class="sent-note">We sent a 6-digit code to <strong id="otp-sent-to"></strong></p>
+    <input id="otp" placeholder="Enter OTP" inputmode="numeric" maxlength="6">
     <button onclick="verifyOTP()">Verify OTP</button>
+    <p class="sent-note"><a onclick="resendResetOTP()" style="cursor:pointer;text-decoration:underline">Didn't get it? Send again</a></p>
   </div>
 
   <div id="step3" class="hidden">

@@ -307,7 +307,14 @@ async function register() {
 /* ── NAVIGATION ── */
 function goToRegister()  { window.location.href = '../pages/register.html'; }
 function goToLogin()     { window.location.href = '../pages/login.html'; }
-function forgotPassword(){ showMsg('Redirecting...'); setTimeout(() => { window.location.href = '../pages/forgot.html'; }, 800); }
+/* Carry the email across so the reset page can send the code straight
+   away instead of asking for it a second time. */
+function forgotPassword(){
+  const email = document.getElementById('email')?.value.trim();
+  if (email) sessionStorage.setItem('sl_reset_email', email);
+  showMsg('Redirecting...');
+  setTimeout(() => { window.location.href = '../pages/forgot.html'; }, 800);
+}
 function goBack()        { window.location.href = '../pages/homepage.html'; }
 
 /* ── KEYBOARD SUPPORT ── */

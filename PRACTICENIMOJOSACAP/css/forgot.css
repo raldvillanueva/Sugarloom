@@ -141,3 +141,13 @@ body {
 .msg.success { color: #38a169; }
 
 .hidden { display: none; }
+/* Code step — which address it went to, and the resend link */
+.sent-note {
+  font-size: 13px;
+  color: #777;
+  text-align: center;
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+.sent-note strong { color: #333; word-break: break-all; }
+.sent-note a { color: #1B5CE0; }
