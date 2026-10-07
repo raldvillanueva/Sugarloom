@@ -2839,11 +2839,16 @@ function renderReports(){
   document.getElementById('rpt-items').textContent         = items;
   document.getElementById('rpt-avg').textContent           = '₱'+Math.round(avg).toLocaleString();
 
-  renderRevenueTrend(txs);
-  renderBestSellers(txs);
-  renderTxHistory();
-  renderSalesHistoryFiltered();
-  renderIngHistory();
+  /* Run each panel independently. One of these throwing used to take
+     the rest of the page down with it — a ReferenceError in the chart
+     left Best Sellers and all three history tables showing the previous
+     period's data, which looked like wrong numbers rather than a
+     crash. */
+  [renderRevenueTrend, renderBestSellers, renderTxHistory,
+   renderSalesHistoryFiltered, renderIngHistory].forEach(fn => {
+    try { fn(txs); }
+    catch (err) { console.error(`Reports: ${fn.name} failed —`, err); }
+  });
 }
 
 function buildDailySummaries(){
@@ -3152,6 +3157,7 @@ function getFilteredTxs(){
 
 let revenueTrendChart = null;
 function renderRevenueTrend(txs){
+  const now = new Date();      // the month branch below used this without declaring it
   let labels=[], slots=[];
   if(reportPeriod==='day'){
     labels=['12am–3am','3am–6am','6am–9am','9am–12pm','12pm–3pm','3pm–6pm','6pm–9pm','9pm–12am'];
