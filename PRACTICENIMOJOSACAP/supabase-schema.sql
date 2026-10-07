@@ -77,6 +77,15 @@ create table if not exists site_content (
   data jsonb not null default '{}'::jsonb
 );
 
+-- Ingredient restock orders placed with suppliers (Admin → Inventory)
+create table if not exists supplier_orders (
+  id   text primary key,
+  date timestamptz default now(),
+  data jsonb not null
+);
+
+create index if not exists idx_supplier_orders_date on supplier_orders (date desc);
+
 -- Messages sent from the "Send us a quick message" form (Admin → Messages)
 create table if not exists inquiries (
   id   text primary key,
@@ -98,3 +107,4 @@ alter table order_tracking disable row level security;
 alter table profiles       disable row level security;
 alter table site_content   disable row level security;
 alter table inquiries      disable row level security;
+alter table supplier_orders disable row level security;

@@ -152,7 +152,7 @@ const DB_VERSION = '11';
 async function initDB(){
   try {
     const toArr = res => (res.data || []).map(row => row.data);
-    const [pRes, iRes, uRes, oRes, txRes, slRes] = await Promise.all([
+    const [pRes, iRes, uRes, oRes, txRes, slRes, poRes] = await Promise.all([
       _supa.from('products').select('data'),
       _supa.from('ingredients').select('data'),
       _supa.from('admin_users').select('data'),
@@ -162,7 +162,8 @@ async function initDB(){
          the jsonb. Ordering by it returned 42703 and threw the whole
          result away, so every sales report read zero. Sorted below. */
       _supa.from('transactions').select('data'),
-      _supa.from('stock_log').select('data').order('date', { ascending: false })
+      _supa.from('stock_log').select('data').order('date', { ascending: false }),
+      _supa.from('supplier_orders').select('data').order('date', { ascending: false })
     ]);
 
     if (!pRes.data || pRes.data.length === 0) {
@@ -182,7 +183,7 @@ async function initDB(){
         orders:         toArr(oRes),
         transactions:   toArr(txRes).sort((a, b) => new Date(b.date) - new Date(a.date)),
         stockLog:       toArr(slRes),
-        supplierOrders: []
+        supplierOrders: toArr(poRes)
       };
       // Patch recipes for products that are missing them
       let patched = false;
@@ -2698,6 +2699,7 @@ function renderInventory(){
     });
   });
   document.getElementById('ingredients-body').innerHTML = ingHTML;
+  renderSupplierOrders();
 }
 
 function openOrderStockModal(ingId){
@@ -2711,6 +2713,157 @@ function openOrderStockModal(ingId){
   document.getElementById('os-date').value       = '';
   document.getElementById('os-notes').value      = '';
   openModal('order-stock-modal');
+}
+
+/* ═══════════════════════════════════════════
+   SUPPLIER ORDERS
+   Place an order for more of an ingredient, then mark it received when
+   the delivery turns up — which adds the quantity to stock and records
+   it in the stock log, same as any other movement.
+
+   Nothing is emailed or sent anywhere: this tracks what has been
+   ordered so the restock loop can be followed end to end.
+   ═══════════════════════════════════════════ */
+
+async function placeSupplierOrder(){
+  const name     = document.getElementById('os-ing-name').value;
+  const qty      = parseFloat(document.getElementById('os-qty').value) || 0;
+  const supplier = document.getElementById('os-supplier').value.trim();
+  const expected = document.getElementById('os-date').value;
+  const notes    = document.getElementById('os-notes').value.trim();
+
+  if(qty <= 0){ toast('Enter how much to order', 'danger'); return; }
+  if(!supplier){ toast('Enter the supplier name', 'danger'); return; }
+
+  const ing = DB.ingredients.find(i => i.name === name);
+  if(!ing){ toast('Ingredient not found', 'danger'); return; }
+
+  const order = {
+    id:        'PO-' + Date.now(),
+    date:      new Date().toISOString(),
+    ingId:     ing.id,
+    ingName:   ing.name,
+    unit:      ing.unit,
+    qty,
+    supplier,
+    expected:  expected || null,
+    notes,
+    status:    'Ordered',
+    orderedBy: `${currentUser.fname} ${currentUser.lname}`.trim()
+  };
+
+  DB.supplierOrders.unshift(order);
+  const { error } = await _supa.from('supplier_orders')
+    .upsert({ id: order.id, date: order.date, data: order }, { onConflict: 'id' });
+
+  if(error){
+    DB.supplierOrders = DB.supplierOrders.filter(o => o.id !== order.id);
+    console.error('supplier order failed:', error);
+    toast('Could not place the order: ' + error.message, 'danger');
+    return;
+  }
+
+  closeModal('order-stock-modal');
+  renderInventory();
+  toast(`Ordered ${qty}${ing.unit} of ${ing.name} from ${supplier}`, 'success');
+}
+
+/* Delivery arrived — add it to stock and log the movement. */
+function receiveSupplierOrder(id){
+  const po = DB.supplierOrders.find(o => o.id === id);
+  if(!po || po.status === 'Received') return;
+
+  const ing = DB.ingredients.find(i => i.id === po.ingId);
+  if(!ing){ toast('That ingredient no longer exists', 'danger'); return; }
+
+  showConfirm({
+    title: 'Mark as received',
+    message: `Add ${po.qty}${po.unit} of ${po.ingName} to stock? Current stock is ${ing.stock}${ing.unit}.`,
+    okText: 'Received',
+    okClass: 'btn-primary',
+    icon: 'bx-package',
+    onConfirm: async () => {
+      const before = ing.stock;
+      ing.stock = before + po.qty;
+
+      logStock({
+        type: 'ingredient', itemId: ing.id, itemName: ing.name, unit: ing.unit,
+        op: 'add', before, after: ing.stock,
+        note: `Delivery from ${po.supplier}`, ref: po.id
+      });
+
+      po.status     = 'Received';
+      po.receivedAt = new Date().toISOString();
+
+      await _supa.from('supplier_orders')
+        .upsert({ id: po.id, date: po.date, data: po }, { onConflict: 'id' })
+        .then(({ error }) => { if(error) console.error('could not update supplier order:', error); });
+
+      saveDB(); renderInventory(); updateBadges();
+      toast(`${ing.name} restocked to ${ing.stock}${ing.unit}`, 'success');
+    }
+  });
+}
+
+function cancelSupplierOrder(id){
+  const po = DB.supplierOrders.find(o => o.id === id);
+  if(!po) return;
+
+  showConfirm({
+    title: 'Cancel this order',
+    message: `Cancel the order for ${po.qty}${po.unit} of ${po.ingName} from ${po.supplier}? Stock is not affected.`,
+    okText: 'Cancel order',
+    icon: 'bx-x-circle',
+    onConfirm: async () => {
+      po.status = 'Cancelled';
+      await _supa.from('supplier_orders')
+        .upsert({ id: po.id, date: po.date, data: po }, { onConflict: 'id' })
+        .then(({ error }) => { if(error) console.error('could not update supplier order:', error); });
+      renderInventory();
+      toast('Supplier order cancelled', 'success');
+    }
+  });
+}
+
+function renderSupplierOrders(){
+  const box = document.getElementById('supplier-orders-body');
+  if(!box) return;
+
+  const list = [...(DB.supplierOrders || [])]
+    .sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const pending = list.filter(o => o.status === 'Ordered');
+  const badge = document.getElementById('po-pending-count');
+  if(badge){
+    badge.textContent = pending.length;
+    badge.style.display = pending.length ? '' : 'none';
+  }
+
+  if(!list.length){
+    box.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:22px;color:var(--text-2)">No supplier orders yet — use the cart button on any ingredient to order more.</td></tr>`;
+    return;
+  }
+
+  box.innerHTML = list.slice(0, 15).map(o => {
+    const pill = o.status === 'Received'  ? 'fulfilled'
+               : o.status === 'Cancelled' ? 'cancelled' : 'pending';
+    return `
+      <tr>
+        <td class="fw-bold">${escHTML(o.ingName)}</td>
+        <td>${o.qty}${escHTML(o.unit)}</td>
+        <td>${escHTML(o.supplier)}</td>
+        <td>${o.expected ? fmtDate(o.expected) : '—'}</td>
+        <td>${fmtDate(o.date)}</td>
+        <td><span class="pill ${pill}">${o.status}</span></td>
+        <td>
+          <div class="td-actions">
+            ${o.status === 'Ordered' ? `
+              <button class="btn-primary sm" onclick="receiveSupplierOrder('${o.id}')"><i class='bx bx-package'></i> Received</button>
+              <button class="btn-icon danger" title="Cancel order" onclick="cancelSupplierOrder('${o.id}')"><i class='bx bx-x'></i></button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
 }
 
 function openAdjustStock(id, type){
