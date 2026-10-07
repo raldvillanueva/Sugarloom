@@ -661,11 +661,10 @@ function setRevenueChart(period, btn){
 }
 
 function chartTheme(){
-  const dark = document.body.classList.contains('dark');
   return {
-    grid: dark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)',
-    text: dark ? '#9CA3AF' : '#6B7280',
-    border: dark ? '#22223A' : '#fff'
+    grid:   'rgba(0,0,0,0.06)',
+    text:   '#6B7280',
+    border: '#fff'
   };
 }
 
@@ -3746,25 +3745,6 @@ document.addEventListener('keydown', e=>{
 /* =============================================
    THEME
    ============================================= */
-function toggleTheme(){
-  const isDark = document.body.classList.toggle('dark');
-  localStorage.setItem('sl_theme', isDark ? 'dark' : 'light');
-  const icon = document.querySelector('#theme-btn i');
-  icon.className = isDark ? 'bx bx-sun' : 'bx bx-moon';
-  renderRevenueTrend(getFilteredTxs());
-  renderBestSellers(getFilteredTxs());
-}
-
-function applyTheme(){
-  const saved = localStorage.getItem('sl_theme');
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  if(saved === 'dark' || (!saved && prefersDark)){
-    document.body.classList.add('dark');
-    const icon = document.querySelector('#theme-btn i');
-    if(icon) icon.className = 'bx bx-sun';
-  }
-}
-
 /* =============================================
    DATE HELPERS
    ============================================= */
@@ -3971,7 +3951,6 @@ function updateInquiryBadge(){
    BOOT
    ============================================= */
 document.addEventListener('DOMContentLoaded', async ()=>{
-  applyTheme();
   await initDB();
   checkLogin();
   document.getElementById('login-password')?.addEventListener('keydown', e=>{ if(e.key==='Enter') adminLogin(); });

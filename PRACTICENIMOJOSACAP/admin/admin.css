@@ -270,8 +270,6 @@ textarea { resize: vertical; }
 .notif-clickable:hover { background: var(--bg-2); }
 .notif-item.unread { background: #EFF6FF; }
 .notif-item.unread:hover { background: #DBEAFE; }
-body.dark .notif-item.unread { background: #1e3a5f; }
-body.dark .notif-item.unread:hover { background: #1e3558; }
 .notif-empty { padding: 24px; text-align: center; color: var(--text-3); font-size: 13px; }
 
 /* ============================
@@ -1019,116 +1017,30 @@ body.dark .notif-item.unread:hover { background: #1e3558; }
 .toast.warning { background: var(--warning); color: var(--text-1); }
 
 /* Theme toggle button */
-.theme-btn {
-  color: var(--text-2); padding: 6px; border-radius: var(--radius-sm);
-  transition: all var(--transition); flex-shrink: 0;
-}
-.theme-btn:hover { background: var(--primary-light); color: var(--primary); }
-.theme-btn i { font-size: 18px; display: block; }
 
 /* ============================
    DARK MODE
    ============================ */
-body.dark {
-  --bg: #0F0F1A;
-  --bg-2: #1A1A2E;
-  --sidebar-bg: #1A1A2E;
-  --card-bg: #22223A;
-  --text-1: #F3F4F6;
-  --text-2: #9CA3AF;
-  --text-3: #4B5563;
-  --border: rgba(255,255,255,0.08);
-  --primary-light: #2D2D50;
-  --blue-light: #1e3a5f;
-  --success-light: #064E3B;
-  --warning-light: #451A03;
-  --danger-light: #450A0A;
-  --purple-light: #2E1065;
-  --orange-light: #431407;
-  --shadow: 0 2px 8px rgba(0,0,0,.40);
-  --shadow-lg: 0 12px 40px rgba(0,0,0,.60);
-}
 
-body.dark .topbar { background: #1A1A2E; border-color: rgba(255,255,255,0.07); }
-body.dark .sidebar { background: #1A1A2E; border-color: rgba(255,255,255,0.07); }
-body.dark .sidebar-logo { color: #ffffff; }
 
-body.dark .card,
-body.dark .stat-card { background: #22223A; border-color: rgba(255,255,255,0.07); }
 
-body.dark .modal { background: #22223A; }
-body.dark .modal-footer { background: #1A1A2E; border-color: rgba(255,255,255,0.07); }
-body.dark .rev-period-btn.active { background: #2D2D4E; }
 
-body.dark .topbar-search { background: #0F0F1A; border-color: rgba(255,255,255,0.08); }
-body.dark .topbar-search input { color: var(--text-1); }
 
-body.dark .pos-products,
-body.dark .pos-cart { background: #22223A; }
 
-body.dark .pos-item { background: #0F0F1A; border-color: rgba(255,255,255,0.08); }
-body.dark .pos-item:hover { background: var(--primary-light); border-color: var(--primary); }
 
-body.dark .cart-summary { background: #0F0F1A; }
-body.dark .customer-field input { background: #0F0F1A; color: var(--text-1); }
 
-body.dark .summary-row input,
-body.dark .summary-row select { background: #0F0F1A; color: var(--text-1); border-color: rgba(255,255,255,0.08); }
 
-body.dark .login-card { background: #22223A; }
-body.dark .login-card h2 { color: #F3F4F6; }
-body.dark .login-card .login-sub { color: #9CA3AF; }
-body.dark .form-group input,
-body.dark .form-group select,
-body.dark .form-group textarea { background: #0F0F1A; color: #F3F4F6; border-color: rgba(255,255,255,0.1); }
 
-body.dark .select-input { background: #22223A; color: #F3F4F6; border-color: rgba(255,255,255,0.08); }
-body.dark .search-box { background: #22223A; border-color: rgba(255,255,255,0.08); }
-body.dark .search-box input { color: #F3F4F6; }
 
-body.dark .status-tabs { background: #22223A; border-color: rgba(255,255,255,0.08); }
 
-body.dark .btn-secondary { background: #0F0F1A; border-color: rgba(255,255,255,0.1); color: #F3F4F6; }
-body.dark .btn-secondary:hover { background: #22223A; }
-body.dark .btn-ghost { color: #9CA3AF; }
-body.dark .btn-ghost:hover { background: #0F0F1A; }
-body.dark .hist-btn { background: #1A1A2E; border-color: rgba(255,255,255,0.1); color: #9CA3AF; }
-body.dark .hist-btn:hover { background: #22223A; border-color: var(--primary); color: var(--primary); }
-body.dark .hist-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
-body.dark .hist-datepicker { background: #1A1A2E; border-color: rgba(255,255,255,0.1); color: #9CA3AF; }
-body.dark .hist-datepicker:hover { border-color: #a855f7; color: #F3F4F6; }
-body.dark .hist-datepicker.open, body.dark .hist-datepicker.has-value { border-color: #a855f7; color: #F3F4F6; }
-body.dark .cal-popup { background: #1A1A2E; border-color: rgba(255,255,255,0.1); }
-body.dark .cal-month-lbl, body.dark .cal-day { color: #F3F4F6; }
-body.dark .cal-day:hover:not(.cal-empty) { background: #22223A; }
-body.dark .cal-nav-btn { border-color: rgba(255,255,255,0.1); color: #9CA3AF; }
-body.dark .cal-nav-btn:hover { background: #22223A; }
-body.dark .cal-day.cal-other { color: #4B5563; }
-body.dark .cal-day.cal-today { border-color: #9CA3AF; }
-body.dark .cal-day.cal-selected { background: #F3F4F6; color: #1A1A2E; }
 
-body.dark .qty-btn { background: #0F0F1A; border-color: rgba(255,255,255,0.08); color: #F3F4F6; }
 
-body.dark .order-type-btn { border-color: rgba(255,255,255,0.1); color: #9CA3AF; }
-body.dark .order-type-btn.active { border-color: var(--secondary); color: var(--secondary); }
 
-body.dark .pm-btn { border-color: rgba(255,255,255,0.1); color: #9CA3AF; }
-body.dark .pm-btn.active { border-color: var(--secondary); color: var(--secondary); }
 
-body.dark .period-btn { background: #22223A; border-color: rgba(255,255,255,0.08); color: #9CA3AF; }
-body.dark .period-btn.active { border-color: var(--secondary); color: var(--secondary); }
 
-body.dark .nav-item.active { background: var(--secondary); color: #fff; }
-body.dark .data-table tr:hover td { background: #0F0F1A; }
 
-body.dark .notif-panel { background: #22223A; border-color: rgba(255,255,255,0.08); }
 
-body.dark .pill.inactive { background: #22223A; color: #4B5563; }
 
-body.dark .toast { background: #2D2D45; color: #F3F4F6; }
-body.dark .toast.success { background: var(--success); color: #fff; }
-body.dark .toast.danger { background: var(--danger); color: #fff; }
-body.dark .toast.warning { background: var(--warning); color: #0F0F1A; }
 
 /* ============================
    TAB BAR
@@ -1166,9 +1078,6 @@ body.dark .toast.warning { background: var(--warning); color: #0F0F1A; }
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
-body.dark .tab-bar { background: #0F0F1A; border-color: rgba(255,255,255,0.08); }
-body.dark .tab-btn:hover,
-body.dark .tab-btn.active { background: #1A1A2E; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
 
 /* ============================
    BTN-SM
