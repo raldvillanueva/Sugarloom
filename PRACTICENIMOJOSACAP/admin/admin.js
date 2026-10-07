@@ -2911,60 +2911,75 @@ function viewRestockForm(id){
         </div>
       </header>
 
-      <h1 class="rf-title">Restock Order Form</h1>
-
-      <div class="rf-chips">
-        <span class="rf-chip">${lines.length} item${lines.length === 1 ? '' : 's'}</span>
-        ${urgent ? `<span class="rf-chip urgent">${urgent} needs attention</span>` : ''}
-        <span class="rf-chip ${f.status === 'Open' ? 'open' : ''}">${escHTML(f.status)}</span>
+      <div class="rf-titlebar">
+        <h1 class="rf-title">Restock Order Form</h1>
+        <div class="rf-summary">
+          <span><b>${lines.length}</b> line item${lines.length === 1 ? '' : 's'}</span>
+          ${urgent ? `<span class="urgent"><b>${urgent}</b> urgent</span>` : ''}
+          <span class="status ${f.status === 'Open' ? 'open' : ''}">${escHTML(f.status)}</span>
+        </div>
       </div>
 
       <section class="rf-fill">
-        <label>Supplier / store<span></span></label>
-        <label>Contact person &amp; number<span></span></label>
-        <label>Required delivery date<span></span></label>
+        <label>Supplier / Store<span></span></label>
+        <label>Contact Person &amp; Number<span></span></label>
+        <label>Required Delivery Date<span></span></label>
       </section>
 
       <table class="rf-table">
         <thead>
           <tr>
-            <th class="num">#</th>
+            <th class="col-no">No.</th>
             <th>Ingredient</th>
-            <th class="num">On hand</th>
-            <th class="num">Reorder at</th>
-            <th>Priority</th>
-            <th class="num">We suggest</th>
-            <th class="fill">Order qty</th>
+            <th class="num">On Hand</th>
+            <th class="num">Reorder At</th>
+            <th class="col-pri">Priority</th>
+            <th class="num">Suggested</th>
+            <th class="fill">Order Qty</th>
             <th class="fill">Received</th>
           </tr>
         </thead>
         <tbody>
           ${lines.map((l, i) => `
             <tr>
-              <td class="num">${i + 1}</td>
-              <td>
+              <td class="col-no">${String(i + 1).padStart(2, '0')}</td>
+              <td class="item">
                 <strong>${escHTML(l.name)}</strong>
                 ${l.note ? `<em>${escHTML(l.note)}</em>` : ''}
               </td>
-              <td class="num">${l.currentStock == null ? '—' : l.currentStock + (l.unit || '')}</td>
-              <td class="num">${l.threshold == null ? '—' : l.threshold + (l.unit || '')}</td>
-              <td>${l.priority === '—' ? '—' : `<span class="rf-pri ${l.priority === 'Low' ? 'low' : 'urgent'}">${escHTML(l.priority)}</span>`}</td>
-              <td class="num strong">${l.suggestedQty}${escHTML(l.unit || '')}</td>
+              <td class="num">${l.currentStock == null ? '—' : l.currentStock + '<span class="u">' + escHTML(l.unit || '') + '</span>'}</td>
+              <td class="num muted">${l.threshold == null ? '—' : l.threshold + '<span class="u">' + escHTML(l.unit || '') + '</span>'}</td>
+              <td class="col-pri">${l.priority === '—' ? '<span class="muted">—</span>' : `<span class="rf-pri ${l.priority === 'Low' ? 'low' : 'urgent'}">${escHTML(l.priority)}</span>`}</td>
+              <td class="num strong">${l.suggestedQty}<span class="u">${escHTML(l.unit || '')}</span></td>
               <td class="fill"></td>
               <td class="fill"></td>
             </tr>`).join('')}
         </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="5" class="foot-label">Total lines to order</td>
+            <td class="num strong">${lines.length}</td>
+            <td class="fill"></td>
+            <td class="fill"></td>
+          </tr>
+        </tfoot>
       </table>
 
       <p class="rf-note">
-        Suggested quantities are worked out from what's on hand against each ingredient's reorder point —
-        they're a starting point, not a decision. Set the order quantity yourself before sending this on.
+        <b>Note</b> — suggested quantities are calculated from stock on hand against each ingredient's
+        reorder point. They are guidance only; confirm the final order quantity with the supplier before
+        sending.
       </p>
 
       <div class="rf-signs">
-        <div><span></span>Prepared by</div>
-        <div><span></span>Approved by</div>
+        <div><span></span><b>Prepared by</b><small>Name &amp; date</small></div>
+        <div><span></span><b>Approved by</b><small>Name &amp; date</small></div>
       </div>
+
+      <footer class="rf-foot">
+        SugarLoom Ph · Pinagbuhatan, Pasig City · sugarloomph@gmail.com
+        <span>${escHTML(f.reference || f.id)}</span>
+      </footer>
 
     </div>`;
 

@@ -1545,120 +1545,148 @@ textarea { resize: vertical; }
 .cod-risk.watch { background: var(--warning-light); color: var(--warning); }
 
 
+
 /* ============================
    RESTOCK ORDER FORM
-   SugarLoom's own: cream paper, brand pink, Playfair heading to match
-   the storefront. Fill-in fields are underlines rather than boxes, and
-   the only ruled grid is the item list itself.
+   A document, not a dashboard panel: ruled table, aligned numerics,
+   generous margins. SugarLoom's cream and pink, Playfair heading.
    ============================ */
 .rf-sheet {
-  --rf-pink: #e8527a;
-  --rf-ink:  #1a1a1a;
-  --rf-soft: #8a8178;
-  --rf-line: #e6e1d8;
-  background: #fffdfa;
+  --rf-pink:  #d6456c;
+  --rf-ink:   #1f1b18;
+  --rf-soft:  #8a8178;
+  --rf-rule:  #ddd6cb;
+  --rf-faint: #f4f0e9;
+  background: #fff;
   color: var(--rf-ink);
-  font-size: 12.5px;
-  line-height: 1.55;
-  padding: 4px 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 30px 32px 24px;
+  border: 1px solid var(--rf-rule);
 }
 
+/* ── letterhead ── */
 .rf-head {
   display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 24px; padding-bottom: 14px;
-  border-bottom: 2px solid var(--rf-pink);
+  gap: 24px; padding-bottom: 16px; margin-bottom: 20px;
+  border-bottom: 2.5px solid var(--rf-pink);
 }
-.rf-brand { display: flex; align-items: center; gap: 10px; }
-.rf-cookie { font-size: 26px; line-height: 1; }
+.rf-brand { display: flex; align-items: center; gap: 11px; }
+.rf-cookie { font-size: 28px; line-height: 1; }
 .rf-brand strong {
-  display: block; font-size: 16px; font-weight: 800;
+  display: block; font-size: 17px; font-weight: 800;
   font-style: italic; letter-spacing: -.3px;
 }
-.rf-brand small { display: block; font-size: 10.5px; color: var(--rf-soft); }
+.rf-brand small { display: block; font-size: 10px; color: var(--rf-soft); margin-top: 1px; }
 
-.rf-ref { text-align: right; }
+.rf-ref { text-align: right; white-space: nowrap; }
 .rf-ref-label {
-  display: block; font-size: 9.5px; font-weight: 700;
-  letter-spacing: .12em; text-transform: uppercase; color: var(--rf-pink);
+  display: block; font-size: 9px; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--rf-pink);
 }
-.rf-ref strong { display: block; font-size: 14px; font-weight: 700; }
-.rf-ref small  { display: block; font-size: 10.5px; color: var(--rf-soft); }
+.rf-ref strong { display: block; font-size: 14px; font-weight: 700; margin-top: 2px; }
+.rf-ref small  { display: block; font-size: 10px; color: var(--rf-soft); }
 
+/* ── title row ── */
+.rf-titlebar {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 20px; margin-bottom: 22px;
+}
 .rf-title {
   font-family: 'Playfair Display', Georgia, serif;
-  font-size: 30px; font-weight: 700; letter-spacing: -.6px;
-  margin: 18px 0 10px;
+  font-size: 25px; font-weight: 700; letter-spacing: -.4px;
+  margin: 0;
 }
-
-.rf-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 20px; }
-.rf-chip {
-  padding: 3px 11px; border-radius: 20px;
-  background: #f3f0ea; color: var(--rf-soft);
-  font-size: 10.5px; font-weight: 600;
+.rf-summary { display: flex; gap: 16px; font-size: 10.5px; color: var(--rf-soft); }
+.rf-summary b { color: var(--rf-ink); font-weight: 700; }
+.rf-summary .urgent, .rf-summary .urgent b { color: var(--rf-pink); }
+.rf-summary .status {
+  padding: 2px 9px; border-radius: 3px;
+  background: var(--rf-faint); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em; font-size: 9.5px;
 }
-.rf-chip.urgent { background: #fdeef2; color: var(--rf-pink); }
-.rf-chip.open   { background: #eef6ee; color: #3d7a44; }
+.rf-summary .status.open { background: #e8f3ea; color: #2f6b38; }
 
-/* Fill-in details — underlines, not boxes */
+/* ── fill-in details ── */
 .rf-fill { display: flex; gap: 26px; margin-bottom: 24px; }
 .rf-fill label {
-  flex: 1; font-size: 9.5px; font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase; color: var(--rf-soft);
+  flex: 1; font-size: 8.5px; font-weight: 700;
+  letter-spacing: .13em; text-transform: uppercase; color: var(--rf-soft);
 }
 .rf-fill span {
-  display: block; height: 26px;
-  border-bottom: 1px solid #cfc7bb; margin-top: 4px;
+  display: block; height: 24px;
+  border-bottom: 1px solid var(--rf-rule); margin-top: 3px;
 }
 
-.rf-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+/* ── item table ── */
+.rf-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
 .rf-table th {
-  text-align: left; font-size: 9.5px; font-weight: 700;
-  letter-spacing: .08em; text-transform: uppercase;
-  color: var(--rf-pink); padding: 0 10px 8px;
-  border-bottom: 1.5px solid var(--rf-pink);
+  text-align: left; font-size: 8.5px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: #fff;
+  background: var(--rf-pink);
+  padding: 8px 9px; white-space: nowrap;
 }
-.rf-table th.num, .rf-table td.num { text-align: right; }
 .rf-table td {
-  padding: 10px; font-size: 12px;
-  border-bottom: 1px solid var(--rf-line);
+  padding: 9px; font-size: 11.5px;
+  border-bottom: 1px solid var(--rf-rule);
   vertical-align: middle;
 }
-.rf-table tbody tr:nth-child(even) { background: #faf7f2; }
-.rf-table td strong { font-weight: 600; }
-.rf-table td em {
-  display: block; font-style: normal;
-  font-size: 10.5px; color: var(--rf-soft);
-}
+.rf-table th.num, .rf-table td.num { text-align: right; }
+.rf-table .col-no  { width: 34px; text-align: center; color: var(--rf-soft); font-variant-numeric: tabular-nums; }
+.rf-table .col-pri { width: 96px; }
+.rf-table td.num   { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.rf-table td.muted { color: var(--rf-soft); }
 .rf-table td.strong { font-weight: 700; }
-.rf-table th.fill, .rf-table td.fill { background: #f7f4ee; min-width: 76px; }
-
-.rf-pri {
-  display: inline-block; padding: 2px 9px; border-radius: 4px;
-  font-size: 10px; font-weight: 700;
+.rf-table .u { font-size: 9.5px; color: var(--rf-soft); margin-left: 1px; }
+.rf-table td.item strong { font-weight: 600; }
+.rf-table td.item em {
+  display: block; font-style: normal;
+  font-size: 10px; color: var(--rf-soft); margin-top: 1px;
 }
-.rf-pri.urgent { background: #fdeef2; color: #c2325a; }
-.rf-pri.low    { background: #fdf4e3; color: #8a6414; }
+.rf-table th.fill, .rf-table td.fill {
+  width: 82px; background: var(--rf-faint);
+  border-left: 1px solid var(--rf-rule);
+}
+.rf-table th.fill { background: #b8385b; }
+.rf-table tfoot td {
+  border-top: 2px solid var(--rf-pink); border-bottom: none;
+  padding-top: 10px; font-size: 11px;
+}
+.rf-table tfoot .foot-label {
+  text-align: right; text-transform: uppercase;
+  letter-spacing: .08em; font-size: 9px; font-weight: 700; color: var(--rf-soft);
+}
 
+/* ── note, signatures, footer ── */
 .rf-note {
-  font-size: 10.5px; color: var(--rf-soft);
-  border-left: 2px solid var(--rf-pink);
-  padding: 2px 0 2px 12px;
-  margin: 0 0 34px;
+  font-size: 10px; color: var(--rf-soft);
+  background: var(--rf-faint);
+  border-left: 3px solid var(--rf-pink);
+  padding: 9px 12px; margin: 0 0 40px;
 }
+.rf-note b { color: var(--rf-ink); }
 
-.rf-signs { display: flex; gap: 60px; }
-.rf-signs div {
-  flex: 1; text-align: center;
-  font-size: 10px; font-weight: 600;
-  letter-spacing: .08em; text-transform: uppercase; color: var(--rf-soft);
-}
+.rf-signs { display: flex; gap: 64px; margin-bottom: 26px; }
+.rf-signs div { flex: 1; text-align: center; }
 .rf-signs span {
-  display: block; height: 30px;
-  border-bottom: 1px solid #cfc7bb; margin-bottom: 7px;
+  display: block; height: 34px;
+  border-bottom: 1px solid #b8ada1; margin-bottom: 7px;
+}
+.rf-signs b {
+  display: block; font-size: 9.5px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase; color: var(--rf-ink);
+}
+.rf-signs small { display: block; font-size: 9px; color: var(--rf-soft); margin-top: 1px; }
+
+.rf-foot {
+  display: flex; justify-content: space-between;
+  border-top: 1px solid var(--rf-rule); padding-top: 9px;
+  font-size: 9px; color: var(--rf-soft); letter-spacing: .03em;
 }
 
 @media print {
   .modal-header, .modal-footer { display: none !important; }
-  .rf-sheet { background: #fff; font-size: 11.5px; }
-  .rf-table tbody tr:nth-child(even) { background: #fafafa; }
+  .rf-sheet { border: none; padding: 0; font-size: 11px; }
+  .rf-table { page-break-inside: auto; }
+  .rf-table tr { page-break-inside: avoid; }
 }
