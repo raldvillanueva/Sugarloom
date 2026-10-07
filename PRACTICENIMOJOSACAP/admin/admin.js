@@ -2692,7 +2692,6 @@ function renderInventory(){
             <button class="btn-icon warn" onclick="openAdjustStock('${ing.id}','ingredient')" title="Adjust"><i class='bx bx-slider'></i></button>
             <button class="btn-icon edit" onclick="openIngredientModal('${ing.id}')" title="Edit"><i class='bx bx-edit'></i></button>
             <button class="btn-icon danger" onclick="deleteIngredient('${ing.id}')" title="Delete"><i class='bx bx-trash'></i></button>
-            <button class="btn-icon" style="background:#DBEAFE;color:#2563EB" onclick="openOrderStockModal('${ing.id}')" title="Order Stock"><i class='bx bx-cart-add'></i></button>
           </div>
         </td>
       </tr>`;
@@ -2700,19 +2699,6 @@ function renderInventory(){
   });
   document.getElementById('ingredients-body').innerHTML = ingHTML;
   syncRestockForm().then(renderSupplierOrders);
-}
-
-function openOrderStockModal(ingId){
-  const ing = DB.ingredients.find(i => i.id === ingId);
-  if(!ing) return;
-  document.getElementById('os-ing-name').value  = ing.name;
-  document.getElementById('os-ing-stock').value = ing.stock + ' ' + ing.unit;
-  document.getElementById('os-unit').value = ing.unit;
-  document.getElementById('os-qty').value        = '';
-  document.getElementById('os-supplier').value   = '';
-  document.getElementById('os-date').value       = '';
-  document.getElementById('os-notes').value      = '';
-  openModal('order-stock-modal');
 }
 
 /* ═══════════════════════════════════════════
@@ -2752,13 +2738,8 @@ function openRestockForm(){
   return (DB.supplierOrders || []).find(f => f.status === 'Open') || null;
 }
 
-/* Raise a form, or top up the open one, whenever something is low.
-   Called on every inventory render, so it keeps pace with stock. */
-async function syncRestockForm(){
-  const low = lowIngredients();
-  if(!low.length) return;
-
-  const lineFor = ing => ({
+function restockLineFor(ing){
+  return {
     ingId:        ing.id,
     name:         ing.name,
     currentStock: ing.stock,
@@ -2766,93 +2747,93 @@ async function syncRestockForm(){
     threshold:    ing.threshold,
     suggestedQty: suggestedRestockQty(ing),
     priority:     restockPriority(ing)
-  });
-
-  let form = openRestockForm();
-  let changed = false;
-
-  if(!form){
-    form = {
-      id:        'RF-' + Date.now(),
-      date:      new Date().toISOString(),
-      status:    'Open',
-      reference: 'RF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Date.now()).slice(-4),
-      items:     low.map(lineFor),
-      raisedBy:  'System — low stock'
-    };
-    DB.supplierOrders.unshift(form);
-    changed = true;
-  } else {
-    low.forEach(ing => {
-      const existing = form.items.find(l => l.ingId === ing.id);
-      if(!existing){ form.items.push(lineFor(ing)); changed = true; }
-      else if(existing.currentStock !== ing.stock){
-        // Keep the figures current while the form is still open
-        existing.currentStock = ing.stock;
-        existing.suggestedQty = suggestedRestockQty(ing);
-        existing.priority     = restockPriority(ing);
-        changed = true;
-      }
-    });
-  }
-
-  if(!changed) return;
-
-  const { error } = await _supa.from('supplier_orders')
-    .upsert({ id: form.id, date: form.date, data: form }, { onConflict: 'id' });
-  if(error) console.error('could not save the restock form:', error);
+  };
 }
 
-/* Manual path: add something to the form that isn't low yet — a bulk
-   order coming up, or an item you know you'll need. */
-async function addToRestockForm(){
-  const name = document.getElementById('os-ing-name').value;
-  const qty  = parseFloat(document.getElementById('os-qty').value) || 0;
-  const note = document.getElementById('os-notes').value.trim();
+/* Shortages already put to the admin this session. Declining is
+   remembered so the prompt doesn't reappear on every render — it comes
+   back if that ingredient is restocked and later runs low again. */
+const _restockAsked = new Set();
 
-  if(qty <= 0){ toast('Enter how much to order', 'danger'); return; }
+/* Called on every inventory render. Nothing is raised without the
+   admin agreeing to it first. */
+async function syncRestockForm(){
+  const low  = lowIngredients();
+  const form = openRestockForm();
 
-  const ing = DB.ingredients.find(i => i.name === name);
-  if(!ing){ toast('Ingredient not found', 'danger'); return; }
+  /* Forget anything that's healthy again, so if it runs low in future
+     the admin is asked afresh rather than never hearing about it. */
+  DB.ingredients.forEach(i => { if(i.stock > i.threshold) _restockAsked.delete(i.id); });
 
-  let form = openRestockForm();
-  if(!form){
-    form = {
-      id:        'RF-' + Date.now(),
-      date:      new Date().toISOString(),
-      status:    'Open',
-      reference: 'RF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Date.now()).slice(-4),
-      items:     [],
-      raisedBy:  `${currentUser.fname} ${currentUser.lname}`.trim()
-    };
-    DB.supplierOrders.unshift(form);
-  }
-
-  const existing = form.items.find(l => l.ingId === ing.id);
-  if(existing){
-    existing.suggestedQty = qty;
-    existing.currentStock = ing.stock;
-    if(note) existing.note = note;
-  } else {
-    form.items.push({
-      ingId: ing.id, name: ing.name, currentStock: ing.stock, unit: ing.unit,
-      threshold: ing.threshold, suggestedQty: qty,
-      priority: restockPriority(ing), ...(note && { note })
+  // Keep an open form's figures current — no prompt, nothing new added
+  let refreshed = false;
+  if(form){
+    low.forEach(ing => {
+      const line = form.items.find(l => l.ingId === ing.id);
+      if(line && line.currentStock !== ing.stock){
+        line.currentStock = ing.stock;
+        line.suggestedQty = suggestedRestockQty(ing);
+        line.priority     = restockPriority(ing);
+        refreshed = true;
+      }
     });
+    if(refreshed) await saveRestockForm(form);
   }
 
+  // Anything low that isn't on the open form and hasn't been asked about
+  const fresh = low.filter(ing =>
+    !_restockAsked.has(ing.id) && !(form && form.items.some(l => l.ingId === ing.id))
+  );
+  if(!fresh.length) return;
+
+  fresh.forEach(ing => _restockAsked.add(ing.id));
+
+  const names = fresh.map(i => `${i.name} (${i.stock}${i.unit} left)`);
+  const list  = names.length <= 3
+    ? names.join(', ')
+    : `${names.slice(0,3).join(', ')} and ${names.length - 3} more`;
+
+  showConfirm({
+    title:   fresh.length === 1 ? 'An ingredient is running low' : `${fresh.length} ingredients are running low`,
+    message: form
+      ? `${list}. Add ${fresh.length === 1 ? 'it' : 'them'} to the open restock form ${form.reference}?`
+      : `${list}. Raise a restock order form so this can be ordered?`,
+    okText:  form ? 'Add to form' : 'Raise form',
+    okClass: 'btn-primary',
+    icon:    'bx-cart-add',
+    onConfirm: async () => {
+      let target = openRestockForm();
+      if(!target){
+        target = {
+          id:        'RF-' + Date.now(),
+          date:      new Date().toISOString(),
+          status:    'Open',
+          reference: 'RF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Date.now()).slice(-4),
+          items:     [],
+          raisedBy:  `${currentUser.fname} ${currentUser.lname}`.trim()
+        };
+        DB.supplierOrders.unshift(target);
+      }
+      fresh.forEach(ing => {
+        if(!target.items.some(l => l.ingId === ing.id)) target.items.push(restockLineFor(ing));
+      });
+
+      const ok = await saveRestockForm(target);
+      renderSupplierOrders();
+      if(ok) toast(`${target.reference} — ${target.items.length} item${target.items.length === 1 ? '' : 's'} to order`, 'success');
+    }
+  });
+}
+
+async function saveRestockForm(form){
   const { error } = await _supa.from('supplier_orders')
     .upsert({ id: form.id, date: form.date, data: form }, { onConflict: 'id' });
-
   if(error){
-    console.error('could not update the restock form:', error);
-    toast('Could not add it to the form: ' + error.message, 'danger');
-    return;
+    console.error('could not save the restock form:', error);
+    toast('Could not save the restock form: ' + error.message, 'danger');
+    return false;
   }
-
-  closeModal('order-stock-modal');
-  renderInventory();
-  toast(`${ing.name} added to ${form.reference}`, 'success');
+  return true;
 }
 
 /* Older records were one order per ingredient; show them as a one-line

@@ -890,54 +890,6 @@
   </div>
 </div>
 
-<!-- Order Stock Modal -->
-<div class="modal-overlay hidden" id="order-stock-modal">
-  <div class="modal sm">
-    <div class="modal-header">
-      <h3><i class='bx bx-cart-add' style="margin-right:6px;color:#2563EB"></i>Add to Restock Form</h3>
-      <button class="modal-close" onclick="closeModal('order-stock-modal')"><i class='bx bx-x'></i></button>
-    </div>
-    <div class="modal-body">
-      <div class="form-row">
-        <div class="form-group">
-          <label>Ingredient</label>
-          <input type="text" id="os-ing-name" readonly style="background:var(--bg);cursor:default">
-        </div>
-        <div class="form-group">
-          <label>Current Stock</label>
-          <input type="text" id="os-ing-stock" readonly style="background:var(--bg);cursor:default">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Suggested Qty</label>
-          <input type="number" id="os-qty" placeholder="0" min="1">
-        </div>
-        <div class="form-group">
-          <label>Unit</label>
-          <input type="text" id="os-unit" readonly style="background:var(--bg);cursor:default">
-        </div>
-      </div>
-      <div class="form-group" style="margin-bottom:14px">
-        <label>Supplier Name</label>
-        <input type="text" id="os-supplier" placeholder="e.g. ABC Baking Supplies">
-      </div>
-      <div class="form-group" style="margin-bottom:14px">
-        <label>Expected Delivery Date</label>
-        <input type="date" id="os-date">
-      </div>
-      <div class="form-group">
-        <label>Notes (optional)</label>
-        <textarea id="os-notes" rows="2" placeholder="Any special instructions..."></textarea>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-ghost" onclick="closeModal('order-stock-modal')">Cancel</button>
-      <button class="btn-primary" onclick="addToRestockForm()"><i class='bx bx-list-plus'></i> Add to restock form</button>
-    </div>
-  </div>
-</div>
-
 <!-- Refund Modal -->
 <div class="modal-overlay hidden" id="refund-modal">
   <div class="modal sm">
