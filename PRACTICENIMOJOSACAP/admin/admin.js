@@ -2910,63 +2910,81 @@ function viewRestockForm(id){
   const lines = formLines(f);
   const generated = new Date(f.date);
 
+  const urgent = lines.filter(l => l.priority === 'Urgent' || l.priority === 'Out of stock').length;
+
   document.getElementById('rf-body').innerHTML = `
     <div class="rf-sheet" id="rf-sheet">
-      <div class="rf-bar"></div>
-      <div class="rf-org">SUGARLOOM PH — PINAGBUHATAN, PASIG CITY</div>
+
+      <header class="rf-head">
+        <div class="rf-brand">
+          <span class="rf-cookie">🍪</span>
+          <div>
+            <strong>SugarLoomPh</strong>
+            <small>Pinagbuhatan, Pasig City · sugarloomph@gmail.com</small>
+          </div>
+        </div>
+        <div class="rf-ref">
+          <span class="rf-ref-label">Restock request</span>
+          <strong>${escHTML(f.reference || f.id)}</strong>
+          <small>${fmtDateTime(f.date)}</small>
+        </div>
+      </header>
+
       <h1 class="rf-title">Restock Order Form</h1>
-      <p class="rf-meta">
-        Form No: ${escHTML(f.reference || f.id)} &nbsp;|&nbsp;
-        Generated: ${fmtDateTime(f.date)} &nbsp;|&nbsp;
-        Status: ${escHTML(f.status)}
-      </p>
 
-      <table class="rf-table rf-supplier">
-        <thead><tr><th>Supplier / Store</th><th>Contact Person / Number</th><th>Required Delivery Date</th></tr></thead>
-        <tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody>
-      </table>
+      <div class="rf-chips">
+        <span class="rf-chip">${lines.length} item${lines.length === 1 ? '' : 's'}</span>
+        ${urgent ? `<span class="rf-chip urgent">${urgent} needs attention</span>` : ''}
+        <span class="rf-chip ${f.status === 'Open' ? 'open' : ''}">${escHTML(f.status)}</span>
+      </div>
 
-      <div class="rf-section">Recommended Purchase List</div>
-      <p class="rf-note">Review the suggested quantities, then enter the final approved order quantity before sending or printing the form for the supplier.</p>
+      <section class="rf-fill">
+        <label>Supplier / store<span></span></label>
+        <label>Contact person &amp; number<span></span></label>
+        <label>Required delivery date<span></span></label>
+      </section>
 
       <table class="rf-table">
         <thead>
           <tr>
-            <th style="width:36px">No.</th>
-            <th>Item Description</th>
-            <th style="width:90px">Current Stock</th>
-            <th style="width:92px">Priority</th>
-            <th style="width:90px">Suggested Qty</th>
-            <th style="width:56px">Unit</th>
-            <th style="width:90px">Final Order Qty</th>
-            <th style="width:86px">Received Qty</th>
-            <th style="width:110px">Remarks</th>
+            <th class="num">#</th>
+            <th>Ingredient</th>
+            <th class="num">On hand</th>
+            <th class="num">Reorder at</th>
+            <th>Priority</th>
+            <th class="num">We suggest</th>
+            <th class="fill">Order qty</th>
+            <th class="fill">Received</th>
           </tr>
         </thead>
         <tbody>
           ${lines.map((l, i) => `
             <tr>
-              <td>${i + 1}</td>
-              <td class="fw-bold">${escHTML(l.name)}</td>
-              <td>${l.currentStock == null ? '—' : l.currentStock}</td>
+              <td class="num">${i + 1}</td>
+              <td>
+                <strong>${escHTML(l.name)}</strong>
+                ${l.note ? `<em>${escHTML(l.note)}</em>` : ''}
+              </td>
+              <td class="num">${l.currentStock == null ? '—' : l.currentStock + (l.unit || '')}</td>
+              <td class="num">${l.threshold == null ? '—' : l.threshold + (l.unit || '')}</td>
               <td>${l.priority === '—' ? '—' : `<span class="rf-pri ${l.priority === 'Low' ? 'low' : 'urgent'}">${escHTML(l.priority)}</span>`}</td>
-              <td>${l.suggestedQty}</td>
-              <td>${escHTML(l.unit || '')}</td>
-              <td></td><td></td><td></td>
+              <td class="num strong">${l.suggestedQty}${escHTML(l.unit || '')}</td>
+              <td class="fill"></td>
+              <td class="fill"></td>
             </tr>`).join('')}
         </tbody>
       </table>
 
-      <div class="rf-review">
-        <strong>MANAGEMENT REVIEW</strong><br>
-        Recommended quantities are system-generated planning guidance based on current stock against each item's threshold. The owner or manager retains final authority over the items, quantities, supplier, delivery arrangement and method of submission.
-      </div>
+      <p class="rf-note">
+        Suggested quantities are worked out from what's on hand against each ingredient's reorder point —
+        they're a starting point, not a decision. Set the order quantity yourself before sending this on.
+      </p>
 
       <div class="rf-signs">
         <div><span></span>Prepared by</div>
-        <div><span></span>Checked by</div>
         <div><span></span>Approved by</div>
       </div>
+
     </div>`;
 
   openModal('restock-form-modal');
@@ -2975,12 +2993,27 @@ function viewRestockForm(id){
 function printRestockForm(){
   const sheet = document.getElementById('rf-sheet');
   if(!sheet) return;
+  /* Absolute URL — a relative one would resolve against about:blank in
+     the new window and the sheet would print unstyled. */
+  const cssHref = new URL('admin.css', location.href).href;
+
   const w = window.open('', '_blank');
-  w.document.write(`<!DOCTYPE html><html><head><title>Restock Order Form</title>
-    <link rel="stylesheet" href="admin.css"></head>
-    <body style="background:#fff;padding:24px">${sheet.outerHTML}</body></html>`);
+  if(!w){ toast('Allow pop-ups to print the form', 'warning'); return; }
+
+  w.document.write(`<!DOCTYPE html><html><head>
+    <title>Restock Order Form</title>
+    <link rel="stylesheet" href="${cssHref}">
+    <style>body{background:#fff;margin:0;padding:28px;}
+           .rf-sheet{max-width:760px;margin:0 auto;}</style>
+    </head><body>${sheet.outerHTML}</body></html>`);
   w.document.close();
-  setTimeout(() => { w.focus(); w.print(); }, 400);
+
+  /* Wait for the stylesheet and webfont rather than guessing. */
+  w.onload = () => {
+    const go = () => { w.focus(); w.print(); };
+    if(w.document.fonts?.ready) w.document.fonts.ready.then(go).catch(go);
+    else setTimeout(go, 300);
+  };
 }
 
 /* Marks a form as dealt with, so the next shortage raises a fresh one. */
