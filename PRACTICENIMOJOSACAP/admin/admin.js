@@ -157,7 +157,11 @@ async function initDB(){
       _supa.from('ingredients').select('data'),
       _supa.from('admin_users').select('data'),
       _supa.from('orders').select('data').order('date', { ascending: false }),
-      _supa.from('transactions').select('data').order('date', { ascending: false }),
+      /* No .order('date') here — unlike orders and stock_log, the
+         transactions table has no date column; the date lives inside
+         the jsonb. Ordering by it returned 42703 and threw the whole
+         result away, so every sales report read zero. Sorted below. */
+      _supa.from('transactions').select('data'),
       _supa.from('stock_log').select('data').order('date', { ascending: false })
     ]);
 
@@ -176,7 +180,7 @@ async function initDB(){
         products:       toArr(pRes),
         ingredients:    toArr(iRes),
         orders:         toArr(oRes),
-        transactions:   toArr(txRes),
+        transactions:   toArr(txRes).sort((a, b) => new Date(b.date) - new Date(a.date)),
         stockLog:       toArr(slRes),
         supplierOrders: []
       };
