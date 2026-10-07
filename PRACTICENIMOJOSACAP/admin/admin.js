@@ -923,6 +923,38 @@ function ingEstimate(p){
   });
   return min === Infinity ? (p.dailyLimit||0) : min;
 }
+/* ── INGREDIENT STOCK LEVELS ──
+   The low-stock threshold is a percentage of a full shelf rather than a
+   raw number: "tell me at 30%" holds whether an ingredient is measured
+   in grams or pieces, and it stays right when the par level changes.
+
+   Ingredients saved before this have an absolute `threshold` and no
+   `capacity`, so both are derived on read — no migration, and old rows
+   keep behaving as they did. Everything goes through these four
+   helpers so nothing compares against the wrong figure. */
+
+function ingCapacity(ing){
+  const c = Number(ing.capacity);
+  if(c > 0) return c;
+  // No par level recorded — infer one that keeps the old behaviour
+  return Math.max(Number(ing.stock) || 0, (Number(ing.threshold) || 0) * 2, 1);
+}
+
+function ingThresholdPct(ing){
+  const p = Number(ing.thresholdPct);
+  if(p > 0) return Math.min(100, p);
+  const derived = Math.round(((Number(ing.threshold) || 0) / ingCapacity(ing)) * 100);
+  return derived > 0 ? Math.min(100, derived) : 20;
+}
+
+function ingThresholdQty(ing){
+  return Math.round(ingCapacity(ing) * ingThresholdPct(ing) / 100);
+}
+
+function isIngLow(ing){
+  return Number(ing.stock) <= ingThresholdQty(ing);
+}
+
 function stockClass(p){
   const remaining = Math.max(0, (p.dailyLimit||0) - (p.soldToday||0));
   if(remaining <= 0) return 'low';
@@ -2674,8 +2706,8 @@ function renderInventory(){
       </tr>`;
     }
     items.forEach(ing => {
-      const low = ing.stock <= ing.threshold;
-      const pct = Math.min(100,Math.round((ing.stock/Math.max(ing.threshold*3,1))*100));
+      const low = isIngLow(ing);
+      const pct = Math.min(100, Math.round((ing.stock / ingCapacity(ing)) * 100));
       ingHTML += `<tr>
         <td class="fw-bold">${ing.name}</td>
         <td>${ing.unit}</td>
@@ -2685,7 +2717,7 @@ function renderInventory(){
             <div class="stock-label">${ing.stock} ${ing.unit}</div>
           </div>
         </td>
-        <td>${ing.threshold} ${ing.unit}</td>
+        <td>${ingThresholdPct(ing)}% <small style="color:var(--text-2)">(${ingThresholdQty(ing)} ${ing.unit})</small></td>
         <td><span class="pill ${low?'low':'ok'}">${low?'Low Stock':'OK'}</span></td>
         <td>
           <div class="td-actions">
@@ -2718,20 +2750,20 @@ function renderInventory(){
 /* Enough to get back above the threshold with room to spare, rounded to
    something a supplier would actually sell. */
 function suggestedRestockQty(ing){
-  const target = Math.max(ing.threshold * 2, ing.threshold + 1);
-  const needed = Math.max(target - ing.stock, ing.threshold);
+  const target = ingCapacity(ing);
+  const needed = Math.max(target - ing.stock, 1);
   const step   = ing.unit === 'pcs' ? 1 : 50;
   return Math.ceil(needed / step) * step;
 }
 
 function restockPriority(ing){
   if(ing.stock <= 0) return 'Out of stock';
-  if(ing.stock <= ing.threshold * 0.5) return 'Urgent';
+  if(ing.stock <= ingThresholdQty(ing) * 0.5) return 'Urgent';
   return 'Low';
 }
 
 function lowIngredients(){
-  return DB.ingredients.filter(i => i.stock <= i.threshold);
+  return DB.ingredients.filter(isIngLow);
 }
 
 function openRestockForm(){
@@ -2744,7 +2776,9 @@ function restockLineFor(ing){
     name:         ing.name,
     currentStock: ing.stock,
     unit:         ing.unit,
-    threshold:    ing.threshold,
+    threshold:    ingThresholdQty(ing),
+    thresholdPct: ingThresholdPct(ing),
+    capacity:     ingCapacity(ing),
     suggestedQty: suggestedRestockQty(ing),
     priority:     restockPriority(ing)
   };
@@ -2763,7 +2797,7 @@ async function syncRestockForm(){
 
   /* Forget anything that's healthy again, so if it runs low in future
      the admin is asked afresh rather than never hearing about it. */
-  DB.ingredients.forEach(i => { if(i.stock > i.threshold) _restockAsked.delete(i.id); });
+  DB.ingredients.forEach(i => { if(!isIngLow(i)) _restockAsked.delete(i.id); });
 
   // Keep an open form's figures current — no prompt, nothing new added
   let refreshed = false;
@@ -3091,8 +3125,12 @@ function openIngredientModal(id){
   document.getElementById('ing-name').value      = ing?.name||'';
   document.getElementById('ing-unit').value      = ing?.unit||'g';
   document.getElementById('ing-stock').value     = ing?.stock||'';
-  document.getElementById('ing-threshold').value = ing?.threshold||'';
+  /* Existing rows have no capacity stored — derive one so the slider
+     opens on the equivalent of their current absolute threshold. */
+  document.getElementById('ing-capacity').value      = ing ? ingCapacity(ing) : '';
+  document.getElementById('ing-threshold-pct').value = ing ? ingThresholdPct(ing) : 30;
   document.getElementById('ing-category').value  = ing?.category||'General';
+  updateThresholdPreview();
   const roStyle = 'background:var(--bg-2,#f8f9fb);cursor:not-allowed;opacity:0.6;pointer-events:none';
   ['ing-name','ing-unit','ing-category','ing-stock'].forEach(elId => {
     const el = document.getElementById(elId);
@@ -3102,20 +3140,47 @@ function openIngredientModal(id){
   openModal('ingredient-modal');
 }
 
-function saveIngredient(){
-  const id   = document.getElementById('ing-id').value;
-  const name = document.getElementById('ing-name').value.trim();
+/* Shows what the chosen percentage works out to in real units, so the
+   slider isn't an abstraction. */
+function updateThresholdPreview(){
+  const cap  = parseFloat(document.getElementById('ing-capacity').value) || 0;
+  const pct  = parseInt(document.getElementById('ing-threshold-pct').value) || 0;
   const unit = document.getElementById('ing-unit').value;
-  const stock= parseFloat(document.getElementById('ing-stock').value);
-  const thr  = parseFloat(document.getElementById('ing-threshold').value);
-  const cat  = document.getElementById('ing-category').value;
-  if(!name||isNaN(stock)||isNaN(thr)){ toast('Fill all fields','danger'); return; }
+  const out  = document.getElementById('ing-threshold-readout');
+  if(!out) return;
+  const qty = Math.round(cap * pct / 100);
+  out.innerHTML = cap > 0
+    ? `${pct}% &nbsp;<span style="color:var(--text-2);font-weight:500">= ${qty} ${unit}</span>`
+    : `${pct}% <span style="color:var(--text-2);font-weight:500">— set a full level</span>`;
+}
+
+function saveIngredient(){
+  const id    = document.getElementById('ing-id').value;
+  const name  = document.getElementById('ing-name').value.trim();
+  const unit  = document.getElementById('ing-unit').value;
+  const stock = parseFloat(document.getElementById('ing-stock').value);
+  const cap   = parseFloat(document.getElementById('ing-capacity').value);
+  const pct   = parseInt(document.getElementById('ing-threshold-pct').value);
+  const cat   = document.getElementById('ing-category').value;
+
+  if(!name || isNaN(stock)){ toast('Fill all fields','danger'); return; }
+  if(isNaN(cap) || cap <= 0){ toast('Set the full stock level','danger'); return; }
+
+  /* threshold is kept in sync as a plain quantity so anything reading it
+     directly — reports, exports — still gets a usable number. */
+  const fields = {
+    name, unit, stock, category: cat,
+    capacity:     cap,
+    thresholdPct: pct,
+    threshold:    Math.round(cap * pct / 100)
+  };
+
   if(id){
     const idx = DB.ingredients.findIndex(i=>i.id===id);
-    DB.ingredients[idx] = {...DB.ingredients[idx], name, unit, stock, threshold:thr, category:cat};
+    DB.ingredients[idx] = {...DB.ingredients[idx], ...fields};
     toast('Ingredient updated','success');
   } else {
-    DB.ingredients.push({id:'i'+Date.now(), name, unit, stock, threshold:thr, category:cat});
+    DB.ingredients.push({ id:'i'+Date.now(), ...fields });
     toast('Ingredient added','success');
   }
   saveDB(); closeModal('ingredient-modal'); renderInventory(); updateBadges();
@@ -3396,7 +3461,7 @@ function renderIngHistory(){
     const ing = DB.ingredients.find(i=>i.name===s.name);
     const stock = ing ? ing.stock : '—';
     const unit  = ing ? ing.unit  : s.unit;
-    const low   = ing && ing.stock <= ing.threshold;
+    const low   = ing && isIngLow(ing);
     return `<tr>
       <td class="fw-bold">${s.name}</td>
       <td>${unit}</td>
@@ -3859,7 +3924,7 @@ function toggleUser(id){
    ============================================= */
 function getLowStockItems(){
   const lowP = DB.products.filter(p => p.active && Math.max(0,(p.dailyLimit||0)-(p.soldToday||0)) <= (p.threshold||0));
-  const lowI = DB.ingredients.filter(i => i.stock <= i.threshold);
+  const lowI = DB.ingredients.filter(isIngLow);
   return [...lowP, ...lowI];
 }
 
@@ -3884,7 +3949,7 @@ function buildNotifs(){
   });
 
   // Low stock ingredients
-  DB.ingredients.filter(i=>i.stock<=i.threshold).forEach(ing=>{
+  DB.ingredients.filter(isIngLow).forEach(ing=>{
     const id = `ingredient_${ing.id||ing.name}`;
     if(seen.has(id)) return;
     notifList.push({ id, icon:'bx-error-circle', color:'#EA580C',

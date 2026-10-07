@@ -812,12 +812,22 @@
       <div class="form-row">
         <div class="form-group">
           <label>Current Stock *</label>
-          <input type="number" id="ing-stock" placeholder="0" min="0">
+          <input type="number" id="ing-stock" placeholder="0" min="0" oninput="updateThresholdPreview()">
         </div>
         <div class="form-group">
-          <label>Low Stock Threshold *</label>
-          <input type="number" id="ing-threshold" placeholder="5" min="0">
+          <label>Full Stock Level *</label>
+          <input type="number" id="ing-capacity" placeholder="0" min="1" oninput="updateThresholdPreview()">
+          <small style="font-size:11px;color:var(--text-2)">A full shelf of this ingredient</small>
         </div>
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Low Stock Threshold *</label>
+        <div style="display:flex;align-items:center;gap:10px">
+          <input type="range" id="ing-threshold-pct" min="5" max="80" step="5" value="30"
+                 oninput="updateThresholdPreview()" style="flex:1">
+          <span id="ing-threshold-readout" style="min-width:150px;font-size:13px;font-weight:600;white-space:nowrap"></span>
+        </div>
+        <small style="font-size:11px;color:var(--text-2)">Warn when stock falls to this share of a full shelf</small>
       </div>
       <div class="form-group">
         <label>Category</label>
