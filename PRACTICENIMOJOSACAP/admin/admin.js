@@ -2699,7 +2699,7 @@ function renderInventory(){
     });
   });
   document.getElementById('ingredients-body').innerHTML = ingHTML;
-  renderSupplierOrders();
+  syncRestockForm().then(renderSupplierOrders);
 }
 
 function openOrderStockModal(ingId){
@@ -2716,154 +2716,294 @@ function openOrderStockModal(ingId){
 }
 
 /* ═══════════════════════════════════════════
-   SUPPLIER ORDERS
-   Place an order for more of an ingredient, then mark it received when
-   the delivery turns up — which adds the quantity to stock and records
-   it in the stock log, same as any other movement.
+   RESTOCK ORDER FORMS
+   When any ingredient falls to or below its threshold, a Restock Order
+   Form is raised automatically listing everything that is low, with a
+   suggested quantity for each. The form is a document to review, print
+   and hand to a supplier — it does not move stock. Stock changes when
+   someone adjusts it, which keeps the count honest about what is
+   actually on the shelf.
 
-   Nothing is emailed or sent anywhere: this tracks what has been
-   ordered so the restock loop can be followed end to end.
+   One open form at a time. While it is open, new shortages are added to
+   it rather than raising a second form, so a supplier gets one list
+   instead of a trickle.
    ═══════════════════════════════════════════ */
 
-async function placeSupplierOrder(){
-  const name     = document.getElementById('os-ing-name').value;
-  const qty      = parseFloat(document.getElementById('os-qty').value) || 0;
-  const supplier = document.getElementById('os-supplier').value.trim();
-  const expected = document.getElementById('os-date').value;
-  const notes    = document.getElementById('os-notes').value.trim();
+/* Enough to get back above the threshold with room to spare, rounded to
+   something a supplier would actually sell. */
+function suggestedRestockQty(ing){
+  const target = Math.max(ing.threshold * 2, ing.threshold + 1);
+  const needed = Math.max(target - ing.stock, ing.threshold);
+  const step   = ing.unit === 'pcs' ? 1 : 50;
+  return Math.ceil(needed / step) * step;
+}
+
+function restockPriority(ing){
+  if(ing.stock <= 0) return 'Out of stock';
+  if(ing.stock <= ing.threshold * 0.5) return 'Urgent';
+  return 'Low';
+}
+
+function lowIngredients(){
+  return DB.ingredients.filter(i => i.stock <= i.threshold);
+}
+
+function openRestockForm(){
+  return (DB.supplierOrders || []).find(f => f.status === 'Open') || null;
+}
+
+/* Raise a form, or top up the open one, whenever something is low.
+   Called on every inventory render, so it keeps pace with stock. */
+async function syncRestockForm(){
+  const low = lowIngredients();
+  if(!low.length) return;
+
+  const lineFor = ing => ({
+    ingId:        ing.id,
+    name:         ing.name,
+    currentStock: ing.stock,
+    unit:         ing.unit,
+    threshold:    ing.threshold,
+    suggestedQty: suggestedRestockQty(ing),
+    priority:     restockPriority(ing)
+  });
+
+  let form = openRestockForm();
+  let changed = false;
+
+  if(!form){
+    form = {
+      id:        'RF-' + Date.now(),
+      date:      new Date().toISOString(),
+      status:    'Open',
+      reference: 'RF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Date.now()).slice(-4),
+      items:     low.map(lineFor),
+      raisedBy:  'System — low stock'
+    };
+    DB.supplierOrders.unshift(form);
+    changed = true;
+  } else {
+    low.forEach(ing => {
+      const existing = form.items.find(l => l.ingId === ing.id);
+      if(!existing){ form.items.push(lineFor(ing)); changed = true; }
+      else if(existing.currentStock !== ing.stock){
+        // Keep the figures current while the form is still open
+        existing.currentStock = ing.stock;
+        existing.suggestedQty = suggestedRestockQty(ing);
+        existing.priority     = restockPriority(ing);
+        changed = true;
+      }
+    });
+  }
+
+  if(!changed) return;
+
+  const { error } = await _supa.from('supplier_orders')
+    .upsert({ id: form.id, date: form.date, data: form }, { onConflict: 'id' });
+  if(error) console.error('could not save the restock form:', error);
+}
+
+/* Manual path: add something to the form that isn't low yet — a bulk
+   order coming up, or an item you know you'll need. */
+async function addToRestockForm(){
+  const name = document.getElementById('os-ing-name').value;
+  const qty  = parseFloat(document.getElementById('os-qty').value) || 0;
+  const note = document.getElementById('os-notes').value.trim();
 
   if(qty <= 0){ toast('Enter how much to order', 'danger'); return; }
-  if(!supplier){ toast('Enter the supplier name', 'danger'); return; }
 
   const ing = DB.ingredients.find(i => i.name === name);
   if(!ing){ toast('Ingredient not found', 'danger'); return; }
 
-  const order = {
-    id:        'PO-' + Date.now(),
-    date:      new Date().toISOString(),
-    ingId:     ing.id,
-    ingName:   ing.name,
-    unit:      ing.unit,
-    qty,
-    supplier,
-    expected:  expected || null,
-    notes,
-    status:    'Ordered',
-    orderedBy: `${currentUser.fname} ${currentUser.lname}`.trim()
-  };
+  let form = openRestockForm();
+  if(!form){
+    form = {
+      id:        'RF-' + Date.now(),
+      date:      new Date().toISOString(),
+      status:    'Open',
+      reference: 'RF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Date.now()).slice(-4),
+      items:     [],
+      raisedBy:  `${currentUser.fname} ${currentUser.lname}`.trim()
+    };
+    DB.supplierOrders.unshift(form);
+  }
 
-  DB.supplierOrders.unshift(order);
+  const existing = form.items.find(l => l.ingId === ing.id);
+  if(existing){
+    existing.suggestedQty = qty;
+    existing.currentStock = ing.stock;
+    if(note) existing.note = note;
+  } else {
+    form.items.push({
+      ingId: ing.id, name: ing.name, currentStock: ing.stock, unit: ing.unit,
+      threshold: ing.threshold, suggestedQty: qty,
+      priority: restockPriority(ing), ...(note && { note })
+    });
+  }
+
   const { error } = await _supa.from('supplier_orders')
-    .upsert({ id: order.id, date: order.date, data: order }, { onConflict: 'id' });
+    .upsert({ id: form.id, date: form.date, data: form }, { onConflict: 'id' });
 
   if(error){
-    DB.supplierOrders = DB.supplierOrders.filter(o => o.id !== order.id);
-    console.error('supplier order failed:', error);
-    toast('Could not place the order: ' + error.message, 'danger');
+    console.error('could not update the restock form:', error);
+    toast('Could not add it to the form: ' + error.message, 'danger');
     return;
   }
 
   closeModal('order-stock-modal');
   renderInventory();
-  toast(`Ordered ${qty}${ing.unit} of ${ing.name} from ${supplier}`, 'success');
+  toast(`${ing.name} added to ${form.reference}`, 'success');
 }
 
-/* Delivery arrived — add it to stock and log the movement. */
-function receiveSupplierOrder(id){
-  const po = DB.supplierOrders.find(o => o.id === id);
-  if(!po || po.status === 'Received') return;
-
-  const ing = DB.ingredients.find(i => i.id === po.ingId);
-  if(!ing){ toast('That ingredient no longer exists', 'danger'); return; }
-
-  showConfirm({
-    title: 'Mark as received',
-    message: `Add ${po.qty}${po.unit} of ${po.ingName} to stock? Current stock is ${ing.stock}${ing.unit}.`,
-    okText: 'Received',
-    okClass: 'btn-primary',
-    icon: 'bx-package',
-    onConfirm: async () => {
-      const before = ing.stock;
-      ing.stock = before + po.qty;
-
-      logStock({
-        type: 'ingredient', itemId: ing.id, itemName: ing.name, unit: ing.unit,
-        op: 'add', before, after: ing.stock,
-        note: `Delivery from ${po.supplier}`, ref: po.id
-      });
-
-      po.status     = 'Received';
-      po.receivedAt = new Date().toISOString();
-
-      await _supa.from('supplier_orders')
-        .upsert({ id: po.id, date: po.date, data: po }, { onConflict: 'id' })
-        .then(({ error }) => { if(error) console.error('could not update supplier order:', error); });
-
-      saveDB(); renderInventory(); updateBadges();
-      toast(`${ing.name} restocked to ${ing.stock}${ing.unit}`, 'success');
-    }
-  });
-}
-
-function cancelSupplierOrder(id){
-  const po = DB.supplierOrders.find(o => o.id === id);
-  if(!po) return;
-
-  showConfirm({
-    title: 'Cancel this order',
-    message: `Cancel the order for ${po.qty}${po.unit} of ${po.ingName} from ${po.supplier}? Stock is not affected.`,
-    okText: 'Cancel order',
-    icon: 'bx-x-circle',
-    onConfirm: async () => {
-      po.status = 'Cancelled';
-      await _supa.from('supplier_orders')
-        .upsert({ id: po.id, date: po.date, data: po }, { onConflict: 'id' })
-        .then(({ error }) => { if(error) console.error('could not update supplier order:', error); });
-      renderInventory();
-      toast('Supplier order cancelled', 'success');
-    }
-  });
+/* Older records were one order per ingredient; show them as a one-line
+   form so nothing disappears from the history. */
+function formLines(f){
+  if(Array.isArray(f.items)) return f.items;
+  return [{
+    ingId: f.ingId, name: f.ingName, currentStock: null, unit: f.unit,
+    suggestedQty: f.qty, priority: '—'
+  }];
 }
 
 function renderSupplierOrders(){
   const box = document.getElementById('supplier-orders-body');
   if(!box) return;
 
-  const list = [...(DB.supplierOrders || [])]
-    .sort((a, b) => new Date(b.date) - new Date(a.date));
+  const list = [...(DB.supplierOrders || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  const pending = list.filter(o => o.status === 'Ordered');
+  const open = list.filter(f => f.status === 'Open').length;
   const badge = document.getElementById('po-pending-count');
-  if(badge){
-    badge.textContent = pending.length;
-    badge.style.display = pending.length ? '' : 'none';
-  }
+  if(badge){ badge.textContent = open; badge.style.display = open ? '' : 'none'; }
 
   if(!list.length){
-    box.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:22px;color:var(--text-2)">No supplier orders yet — use the cart button on any ingredient to order more.</td></tr>`;
+    box.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:22px;color:var(--text-2)">
+      No restock forms. One is raised automatically when an ingredient reaches its threshold.</td></tr>`;
     return;
   }
 
-  box.innerHTML = list.slice(0, 15).map(o => {
-    const pill = o.status === 'Received'  ? 'fulfilled'
-               : o.status === 'Cancelled' ? 'cancelled' : 'pending';
+  box.innerHTML = list.slice(0, 15).map(f => {
+    const lines = formLines(f);
+    const urgent = lines.filter(l => l.priority === 'Urgent' || l.priority === 'Out of stock').length;
+    const pill = f.status === 'Open' ? 'pending' : f.status === 'Cancelled' ? 'cancelled' : 'fulfilled';
     return `
       <tr>
-        <td class="fw-bold">${escHTML(o.ingName)}</td>
-        <td>${o.qty}${escHTML(o.unit)}</td>
-        <td>${escHTML(o.supplier)}</td>
-        <td>${o.expected ? fmtDate(o.expected) : '—'}</td>
-        <td>${fmtDate(o.date)}</td>
-        <td><span class="pill ${pill}">${o.status}</span></td>
+        <td class="fw-bold">${escHTML(f.reference || f.id)}</td>
+        <td>${lines.length} item${lines.length === 1 ? '' : 's'}${urgent ? ` <span class="cod-risk high">${urgent} urgent</span>` : ''}</td>
+        <td>${escHTML(lines.slice(0,3).map(l => l.name).join(', '))}${lines.length > 3 ? ` +${lines.length - 3} more` : ''}</td>
+        <td>${fmtDate(f.date)}</td>
+        <td><span class="pill ${pill}">${escHTML(f.status)}</span></td>
         <td>
           <div class="td-actions">
-            ${o.status === 'Ordered' ? `
-              <button class="btn-primary sm" onclick="receiveSupplierOrder('${o.id}')"><i class='bx bx-package'></i> Received</button>
-              <button class="btn-icon danger" title="Cancel order" onclick="cancelSupplierOrder('${o.id}')"><i class='bx bx-x'></i></button>` : ''}
+            <button class="btn-primary sm" onclick="viewRestockForm('${f.id}')"><i class='bx bx-file'></i> View form</button>
+            ${f.status === 'Open' ? `<button class="btn-icon danger" title="Close this form" onclick="closeRestockForm('${f.id}')"><i class='bx bx-check'></i></button>` : ''}
           </div>
         </td>
       </tr>`;
   }).join('');
+}
+
+/* Builds the printable document. */
+function viewRestockForm(id){
+  const f = (DB.supplierOrders || []).find(x => x.id === id);
+  if(!f) return;
+
+  const lines = formLines(f);
+  const generated = new Date(f.date);
+
+  document.getElementById('rf-body').innerHTML = `
+    <div class="rf-sheet" id="rf-sheet">
+      <div class="rf-bar"></div>
+      <div class="rf-org">SUGARLOOM PH — PINAGBUHATAN, PASIG CITY</div>
+      <h1 class="rf-title">Restock Order Form</h1>
+      <p class="rf-meta">
+        Form No: ${escHTML(f.reference || f.id)} &nbsp;|&nbsp;
+        Generated: ${fmtDateTime(f.date)} &nbsp;|&nbsp;
+        Status: ${escHTML(f.status)}
+      </p>
+
+      <table class="rf-table rf-supplier">
+        <thead><tr><th>Supplier / Store</th><th>Contact Person / Number</th><th>Required Delivery Date</th></tr></thead>
+        <tbody><tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr></tbody>
+      </table>
+
+      <div class="rf-section">Recommended Purchase List</div>
+      <p class="rf-note">Review the suggested quantities, then enter the final approved order quantity before sending or printing the form for the supplier.</p>
+
+      <table class="rf-table">
+        <thead>
+          <tr>
+            <th style="width:36px">No.</th>
+            <th>Item Description</th>
+            <th style="width:90px">Current Stock</th>
+            <th style="width:92px">Priority</th>
+            <th style="width:90px">Suggested Qty</th>
+            <th style="width:56px">Unit</th>
+            <th style="width:90px">Final Order Qty</th>
+            <th style="width:86px">Received Qty</th>
+            <th style="width:110px">Remarks</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lines.map((l, i) => `
+            <tr>
+              <td>${i + 1}</td>
+              <td class="fw-bold">${escHTML(l.name)}</td>
+              <td>${l.currentStock == null ? '—' : l.currentStock}</td>
+              <td>${l.priority === '—' ? '—' : `<span class="rf-pri ${l.priority === 'Low' ? 'low' : 'urgent'}">${escHTML(l.priority)}</span>`}</td>
+              <td>${l.suggestedQty}</td>
+              <td>${escHTML(l.unit || '')}</td>
+              <td></td><td></td><td></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+
+      <div class="rf-review">
+        <strong>MANAGEMENT REVIEW</strong><br>
+        Recommended quantities are system-generated planning guidance based on current stock against each item's threshold. The owner or manager retains final authority over the items, quantities, supplier, delivery arrangement and method of submission.
+      </div>
+
+      <div class="rf-signs">
+        <div><span></span>Prepared by</div>
+        <div><span></span>Checked by</div>
+        <div><span></span>Approved by</div>
+      </div>
+    </div>`;
+
+  openModal('restock-form-modal');
+}
+
+function printRestockForm(){
+  const sheet = document.getElementById('rf-sheet');
+  if(!sheet) return;
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>Restock Order Form</title>
+    <link rel="stylesheet" href="admin.css"></head>
+    <body style="background:#fff;padding:24px">${sheet.outerHTML}</body></html>`);
+  w.document.close();
+  setTimeout(() => { w.focus(); w.print(); }, 400);
+}
+
+/* Marks a form as dealt with, so the next shortage raises a fresh one. */
+function closeRestockForm(id){
+  const f = (DB.supplierOrders || []).find(x => x.id === id);
+  if(!f) return;
+
+  showConfirm({
+    title: 'Close this form',
+    message: `Mark ${f.reference || f.id} as sent? It stays in the history, and the next time something runs low a new form is raised.`,
+    okText: 'Mark as sent',
+    okClass: 'btn-primary',
+    icon: 'bx-check',
+    onConfirm: async () => {
+      f.status = 'Sent';
+      f.closedAt = new Date().toISOString();
+      const { error } = await _supa.from('supplier_orders')
+        .upsert({ id: f.id, date: f.date, data: f }, { onConflict: 'id' });
+      if(error) console.error('could not close the form:', error);
+      renderInventory();
+      toast('Form marked as sent', 'success');
+    }
+  });
 }
 
 function openAdjustStock(id, type){

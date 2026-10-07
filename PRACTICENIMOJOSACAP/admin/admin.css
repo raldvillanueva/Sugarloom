@@ -1543,3 +1543,74 @@ textarea { resize: vertical; }
 }
 .cod-risk.high  { background: var(--danger-light);  color: var(--danger); }
 .cod-risk.watch { background: var(--warning-light); color: var(--warning); }
+
+/* ============================
+   RESTOCK ORDER FORM (printable)
+   ============================ */
+.rf-sheet {
+  background: #fff;
+  color: #2b2b2b;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.rf-bar { height: 10px; background: #5B3A29; margin-bottom: 14px; }
+.rf-org {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  color: #8a5a3b; margin-bottom: 2px;
+}
+.rf-title {
+  font-size: 26px; font-weight: 700; color: #3b2317;
+  margin: 0 0 4px;
+}
+.rf-meta {
+  font-size: 11px; color: #8a5a3b;
+  margin: 0 0 16px; padding-bottom: 10px;
+  border-bottom: 1px solid #e4d7cd;
+}
+.rf-section {
+  background: #f6ece4; border: 1px solid #e4d7cd;
+  padding: 8px 12px; font-weight: 700; color: #3b2317;
+  margin-bottom: 8px;
+}
+.rf-note { font-size: 11px; color: #8a5a3b; margin: 0 0 10px; }
+
+.rf-table {
+  width: 100%; border-collapse: collapse; margin-bottom: 16px;
+}
+.rf-table th {
+  background: #5B3A29; color: #fff;
+  font-size: 10px; font-weight: 700; text-align: left;
+  padding: 8px 10px; border: 1px solid #5B3A29;
+}
+.rf-table td {
+  border: 1px solid #d9c9bc; padding: 8px 10px;
+  font-size: 11px; vertical-align: top;
+}
+.rf-supplier td { height: 34px; }
+
+.rf-pri {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 10px; font-weight: 700;
+}
+.rf-pri.urgent { background: #fde2e2; color: #c0392b; }
+.rf-pri.low    { background: #fdf0d5; color: #9c6b17; }
+
+.rf-review {
+  background: #faf4ef; border: 1px solid #e4d7cd;
+  padding: 10px 12px; font-size: 10.5px; color: #6b4a33;
+  margin-bottom: 26px;
+}
+.rf-signs {
+  display: flex; gap: 32px; justify-content: space-between;
+  text-align: center; font-size: 11px; color: #3b2317;
+}
+.rf-signs div { flex: 1; }
+.rf-signs span {
+  display: block; border-top: 1px solid #8a7265;
+  margin-bottom: 6px; height: 28px;
+}
+
+@media print {
+  .modal-header, .modal-footer { display: none !important; }
+  .rf-sheet { font-size: 11px; }
+}

@@ -440,13 +440,13 @@
         <div class="card">
           <div class="card-header">
             <h3>
-              Supplier Orders
+              Restock Order Forms
               <span class="badge" id="po-pending-count" style="display:none;background:#f59e0b;margin-left:6px">0</span>
             </h3>
-            <span style="font-size:12px;color:var(--text-2)">Mark an order received to add it to stock</span>
+            <span style="font-size:12px;color:var(--text-2)">Raised automatically when an ingredient reaches its threshold</span>
           </div>
           <table class="data-table">
-            <thead><tr><th>Ingredient</th><th>Qty</th><th>Supplier</th><th>Expected</th><th>Ordered</th><th>Status</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Form No.</th><th>Items</th><th>Covering</th><th>Raised</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody id="supplier-orders-body"></tbody>
           </table>
         </div>
@@ -875,11 +875,26 @@
   </div>
 </div>
 
+<!-- Restock Order Form viewer -->
+<div class="modal-overlay hidden" id="restock-form-modal">
+  <div class="modal lg">
+    <div class="modal-header">
+      <h3><i class='bx bx-file' style="margin-right:6px;color:#2563EB"></i>Restock Order Form</h3>
+      <button class="modal-close" onclick="closeModal('restock-form-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body" id="rf-body"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('restock-form-modal')">Close</button>
+      <button class="btn-primary" onclick="printRestockForm()"><i class='bx bx-printer'></i> Print / Save as PDF</button>
+    </div>
+  </div>
+</div>
+
 <!-- Order Stock Modal -->
 <div class="modal-overlay hidden" id="order-stock-modal">
   <div class="modal sm">
     <div class="modal-header">
-      <h3><i class='bx bx-cart-add' style="margin-right:6px;color:#2563EB"></i>Order Stock from Supplier</h3>
+      <h3><i class='bx bx-cart-add' style="margin-right:6px;color:#2563EB"></i>Add to Restock Form</h3>
       <button class="modal-close" onclick="closeModal('order-stock-modal')"><i class='bx bx-x'></i></button>
     </div>
     <div class="modal-body">
@@ -895,7 +910,7 @@
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Qty to Order</label>
+          <label>Suggested Qty</label>
           <input type="number" id="os-qty" placeholder="0" min="1">
         </div>
         <div class="form-group">
@@ -918,7 +933,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('order-stock-modal')">Cancel</button>
-      <button class="btn-primary" onclick="placeSupplierOrder()"><i class='bx bx-cart-add'></i> Place Order</button>
+      <button class="btn-primary" onclick="addToRestockForm()"><i class='bx bx-list-plus'></i> Add to restock form</button>
     </div>
   </div>
 </div>
