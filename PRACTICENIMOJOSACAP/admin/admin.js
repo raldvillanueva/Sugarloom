@@ -1746,6 +1746,10 @@ function filterIngCat(cat, btn){
 }
 
 function openOrderModal(id, viewOnly=false){
+  {
+    const _o = DB.orders.find(oo => oo.id === id);
+    if(_o) logRead('Orders', 'Order details viewed', `${_o.id} — ${_o.customer || 'Customer'}`, '');
+  }
   currentOrderId = id;
   const o = DB.orders.find(oo=>oo.id===id);
   document.getElementById('order-modal-title').textContent = 'Order '+o.id;
@@ -3281,7 +3285,7 @@ function renderRestockDocument(f){
   const urgent = lines.filter(l => l.priority === 'Urgent' || l.priority === 'Out of stock').length;
 
   document.getElementById('rf-body').innerHTML = `
-    <div class="rf-sheet" id="rf-sheet">
+    <div class="rf-sheet" id="rf-sheet" data-ref="${escHTML(f.reference || f.id)}">
 
       <header class="rf-head">
         <div class="rf-brand">
@@ -3380,6 +3384,7 @@ function renderRestockDocument(f){
 function printRestockForm(){
   const sheet = document.getElementById('rf-sheet');
   if(!sheet) return;
+  logAudit('Inventory', 'Restock form printed', sheet.dataset.ref || 'Restock order form', '');
   /* Absolute URL — a relative one would resolve against about:blank in
      the new window and the sheet would print unstyled. */
   const cssHref = new URL('admin.css', location.href).href;
@@ -3664,6 +3669,8 @@ function renderSalesHistory(){ renderSalesHistoryFiltered(); }
 
 function exportSalesHistoryCSV(){
   const rows = buildDailySummaries();
+  logAudit('Reports', 'Sales history exported', 'Daily sales summary',
+           `${rows.length} day${rows.length === 1 ? '' : 's'}`);
   const headers = ['Date','Revenue (₱)','Transactions','Items Sold','Avg. Order Value (₱)','Top Product'];
   const data = rows.map(r=>[r.date, r.revenue, r.transactions, r.itemsSold, r.avg, r.topProduct]);
   const csv = [headers, ...data].map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -3765,6 +3772,8 @@ function renderIngHistory(){
 function exportIngHistoryCSV(){
   if(!DB.stockLog) return;
   const rows = [...DB.stockLog].filter(l=>l.type==='ingredient').sort((a,b)=>new Date(b.date)-new Date(a.date));
+  logAudit('Inventory', 'Ingredient history exported', 'Stock movements',
+           `${rows.length} row${rows.length === 1 ? '' : 's'}`);
   const headers = ['Date','Ingredient','Operation','Before','Change','After','Unit','Reference','Note'];
   const data = rows.map(r=>[fmtDateTime(r.date), r.itemName, r.op, r.before, r.change, r.after, r.unit, r.ref||'', r.note||'']);
   const csv = [headers, ...data].map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -3960,6 +3969,9 @@ function renderBestSellers(txs){
 
 function exportCSV(){
   const txs = getFilteredTxs();
+  logAudit('Reports', 'Transactions exported', 'Transaction history',
+           `${txs.length} row${txs.length === 1 ? '' : 's'}` +
+           (rangeIsSet(reportRange) ? ` · ${reportRange.from || 'start'} to ${reportRange.to || 'today'}` : ' · all time'));
   const rows = [['Tx ID','Customer','Items','Payment','Total','Date']];
   txs.forEach(t=>rows.push([t.id,t.customer,t.items.map(i=>i.name+' x'+i.qty).join('; '),t.payment||'',t.total,fmtDateTime(t.date)]));
   const csv = rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
@@ -4071,6 +4083,7 @@ function renderCustomers(){
 }
 
 function viewCustomer(email){
+  logRead('Customers', 'Customer record viewed', email, 'Name, phone, address and order history');
   const storeUsers = JSON.parse(localStorage.getItem('sl_users')) || [];
   const u = storeUsers.find(x => x.email.toLowerCase() === email.toLowerCase());
 
@@ -4138,6 +4151,7 @@ function viewCustomer(email){
 }
 
 function viewCustomerReviews(email){
+  logRead('Customers', 'Customer reviews viewed', email, '');
   const storeUsers = JSON.parse(localStorage.getItem('sl_users')) || [];
   const u = storeUsers.find(x => x.email.toLowerCase() === email.toLowerCase());
   const name = u ? (u.fname + ' ' + u.lname).trim() || email : email;
@@ -4335,10 +4349,56 @@ async function logAudit(area, action, entity, detail){
   }
 }
 
+/* ── READ EVENTS ──
+   Changes are the obvious thing to record, but who *looked* is the other
+   half of a trail. A customer's address and phone number can be read
+   without anything being modified, and an export takes the data out of
+   the system altogether — neither leaves a mark if only writes are
+   logged.
+
+   Not every read, though. Rendering a list is not an access decision,
+   and a line per render would bury the entries that matter under
+   thousands that do not. What is recorded is someone deliberately
+   opening one record, or taking data out. Reopening the same record is
+   folded together for READ_WINDOW_MS, so working an order through the
+   queue does not write a line every time it is looked at.
+
+   Exports are never folded: each one is a separate copy of the data
+   leaving, and that is exactly the thing worth counting. */
+const READ_WINDOW_MS = 10 * 60 * 1000;
+const _readSeen = new Map();
+
+function logRead(area, action, entity, detail){
+  const key  = `${(currentUser || {}).id}|${area}|${action}|${entity}`;
+  const now  = Date.now();
+  const last = _readSeen.get(key);
+  if(last && now - last < READ_WINDOW_MS) return;
+  _readSeen.set(key, now);
+  return logAudit(area, action, entity, detail);
+}
+
+/* ── RETENTION ──
+   How long entries are kept. The panel cannot enforce this itself, by
+   design: audit_log grants insert and select and nothing else, so the
+   browser has no way to delete a row. Enforcement belongs to the
+   database, where supabase-audit-log.sql installs a scheduled purge.
+
+   What the panel does is state the policy and say when something is
+   past it, so a trail that has quietly stopped being purged shows up
+   rather than being assumed. */
+const AUDIT_RETENTION_DAYS = 365;
+
+function auditRetentionCutoff(){
+  const d = new Date();
+  d.setDate(d.getDate() - AUDIT_RETENTION_DAYS);
+  return d;
+}
+
 /* Re-read from Supabase when the view is opened, so a Super Admin sees
    what other staff have done since the page was loaded — the log is the
    one view where stale data would defeat the purpose. */
 async function refreshAudit(){
+  logRead('Access', 'Audit trail viewed', 'Activity log', '');
   if(!auditUnavailable){
     const { data, error } = await _supa.from('audit_log')
       .select('date, data').order('date', { ascending: false }).limit(500);
@@ -4423,6 +4483,8 @@ function renderAudit(){
     return;
   }
 
+  renderAuditRetention(all);
+
   body.innerHTML = rows.map(r => `
     <tr>
       <td style="white-space:nowrap">${isNaN(new Date(r.at)) ? '<span style="color:var(--text-3)">—</span>' : fmtDateTime(r.at)}</td>
@@ -4437,6 +4499,33 @@ function renderAudit(){
     </tr>`).join('');
 }
 
+/* States the retention policy, and flags a purge that is not running.
+   Entries older than the policy are not an error in themselves — the
+   scheduled job runs once a day — but a growing pile of them means it
+   has stopped, and silence about that is how a retention policy becomes
+   a sentence in a document rather than something that happens. */
+function renderAuditRetention(all){
+  const el = document.getElementById('audit-retention');
+  if(!el) return;
+
+  const cutoff = auditRetentionCutoff();
+  const dated  = all.map(r => new Date(r.at)).filter(d => !isNaN(d));
+  const oldest = dated.length ? new Date(Math.min(...dated)) : null;
+  const stale  = dated.filter(d => d < cutoff).length;
+
+  const months = Math.round(AUDIT_RETENTION_DAYS / 30);
+  el.innerHTML = `
+    <i class='bx bx-shield-quarter'></i>
+    <span>
+      Kept for <strong>${AUDIT_RETENTION_DAYS} days</strong> (about ${months} months), then purged by the
+      database on a daily schedule. The panel cannot delete an entry, which is why the purge lives there.
+      ${oldest ? `Oldest entry held: <strong>${fmtDate(oldest)}</strong>.` : ''}
+    </span>
+    ${stale ? `<span class="audit-retention-warn">${stale} entr${stale === 1 ? 'y is' : 'ies are'} past retention —
+       the scheduled purge may not be running. See supabase-audit-log.sql.</span>` : ''}`;
+  el.classList.toggle('overdue', stale > 0);
+}
+
 function auditRolePill(role){
   if(role === 'Super Admin')   return 'cancelled';
   if(role === 'Administrator') return 'confirmed';
@@ -4448,6 +4537,8 @@ function auditRolePill(role){
 function exportAuditCSV(){
   const rows = auditFiltered();
   if(!rows.length){ toast('Nothing to export for this filter', ''); return; }
+  logAudit('Access', 'Audit trail exported', 'Activity log',
+           `${rows.length} entr${rows.length === 1 ? 'y' : 'ies'}`);
 
   const headers = ['When','Who','Role','Email','Area','Action','Item','Details'];
   const data = rows.map(r => [fmtDateTime(r.at), r.actorName, r.actorRole, r.actorEmail,

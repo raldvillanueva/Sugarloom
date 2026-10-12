@@ -90,7 +90,21 @@ The two senior roles divide rather than overlap.
 - **Baker**, **Packer** — Orders only.
 
 Every recorded action goes through `logAudit(area, action, entity,
-detail)`. It writes straight to `audit_log` rather than through
+detail)`, and deliberate reads through `logRead(...)`, which is the same
+thing folded over a ten-minute window per actor/record so working an
+order through the queue does not write forty lines. Reads cover opening
+one customer's details or reviews, opening an order, and viewing the
+trail; exports and prints are logged through `logAudit` directly and are
+never folded, since each one is a separate copy of the data leaving.
+
+Retention is 365 days (`AUDIT_RETENTION_DAYS`), enforced by
+`purge_audit_log()` on a daily pg_cron schedule in
+`supabase-audit-log.sql` — not by the panel, which has no delete policy
+and so cannot remove a row. Keep the two numbers in step; the page
+states the constant and the database applies the SQL. The page flags
+entries past retention, so a purge that has stopped is visible.
+
+Both write straight to `audit_log` rather than through
 `saveDB()`, which upserts whole tables from memory — an entry the next
 save could rewrite is not an audit entry. A failed write is logged to
 the console and never blocks the action it describes. If the table is

@@ -464,6 +464,20 @@ textarea { resize: vertical; }
 .hist-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
 .hist-filter-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
 
+/* The retention policy, stated under the log it governs. */
+.audit-retention {
+  display: flex; align-items: flex-start; gap: 8px; flex-wrap: wrap;
+  margin-top: 14px; padding: 10px 12px;
+  background: var(--bg-2, #f5f3ee);
+  border-radius: 8px;
+  font-size: 12px; line-height: 1.55; color: var(--text-2);
+}
+.audit-retention i { font-size: 15px; color: var(--text-3); flex-shrink: 0; margin-top: 1px; }
+.audit-retention span { flex: 1; min-width: 220px; }
+.audit-retention.overdue { background: #FEF3C7; color: #78350F; }
+.audit-retention.overdue i { color: #B45309; }
+.audit-retention-warn { font-weight: 600; color: #92400E; }
+
 /* Dropdown filters in a filter bar, sized to match the date inputs. */
 .audit-select {
   border: 1px solid var(--border);

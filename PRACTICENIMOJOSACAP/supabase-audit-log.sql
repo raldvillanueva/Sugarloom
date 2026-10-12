@@ -63,6 +63,59 @@ create policy "audit: read"
 
 
 -- ══════════════════════════════════════════════════════════════
+--  RETENTION — 365 days
+--
+--  The panel deliberately cannot delete an audit row: the policies
+--  above grant insert and select and nothing else. That is what makes
+--  the trail trustworthy, and it is also why retention cannot be
+--  enforced from the browser. It has to happen here.
+--
+--  Keep this number the same as AUDIT_RETENTION_DAYS in admin/admin.js,
+--  which is what the Audit Trail page tells staff. If the two drift,
+--  the page states a policy that is not the one being applied.
+-- ══════════════════════════════════════════════════════════════
+
+create or replace function purge_audit_log()
+returns integer
+language plpgsql
+security definer           -- runs as the owner, so RLS does not block the delete
+set search_path = public
+as $$
+declare
+  removed integer;
+begin
+  delete from audit_log
+  where date < now() - interval '365 days';
+  get diagnostics removed = row_count;
+  return removed;
+end;
+$$;
+
+-- Nobody using the anon key should be able to call this. Only the
+-- scheduler and the project owner.
+revoke all on function purge_audit_log() from public, anon, authenticated;
+
+
+-- ── Run it daily ──
+-- pg_cron is available on Supabase but off by default. Enable it under
+-- Database → Extensions, or with the line below, then schedule the job.
+-- If your plan does not offer pg_cron, run `select purge_audit_log();`
+-- by hand now and then — the Audit Trail page will tell you when
+-- entries are overdue, so you are not relying on memory alone.
+
+create extension if not exists pg_cron;
+
+select cron.unschedule('purge-audit-log')
+where exists (select 1 from cron.job where jobname = 'purge-audit-log');
+
+select cron.schedule(
+  'purge-audit-log',
+  '20 3 * * *',                      -- 03:20 every day
+  $$select purge_audit_log();$$
+);
+
+
+-- ══════════════════════════════════════════════════════════════
 --  CHECK IT WORKED
 --  Expect: rls_enabled = true, and exactly the two policies below.
 --  If you see a policy named "app access" with cmd = ALL, supabase-rls.sql
@@ -77,6 +130,9 @@ from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
 left join pg_policies p on p.schemaname = 'public' and p.tablename = c.relname
 where n.nspname = 'public' and c.relname = 'audit_log';
+
+-- And that the purge is scheduled. Expect one row, active = true.
+select jobname, schedule, active from cron.job where jobname = 'purge-audit-log';
 
 
 -- ══════════════════════════════════════════════════════════════
