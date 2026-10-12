@@ -73,19 +73,72 @@ const PRODUCT_RECIPES = {
    So staff accounts, the website copy and the audit trail sit with Super
    Admin alone. That is what makes the trail worth keeping — an
    administrator who could reach the log of their own actions, or grant
-   themselves a role, is not being audited by it. */
-const ROLE_VIEWS = {
-  'Super Admin':   ['customers', 'reports', 'content', 'users', 'audit'],
-  'Administrator': ['dashboard', 'products', 'orders', 'customers', 'inventory',
-                    'reports', 'messages', 'reviews'],
-  'Baker':         ['orders'],
-  'Packer':        ['orders']
+   themselves a role, is not being audited by it.
+
+   Each role gets its own sidebar: which items, in what order, under what
+   headings. The markup carries the Administrator's layout and
+   applyRoleNav() rearranges it, so a role's sidebar reads in the order
+   that suits it rather than in whatever order the HTML happens to be
+   written. An empty label means no heading, which is what the Baker and
+   Packer want with a single item. */
+const ROLE_NAV = {
+  'Super Admin': [
+    { label: 'OVERSIGHT', views: ['audit', 'reports', 'content', 'users', 'customers'] }
+  ],
+  'Administrator': [
+    { label: 'MAIN',       views: ['dashboard', 'products', 'orders', 'customers'] },
+    { label: 'MANAGEMENT', views: ['inventory', 'reports', 'messages', 'reviews'] }
+  ],
+  'Baker':  [{ label: '', views: ['orders'] }],
+  'Packer': [{ label: '', views: ['orders'] }]
 };
+
+/* Derived so the sidebar and the permission check can never disagree:
+   if it is not in the sidebar, the role cannot open it. */
+const ROLE_VIEWS = Object.fromEntries(
+  Object.entries(ROLE_NAV).map(([role, groups]) => [role, groups.flatMap(g => g.views)])
+);
 
 function allowedViews(role){ return ROLE_VIEWS[role] || ROLE_VIEWS['Administrator']; }
 function canView(view){ return !!currentUser && allowedViews(currentUser.role).includes(view); }
 function homeView(){ return allowedViews(currentUser && currentUser.role)[0]; }
 function isSuperAdmin(){ return !!currentUser && currentUser.role === 'Super Admin'; }
+
+/* Rebuilds the sidebar for whoever just signed in: hides everything the
+   role may not open, then appends what it may back in the role's own
+   order under the role's own headings. Appending an element that is
+   already in the container moves it, so no markup is duplicated and the
+   onclick handlers written in the HTML survive untouched. */
+function applyRoleNav(){
+  const nav = document.querySelector('.sidebar-nav');
+  if(!nav || !currentUser) return;
+
+  const groups = ROLE_NAV[currentUser.role] || ROLE_NAV['Administrator'];
+  const items  = new Map([...nav.querySelectorAll('.nav-item[data-view]')]
+                           .map(el => [el.dataset.view, el]));
+
+  /* Headings are thrown away and remade, since which ones a role needs —
+     and what they are called — is part of the role, not of the markup. */
+  nav.querySelectorAll('.sidebar-section-label').forEach(el => el.remove());
+  items.forEach(el => el.style.display = 'none');
+
+  groups.forEach(group => {
+    const present = group.views.filter(v => items.has(v));
+    if(!present.length) return;          // nothing to put under this heading
+
+    if(group.label){
+      const heading = document.createElement('div');
+      heading.className   = 'sidebar-section-label';
+      heading.textContent = group.label;
+      nav.appendChild(heading);
+    }
+    present.forEach(view => {
+      const el = items.get(view);
+      el.style.display = '';
+      nav.appendChild(el);
+    });
+  });
+}
 
 /* ---- SEED DATA ---- */
 const SEED = {
@@ -464,24 +517,7 @@ function showApp(){
   });
   const defaultTab = document.getElementById('tab-all');
   if(defaultTab) defaultTab.classList.add('active');
-  /* Show only what this role may open. One rule, read from ROLE_VIEWS,
-     rather than a list of roles to hide things from — adding a view or a
-     role used to mean remembering to update several places, and the item
-     that got forgotten was the one that leaked. */
-  document.querySelectorAll('.nav-item[data-view]').forEach(el => {
-    el.style.display = canView(el.dataset.view) ? '' : 'none';
-  });
-
-  /* A section heading with nothing left under it is just noise. MAIN sits
-     outside the <nav> and MANAGEMENT inside it, so walk the sidebar in
-     document order rather than by sibling. */
-  let label = null, labelHasItems = false;
-  const flushLabel = () => { if(label) label.style.display = labelHasItems ? '' : 'none'; };
-  document.querySelectorAll('.sidebar-section-label, .nav-item[data-view]').forEach(el => {
-    if(el.classList.contains('sidebar-section-label')){ flushLabel(); label = el; labelHasItems = false; }
-    else if(el.style.display !== 'none') labelHasItems = true;
-  });
-  flushLabel();
+  applyRoleNav();
 
   const isStaff = currentUser.role === 'Baker' || currentUser.role === 'Packer';
   const notifBtn = document.querySelector('.notif-btn');

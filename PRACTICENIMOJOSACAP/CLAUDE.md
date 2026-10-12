@@ -64,10 +64,17 @@ can send an order to the back or hand it back a step with a reason.
 
 ## Roles
 
-`ROLE_VIEWS` at the top of `admin.js` is the only place that decides who
-sees what. The sidebar, the landing view and `switchView()` all read it,
-so a role cannot be shown a nav item it may not open, or open a view
-whose nav item is hidden. To add a view to a role, add it there.
+`ROLE_NAV` at the top of `admin.js` is the only place that decides who
+sees what, in what order, under what headings. `ROLE_VIEWS` is derived
+from it, so the sidebar and the permission check cannot disagree: if it
+is not in the sidebar, the role cannot open it — not by clicking, not
+from the console. The landing view is each role's first item.
+
+`applyRoleNav()` rebuilds the sidebar on sign-in. The markup carries the
+Administrator's layout; other roles get their items moved into their own
+order and their headings remade, so a role's sidebar reads the way that
+role works rather than the way the HTML happens to be written. A group
+with an empty label gets no heading. To change a role, edit `ROLE_NAV`.
 
 The two senior roles divide rather than overlap.
 

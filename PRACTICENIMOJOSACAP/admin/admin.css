@@ -124,12 +124,17 @@ textarea { resize: vertical; }
 }
 .sidebar-logo i { font-size: 24px; }
 
+/* Sits inside .sidebar-nav alongside the items, so the 12px here lands
+   on the nav's own 12px and the heading lines up with the icons below
+   it. MAIN used to sit outside the nav and was indented differently
+   from MANAGEMENT because of it. */
 .sidebar-section-label {
   font-size: 10px; font-weight: 700;
   letter-spacing: .08em;
   color: var(--text-3);
-  padding: 16px 20px 6px;
+  padding: 16px 12px 6px;
 }
+.sidebar-section-label:first-child { padding-top: 8px; }
 
 .sidebar-nav {
   flex: 1;
