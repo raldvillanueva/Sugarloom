@@ -1505,6 +1505,92 @@ textarea { resize: vertical; }
 
 
 /* ============================
+   RESTOCK DRAFT — REVIEW & EDIT
+   Deliberately a working screen rather than a document: a draft is
+   something to change, so it reads as a form with inputs, not as
+   paper. The printed sheet below is what it becomes once sent.
+   ============================ */
+.rf-edit { font-size: 13px; }
+
+.rf-edit-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.rf-edit-head strong { display: block; font-size: 15px; }
+.rf-edit-head small  { color: var(--text-2); font-size: 12px; }
+
+.rf-edit-intro {
+  background: var(--bg-2, #f5f3ee);
+  border-left: 3px solid #EA580C;
+  border-radius: 0 8px 8px 0;
+  padding: 10px 12px;
+  color: var(--text-2);
+  line-height: 1.5;
+  margin-bottom: 14px;
+}
+
+.rf-edit-fields {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px; margin-bottom: 14px;
+}
+.rf-edit-fields label,
+.rf-edit-add label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 12px; font-weight: 600; color: var(--text-2);
+}
+.rf-edit-fields input,
+.rf-edit-add select {
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 9px; font-size: 13px; font-family: inherit;
+  background: var(--bg-card, #fff); color: var(--text-1); outline: none;
+}
+.rf-edit-fields input:focus,
+.rf-edit-add select:focus { border-color: var(--primary); }
+
+.rf-edit-table { width: 100%; border-collapse: collapse; }
+.rf-edit-table th {
+  text-align: left; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-3); padding: 8px 8px; border-bottom: 1px solid var(--border);
+}
+.rf-edit-table td {
+  padding: 8px; border-bottom: 1px solid var(--border); vertical-align: middle;
+}
+.rf-edit-table .num      { text-align: right; white-space: nowrap; }
+.rf-edit-table th.num    { text-align: right; }
+.rf-edit-table .muted    { color: var(--text-3); }
+.rf-edit-table .col-tick { width: 46px; text-align: center; }
+.rf-edit-table input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--primary); }
+
+/* An excluded line stays visible — seeing what you chose not to order
+   matters as much as seeing what you did. */
+.rf-row-off td { opacity: .45; }
+.rf-row-off .item strong { text-decoration: line-through; }
+
+.rf-qty {
+  width: 72px; text-align: right;
+  border: 1px solid var(--border); border-radius: 7px;
+  padding: 5px 7px; font-size: 13px; font-family: inherit;
+  background: var(--bg-card, #fff); color: var(--text-1); outline: none;
+}
+.rf-qty:focus     { border-color: var(--primary); }
+.rf-qty:disabled  { background: var(--bg-2, #f5f3ee); color: var(--text-3); }
+.rf-edit-table .u { color: var(--text-3); font-size: 11px; margin-left: 3px; }
+
+.rf-edit-add {
+  display: flex; align-items: flex-end; gap: 10px;
+  margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);
+}
+.rf-edit-add label { flex: 1; max-width: 340px; }
+
+.rf-edit-total {
+  margin-top: 12px; font-size: 12px; font-weight: 600; color: var(--text-2);
+}
+
+#rf-footer { display: flex; align-items: center; gap: 8px; }
+.btn-ghost.danger { color: var(--danger); }
+
+/* ============================
    RESTOCK ORDER FORM
    A document, not a dashboard panel: ruled table, aligned numerics,
    generous margins. SugarLoom's cream and pink, Playfair heading.

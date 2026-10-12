@@ -2880,11 +2880,18 @@ function lowIngredients(){
   return DB.ingredients.filter(isIngLow);
 }
 
-function openRestockForm(){
-  return (DB.supplierOrders || []).find(f => f.status === 'Open') || null;
+/* Forms raised before the draft/send split used status 'Open'. Read it
+   as 'Draft' so old records keep working rather than showing a status
+   that no longer means anything. */
+function restockStatus(f){ return f.status === 'Open' ? 'Draft' : (f.status || 'Draft'); }
+function isRestockDraft(f){ return restockStatus(f) === 'Draft'; }
+
+function draftRestockForm(){
+  return (DB.supplierOrders || []).find(isRestockDraft) || null;
 }
 
 function restockLineFor(ing){
+  const suggested = suggestedRestockQty(ing);
   return {
     ingId:        ing.id,
     name:         ing.name,
@@ -2893,28 +2900,39 @@ function restockLineFor(ing){
     threshold:    ingThresholdQty(ing),
     thresholdPct: ingThresholdPct(ing),
     capacity:     ingCapacity(ing),
-    suggestedQty: suggestedRestockQty(ing),
+    suggestedQty: suggested,
+    /* What will actually be ordered. Starts at the suggestion and is
+       the admin's to change — the suggestion is kept beside it so the
+       form shows what was advised as well as what was decided. */
+    orderQty:     suggested,
+    include:      true,
     priority:     restockPriority(ing)
   };
 }
 
-/* Shortages already put to the admin this session. Declining is
-   remembered so the prompt doesn't reappear on every render — it comes
-   back if that ingredient is restocked and later runs low again. */
-const _restockAsked = new Set();
+/* Older lines predate these two fields. */
+function rfOrderQty(l){ return l.orderQty == null ? (l.suggestedQty || 0) : l.orderQty; }
+function rfIncluded(l){ return l.include !== false; }
+function rfLinesToOrder(f){ return formLines(f).filter(rfIncluded); }
 
-/* Called on every inventory render. Nothing is raised without the
-   admin agreeing to it first. */
+/* Shortages the admin has already been told about this session, so the
+   alert fires once rather than on every render. Cleared for an
+   ingredient that recovers, so it alerts again if it runs low later. */
+const _restockAlerted = new Set();
+
+/* Called on every inventory render. A shortage raises a DRAFT and
+   alerts the admin — it is never sent anywhere on its own. The draft
+   is a proposal: the admin edits what is on it and how much, and
+   nothing counts as ordered until they confirm it. */
 async function syncRestockForm(){
-  const low  = lowIngredients();
-  const form = openRestockForm();
+  const low = lowIngredients();
+  let form  = draftRestockForm();
 
-  /* Forget anything that's healthy again, so if it runs low in future
-     the admin is asked afresh rather than never hearing about it. */
-  DB.ingredients.forEach(i => { if(!isIngLow(i)) _restockAsked.delete(i.id); });
+  DB.ingredients.forEach(i => { if(!isIngLow(i)) _restockAlerted.delete(i.id); });
 
-  // Keep an open form's figures current — no prompt, nothing new added
-  let refreshed = false;
+  /* Keep the draft's stock figures current while it sits unsent, but
+     never touch orderQty or include — those are the admin's. */
+  let changed = false;
   if(form){
     low.forEach(ing => {
       const line = form.items.find(l => l.ingId === ing.id);
@@ -2922,55 +2940,52 @@ async function syncRestockForm(){
         line.currentStock = ing.stock;
         line.suggestedQty = suggestedRestockQty(ing);
         line.priority     = restockPriority(ing);
-        refreshed = true;
+        changed = true;
       }
     });
-    if(refreshed) await saveRestockForm(form);
   }
 
-  // Anything low that isn't on the open form and hasn't been asked about
+  /* Anything low that is not already proposed. A line the admin removed
+     from the draft stays removed — removedIds remembers that decision,
+     so their edit is not undone by the next render. */
   const fresh = low.filter(ing =>
-    !_restockAsked.has(ing.id) && !(form && form.items.some(l => l.ingId === ing.id))
+    !(form && form.items.some(l => l.ingId === ing.id)) &&
+    !(form && (form.removedIds || []).includes(ing.id))
   );
-  if(!fresh.length) return;
 
-  fresh.forEach(ing => _restockAsked.add(ing.id));
-
-  const names = fresh.map(i => `${i.name} (${i.stock}${i.unit} left)`);
-  const list  = names.length <= 3
-    ? names.join(', ')
-    : `${names.slice(0,3).join(', ')} and ${names.length - 3} more`;
-
-  showConfirm({
-    title:   fresh.length === 1 ? 'An ingredient is running low' : `${fresh.length} ingredients are running low`,
-    message: form
-      ? `${list}. Add ${fresh.length === 1 ? 'it' : 'them'} to the open restock form ${form.reference}?`
-      : `${list}. Raise a restock order form so this can be ordered?`,
-    okText:  form ? 'Add to form' : 'Raise form',
-    okClass: 'btn-primary',
-    icon:    'bx-cart-add',
-    onConfirm: async () => {
-      let target = openRestockForm();
-      if(!target){
-        target = {
-          id:        'RF-' + Date.now(),
-          date:      new Date().toISOString(),
-          status:    'Open',
-          reference: 'RF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Date.now()).slice(-4),
-          items:     [],
-          raisedBy:  `${currentUser.fname} ${currentUser.lname}`.trim()
-        };
-        DB.supplierOrders.unshift(target);
-      }
-      fresh.forEach(ing => {
-        if(!target.items.some(l => l.ingId === ing.id)) target.items.push(restockLineFor(ing));
-      });
-
-      const ok = await saveRestockForm(target);
-      renderSupplierOrders();
-      if(ok) toast(`${target.reference} — ${target.items.length} item${target.items.length === 1 ? '' : 's'} to order`, 'success');
+  if(fresh.length){
+    if(!form){
+      form = {
+        id:        'RF-' + Date.now(),
+        date:      new Date().toISOString(),
+        status:    'Draft',
+        reference: 'RF-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + String(Date.now()).slice(-4),
+        items:     [],
+        removedIds: [],
+        supplier:  '', contact: '', neededBy: '',
+        raisedBy:  'System — low stock'
+      };
+      DB.supplierOrders.unshift(form);
     }
-  });
+    fresh.forEach(ing => form.items.push(restockLineFor(ing)));
+    changed = true;
+  }
+
+  if(changed) await saveRestockForm(form);
+
+  // Alert once per ingredient, wherever the admin happens to be
+  const toAlert = fresh.filter(ing => !_restockAlerted.has(ing.id));
+  if(toAlert.length){
+    toAlert.forEach(ing => _restockAlerted.add(ing.id));
+    const names = toAlert.map(i => i.name);
+    const list  = names.length <= 2 ? names.join(' and ')
+                : `${names.slice(0,2).join(', ')} and ${names.length - 2} more`;
+    toast(`${list} running low — restock form ${form.reference} is waiting for your review`, 'warning');
+    logAudit('Inventory', 'Restock draft raised', form.reference,
+             `${toAlert.length} ingredient${toAlert.length === 1 ? '' : 's'}: ${names.join(', ')}`);
+  }
+
+  if(changed) updateBadges();
 }
 
 async function saveRestockForm(form){
@@ -3000,44 +3015,288 @@ function renderSupplierOrders(){
 
   const list = [...(DB.supplierOrders || [])].sort((a,b) => new Date(b.date) - new Date(a.date));
 
-  const open = list.filter(f => f.status === 'Open').length;
+  const drafts = list.filter(isRestockDraft).length;
   const badge = document.getElementById('po-pending-count');
-  if(badge){ badge.textContent = open; badge.style.display = open ? '' : 'none'; }
+  if(badge){ badge.textContent = drafts; badge.style.display = drafts ? '' : 'none'; }
 
   if(!list.length){
     box.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:22px;color:var(--text-2)">
-      No restock forms. One is raised automatically when an ingredient reaches its threshold.</td></tr>`;
+      No restock forms. A draft is raised for you to review when an ingredient reaches its reorder point.</td></tr>`;
     return;
   }
 
   box.innerHTML = list.slice(0, 15).map(f => {
-    const lines = formLines(f);
+    const status = restockStatus(f);
+    const draft  = isRestockDraft(f);
+    const lines  = draft ? formLines(f) : rfLinesToOrder(f);
     const urgent = lines.filter(l => l.priority === 'Urgent' || l.priority === 'Out of stock').length;
-    const pill = f.status === 'Open' ? 'pending' : f.status === 'Cancelled' ? 'cancelled' : 'fulfilled';
+    const pill   = draft ? 'pending' : status === 'Cancelled' ? 'cancelled' : 'fulfilled';
     return `
       <tr>
         <td class="fw-bold">${escHTML(f.reference || f.id)}</td>
         <td>${lines.length} item${lines.length === 1 ? '' : 's'}${urgent ? ` <span class="cod-risk high">${urgent} urgent</span>` : ''}</td>
         <td>${escHTML(lines.slice(0,3).map(l => l.name).join(', '))}${lines.length > 3 ? ` +${lines.length - 3} more` : ''}</td>
         <td>${fmtDate(f.date)}</td>
-        <td><span class="pill ${pill}">${escHTML(f.status)}</span></td>
+        <td><span class="pill ${pill}">${escHTML(draft ? 'Awaiting review' : status)}</span></td>
         <td>
           <div class="td-actions">
-            <button class="btn-primary sm" onclick="viewRestockForm('${f.id}')"><i class='bx bx-file'></i> View form</button>
-            ${f.status === 'Open' ? `<button class="btn-icon danger" title="Close this form" onclick="closeRestockForm('${f.id}')"><i class='bx bx-check'></i></button>` : ''}
+            <button class="${draft ? 'btn-primary' : 'btn-secondary'} sm" onclick="viewRestockForm('${f.id}')">
+              <i class='bx bx-${draft ? 'edit' : 'file'}'></i> ${draft ? 'Review & send' : 'View form'}
+            </button>
           </div>
         </td>
       </tr>`;
   }).join('');
 }
 
-/* Builds the printable document. */
+/* A draft opens for review and editing; anything already sent opens as
+   the finished document. The same button does both, because "look at
+   the form" means a different thing before and after it goes out. */
 function viewRestockForm(id){
   const f = (DB.supplierOrders || []).find(x => x.id === id);
   if(!f) return;
+  if(isRestockDraft(f)) return openRestockEditor(f);
+  renderRestockDocument(f);
+}
 
-  const lines = formLines(f);
-  const generated = new Date(f.date);
+/* ── REVIEWING A DRAFT ──
+   Edits are held here and written once the admin saves or sends, so
+   closing the window without saving leaves the draft as it was. */
+let rfDraft = null;
+
+function openRestockEditor(f){
+  rfDraft = JSON.parse(JSON.stringify(f));
+  rfDraft.items = formLines(rfDraft).map(l => ({ ...l, orderQty: rfOrderQty(l), include: rfIncluded(l) }));
+  renderRestockEditor();
+  openModal('restock-form-modal');
+}
+
+function renderRestockEditor(){
+  const f = rfDraft;
+  if(!f) return;
+  const lines  = f.items;
+  const chosen = lines.filter(rfIncluded);
+
+  /* Ingredients not already proposed, so the admin can order something
+     that has not tripped its threshold — a bulk week, a new recipe. */
+  const spare = DB.ingredients
+    .filter(i => !lines.some(l => l.ingId === i.id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  document.getElementById('rf-body').innerHTML = `
+    <div class="rf-edit">
+      <div class="rf-edit-head">
+        <div>
+          <strong>${escHTML(f.reference || f.id)}</strong>
+          <small>Raised ${fmtDateTime(f.date)} · ${escHTML(f.raisedBy || 'System')}</small>
+        </div>
+        <span class="pill pending">Draft — not sent</span>
+      </div>
+
+      <p class="rf-edit-intro">
+        Raised automatically because these ingredients reached their reorder point.
+        Change the quantities, untick anything you are not ordering, or add something else.
+        Nothing is sent until you confirm it.
+      </p>
+
+      <div class="rf-edit-fields">
+        <label>Supplier / store
+          <input type="text" id="rf-supplier" value="${escHTML(f.supplier || '')}"
+                 placeholder="e.g. Pasig Baking Supply" oninput="rfField('supplier', this.value)">
+        </label>
+        <label>Contact person &amp; number
+          <input type="text" id="rf-contact" value="${escHTML(f.contact || '')}"
+                 placeholder="e.g. Aling Rosa — 0917 123 4567" oninput="rfField('contact', this.value)">
+        </label>
+        <label>Needed by
+          <input type="date" id="rf-needed" value="${escHTML(f.neededBy || '')}"
+                 onchange="rfField('neededBy', this.value)">
+        </label>
+      </div>
+
+      <table class="rf-edit-table">
+        <thead>
+          <tr>
+            <th class="col-tick">Order</th>
+            <th>Ingredient</th>
+            <th class="num">On hand</th>
+            <th class="num">Reorder at</th>
+            <th>Priority</th>
+            <th class="num">Suggested</th>
+            <th class="num">Order qty</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${lines.length ? lines.map((l, i) => `
+            <tr class="${rfIncluded(l) ? '' : 'rf-row-off'}">
+              <td class="col-tick">
+                <input type="checkbox" ${rfIncluded(l) ? 'checked' : ''} onchange="rfToggle(${i}, this.checked)"
+                       title="Include this ingredient in the order">
+              </td>
+              <td class="item"><strong>${escHTML(l.name)}</strong></td>
+              <td class="num">${l.currentStock == null ? '—' : l.currentStock + ' ' + escHTML(l.unit || '')}</td>
+              <td class="num muted">${l.threshold == null ? '—' : l.threshold + ' ' + escHTML(l.unit || '')}</td>
+              <td>${l.priority && l.priority !== '—'
+                    ? `<span class="rf-pri ${l.priority === 'Low' ? 'low' : 'urgent'}">${escHTML(l.priority)}</span>`
+                    : '<span class="muted">—</span>'}</td>
+              <td class="num muted">${l.suggestedQty || 0} ${escHTML(l.unit || '')}</td>
+              <td class="num">
+                <input type="number" min="0" step="1" class="rf-qty" value="${rfOrderQty(l)}"
+                       ${rfIncluded(l) ? '' : 'disabled'} oninput="rfQty(${i}, this.value)">
+                <span class="u">${escHTML(l.unit || '')}</span>
+              </td>
+              <td><button class="btn-icon danger" title="Remove from this form"
+                          onclick="rfRemove(${i})"><i class='bx bx-trash'></i></button></td>
+            </tr>`).join('')
+          : `<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--text-2)">
+               Nothing on this form. Add an ingredient below, or cancel it.</td></tr>`}
+        </tbody>
+      </table>
+
+      <div class="rf-edit-add">
+        <label>Add another ingredient
+          <select id="rf-add-pick">
+            <option value="">Choose an ingredient…</option>
+            ${spare.map(i => `<option value="${escHTML(i.id)}">${escHTML(i.name)} — ${i.stock} ${escHTML(i.unit || '')} on hand</option>`).join('')}
+          </select>
+        </label>
+        <button class="btn-secondary sm" onclick="rfAdd()"><i class='bx bx-plus'></i> Add</button>
+      </div>
+
+      <div class="rf-edit-total">
+        <span>${chosen.length} of ${lines.length} ingredient${lines.length === 1 ? '' : 's'} selected to order</span>
+      </div>
+    </div>`;
+
+  document.getElementById('rf-footer').innerHTML = `
+    <button class="btn-ghost danger" onclick="cancelRestockForm('${f.id}')">Cancel form</button>
+    <div style="flex:1"></div>
+    <button class="btn-ghost" onclick="closeModal('restock-form-modal')">Close</button>
+    <button class="btn-secondary" onclick="saveRestockDraft()"><i class='bx bx-save'></i> Save draft</button>
+    <button class="btn-primary" onclick="confirmAndSendRestock()" ${chosen.length ? '' : 'disabled'}>
+      <i class='bx bx-send'></i> Confirm &amp; send
+    </button>`;
+}
+
+function rfField(key, value){ if(rfDraft) rfDraft[key] = value; }
+
+function rfToggle(i, on){
+  if(!rfDraft) return;
+  rfDraft.items[i].include = on;
+  renderRestockEditor();
+}
+
+/* Not re-rendered on every keystroke — that would move the caret and
+   make the field impossible to type in. The count updates on save. */
+function rfQty(i, value){
+  if(!rfDraft) return;
+  rfDraft.items[i].orderQty = Math.max(0, parseInt(value, 10) || 0);
+}
+
+function rfRemove(i){
+  if(!rfDraft) return;
+  const [gone] = rfDraft.items.splice(i, 1);
+  /* Remembered so the next inventory render does not put it straight
+     back — the admin took it off on purpose. */
+  if(gone && gone.ingId){
+    rfDraft.removedIds = [...new Set([...(rfDraft.removedIds || []), gone.ingId])];
+  }
+  renderRestockEditor();
+}
+
+function rfAdd(){
+  const pick = document.getElementById('rf-add-pick');
+  const ing  = DB.ingredients.find(i => i.id === pick?.value);
+  if(!ing){ toast('Choose an ingredient first', ''); return; }
+  rfDraft.items.push(restockLineFor(ing));
+  rfDraft.removedIds = (rfDraft.removedIds || []).filter(id => id !== ing.id);
+  renderRestockEditor();
+}
+
+/* Writes the held edits back onto the real form. */
+function rfCommit(){
+  const real = (DB.supplierOrders || []).find(x => x.id === rfDraft.id);
+  if(!real) return null;
+  real.items      = rfDraft.items;
+  real.removedIds = rfDraft.removedIds || [];
+  real.supplier   = rfDraft.supplier || '';
+  real.contact    = rfDraft.contact  || '';
+  real.neededBy   = rfDraft.neededBy || '';
+  return real;
+}
+
+async function saveRestockDraft(){
+  const real = rfCommit();
+  if(!real) return;
+  const ok = await saveRestockForm(real);
+  renderSupplierOrders();
+  if(ok) toast('Draft saved — still not sent', 'success');
+}
+
+function confirmAndSendRestock(){
+  const chosen = rfDraft.items.filter(rfIncluded);
+  if(!chosen.length){ toast('Tick at least one ingredient to order', 'danger'); return; }
+
+  const zero = chosen.filter(l => rfOrderQty(l) <= 0);
+  if(zero.length){
+    toast(`Set a quantity for ${zero.map(l => l.name).join(', ')}`, 'danger');
+    return;
+  }
+
+  const summary = chosen.map(l => `${l.name} ${rfOrderQty(l)}${l.unit || ''}`).join(', ');
+
+  showConfirm({
+    title:   'Send this restock order',
+    message: `Order ${chosen.length} ingredient${chosen.length === 1 ? '' : 's'}${rfDraft.supplier ? ' from ' + rfDraft.supplier : ''}: ${summary}.` +
+             ` Once sent the form is final — it stays in the history and the next shortage raises a new one.` +
+             ` Stock is not changed; adjust it when the delivery actually arrives.`,
+    okText:  'Confirm & send',
+    okClass: 'btn-primary',
+    icon:    'bx-send',
+    onConfirm: async () => {
+      const real = rfCommit();
+      if(!real) return;
+      real.status     = 'Sent';
+      real.sentAt     = new Date().toISOString();
+      real.sentBy     = `${currentUser.fname} ${currentUser.lname}`.trim();
+      /* Only what was actually ordered goes into the record. */
+      real.items      = chosen;
+      const ok = await saveRestockForm(real);
+      closeModal('restock-form-modal');
+      rfDraft = null;
+      renderInventory();
+      logAudit('Inventory', 'Restock order sent', real.reference, summary);
+      if(ok) toast(`${real.reference} sent — ${chosen.length} ingredient${chosen.length === 1 ? '' : 's'}`, 'success');
+    }
+  });
+}
+
+function cancelRestockForm(id){
+  const f = (DB.supplierOrders || []).find(x => x.id === id);
+  if(!f) return;
+  showConfirm({
+    title:   'Cancel this form',
+    message: `Discard ${f.reference || f.id} without ordering anything? It stays in the history as cancelled, and the next time something runs low a new form is raised.`,
+    okText:  'Cancel form',
+    okClass: 'btn-danger',
+    icon:    'bx-x-circle',
+    onConfirm: async () => {
+      f.status      = 'Cancelled';
+      f.cancelledAt = new Date().toISOString();
+      await saveRestockForm(f);
+      closeModal('restock-form-modal');
+      rfDraft = null;
+      renderInventory();
+      logAudit('Inventory', 'Restock form cancelled', f.reference || f.id, '');
+      toast('Form cancelled', '');
+    }
+  });
+}
+
+/* Builds the printable document for a form that has been sent. */
+function renderRestockDocument(f){
+  const lines = rfLinesToOrder(f);
 
   const urgent = lines.filter(l => l.priority === 'Urgent' || l.priority === 'Out of stock').length;
 
@@ -3064,14 +3323,14 @@ function viewRestockForm(id){
         <div class="rf-summary">
           <span><b>${lines.length}</b> line item${lines.length === 1 ? '' : 's'}</span>
           ${urgent ? `<span class="urgent"><b>${urgent}</b> urgent</span>` : ''}
-          <span class="status ${f.status === 'Open' ? 'open' : ''}">${escHTML(f.status)}</span>
+          <span class="status ${isRestockDraft(f) ? 'open' : ''}">${escHTML(restockStatus(f))}</span>
         </div>
       </div>
 
       <section class="rf-fill">
-        <label>Supplier / Store<span></span></label>
-        <label>Contact Person &amp; Number<span></span></label>
-        <label>Required Delivery Date<span></span></label>
+        <label>Supplier / Store<span>${escHTML(f.supplier || '')}</span></label>
+        <label>Contact Person &amp; Number<span>${escHTML(f.contact || '')}</span></label>
+        <label>Required Delivery Date<span>${f.neededBy ? fmtDate(f.neededBy) : ''}</span></label>
       </section>
 
       <table class="rf-table">
@@ -3083,7 +3342,7 @@ function viewRestockForm(id){
             <th class="num">Reorder At</th>
             <th class="col-pri">Priority</th>
             <th class="num">Suggested</th>
-            <th class="fill">Order Qty</th>
+            <th class="num">Order Qty</th>
             <th class="fill">Received</th>
           </tr>
         </thead>
@@ -3098,25 +3357,25 @@ function viewRestockForm(id){
               <td class="num">${l.currentStock == null ? '—' : l.currentStock + '<span class="u">' + escHTML(l.unit || '') + '</span>'}</td>
               <td class="num muted">${l.threshold == null ? '—' : l.threshold + '<span class="u">' + escHTML(l.unit || '') + '</span>'}</td>
               <td class="col-pri">${l.priority === '—' ? '<span class="muted">—</span>' : `<span class="rf-pri ${l.priority === 'Low' ? 'low' : 'urgent'}">${escHTML(l.priority)}</span>`}</td>
-              <td class="num strong">${l.suggestedQty}<span class="u">${escHTML(l.unit || '')}</span></td>
-              <td class="fill"></td>
+              <td class="num muted">${l.suggestedQty}<span class="u">${escHTML(l.unit || '')}</span></td>
+              <td class="num strong">${rfOrderQty(l)}<span class="u">${escHTML(l.unit || '')}</span></td>
               <td class="fill"></td>
             </tr>`).join('')}
         </tbody>
         <tfoot>
           <tr>
-            <td colspan="5" class="foot-label">Total lines to order</td>
+            <td colspan="6" class="foot-label">Total lines to order</td>
             <td class="num strong">${lines.length}</td>
-            <td class="fill"></td>
             <td class="fill"></td>
           </tr>
         </tfoot>
       </table>
 
       <p class="rf-note">
-        <b>Note</b> — suggested quantities are calculated from stock on hand against each ingredient's
-        reorder point. They are guidance only; confirm the final order quantity with the supplier before
-        sending.
+        <b>Note</b> — suggested quantities were calculated from stock on hand against each ingredient's
+        reorder point. The order quantities shown were reviewed and confirmed by
+        ${escHTML(f.sentBy || 'the administrator')}${f.sentAt ? ' on ' + fmtDateTime(f.sentAt) : ''}.
+        Stock is updated when the delivery arrives, not when this form is sent.
       </p>
 
       <div class="rf-signs">
@@ -3130,6 +3389,10 @@ function viewRestockForm(id){
       </footer>
 
     </div>`;
+
+  document.getElementById('rf-footer').innerHTML = `
+    <button class="btn-ghost" onclick="closeModal('restock-form-modal')">Close</button>
+    <button class="btn-primary" onclick="printRestockForm()"><i class='bx bx-printer'></i> Print / Save as PDF</button>`;
 
   openModal('restock-form-modal');
 }
@@ -3158,29 +3421,6 @@ function printRestockForm(){
     if(w.document.fonts?.ready) w.document.fonts.ready.then(go).catch(go);
     else setTimeout(go, 300);
   };
-}
-
-/* Marks a form as dealt with, so the next shortage raises a fresh one. */
-function closeRestockForm(id){
-  const f = (DB.supplierOrders || []).find(x => x.id === id);
-  if(!f) return;
-
-  showConfirm({
-    title: 'Close this form',
-    message: `Mark ${f.reference || f.id} as sent? It stays in the history, and the next time something runs low a new form is raised.`,
-    okText: 'Mark as sent',
-    okClass: 'btn-primary',
-    icon: 'bx-check',
-    onConfirm: async () => {
-      f.status = 'Sent';
-      f.closedAt = new Date().toISOString();
-      const { error } = await _supa.from('supplier_orders')
-        .upsert({ id: f.id, date: f.date, data: f }, { onConflict: 'id' });
-      if(error) console.error('could not close the form:', error);
-      renderInventory();
-      toast('Form marked as sent', 'success');
-    }
-  });
 }
 
 function openAdjustStock(id, type){
@@ -4269,6 +4509,17 @@ function buildNotifs(){
     notifList.push({ id, icon:'bx-error-circle', color:'#EA580C',
       text:`Low stock ingredient: ${ing.name} (${ing.stock} left)`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); }
+    });
+  });
+
+  // Restock drafts waiting to be reviewed and sent
+  (DB.supplierOrders || []).filter(isRestockDraft).forEach(f => {
+    const id = `restock_${f.id}`;
+    if(seen.has(id)) return;
+    const names = formLines(f).map(l => l.name);
+    notifList.push({ id, icon:'bx-cart-add', color:'#EA580C',
+      text:`Restock form ${escHTML(f.reference || f.id)} is waiting for your review — ${escHTML(names.slice(0,3).join(', '))}${names.length > 3 ? ` +${names.length - 3} more` : ''}`,
+      action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); setTimeout(()=>viewRestockForm(f.id), 200); }
     });
   });
 

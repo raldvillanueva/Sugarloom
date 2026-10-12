@@ -97,6 +97,26 @@ the console and never blocks the action it describes. If the table is
 missing the page says so and the rest of the panel is unaffected; run
 `supabase-audit-log.sql`.
 
+## Restocking
+
+An ingredient at or below its reorder point puts a **Draft** restock
+form in front of the admin — a toast, a notification-bell entry and a
+badge on Inventory. The draft is a proposal, never an order: the admin
+opens it, changes quantities, unticks anything they are not buying, adds
+anything else they want, then confirms. Only then does it become
+**Sent**.
+
+`suggestedQty` is what the system advised and `orderQty` is what the
+admin decided; both are kept, so the printed form shows the advice next
+to the decision. A line the admin removes goes into `removedIds` so the
+next inventory render does not quietly put it back. Forms raised before
+this split have status `Open` and no `orderQty` — `restockStatus()` and
+`rfOrderQty()` read those as `Draft` and the suggestion.
+
+Sending moves no stock. Stock changes when someone adjusts it after the
+delivery arrives, which keeps the count honest about what is on the
+shelf.
+
 **Ingredients are deducted when baking starts**, not at confirmation, and
 are returned if the order is later cancelled. `order.stockDeducted`
 guards against deducting twice for the same bake.

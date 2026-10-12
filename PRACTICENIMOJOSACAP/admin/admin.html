@@ -974,10 +974,9 @@
       <button class="modal-close" onclick="closeModal('restock-form-modal')"><i class='bx bx-x'></i></button>
     </div>
     <div class="modal-body" id="rf-body"></div>
-    <div class="modal-footer">
-      <button class="btn-ghost" onclick="closeModal('restock-form-modal')">Close</button>
-      <button class="btn-primary" onclick="printRestockForm()"><i class='bx bx-printer'></i> Print / Save as PDF</button>
-    </div>
+    <!-- Filled by renderRestockEditor() or renderRestockDocument(): a draft
+         needs Save and Send, a sent form needs Print. -->
+    <div class="modal-footer" id="rf-footer"></div>
   </div>
 </div>
 
