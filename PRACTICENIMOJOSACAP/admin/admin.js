@@ -138,8 +138,11 @@ let _trackingCache = {}; // Supabase order_tracking cache: order_id → data
 let currentUser = null;
 let orderFilter = 'All';
 let ingCatFilter = 'All';
-let reportPeriod = 'day';
-let histFilterState = { tx: 'all', sales: 'all', ing: 'all' };
+/* Every date filter in Reports is a From–To range. An empty end of a
+   range means "no bound that way", so leaving both blank shows everything
+   and filling in only From reads as "since". */
+let reportRange   = { from: '', to: '' };
+let histRangeState = { tx: {from:'',to:''}, sales: {from:'',to:''}, ing: {from:'',to:''} };
 let ingHistCat = 'All';
 let revenueChartPeriod = 'weekly';
 let revenueChartInst = null, categoryChartInst = null, reportChartInst = null, bestSellerChartInst = null;
@@ -3208,10 +3211,68 @@ function openProductStockModal(){
 /* =============================================
    REPORTS
    ============================================= */
-function setReportPeriod(period, btn){
-  reportPeriod=period;
-  document.querySelectorAll('.period-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
+/* ── DATE RANGES ──
+   A date input gives back 'YYYY-MM-DD', which `new Date()` reads as UTC
+   midnight — an hour or two earlier than local midnight here, so a
+   transaction made late in the evening on the From date would fall
+   outside its own range. Building the Date from the parts keeps it local,
+   and the To bound runs to the end of that day so the day the user picked
+   is included. */
+function rangeStart(val){
+  if(!val) return null;
+  const [y,m,d] = val.split('-').map(Number);
+  return new Date(y, m-1, d, 0, 0, 0, 0);
+}
+function rangeEnd(val){
+  if(!val) return null;
+  const [y,m,d] = val.split('-').map(Number);
+  return new Date(y, m-1, d, 23, 59, 59, 999);
+}
+
+/* True when the row's date sits inside the range. Either end may be
+   blank, and a backwards range (From after To) is read in the order the
+   user meant rather than returning nothing. */
+function inRange(value, range){
+  const t = new Date(value).getTime();
+  if(isNaN(t)) return false;
+  let from = rangeStart(range.from), to = rangeEnd(range.to);
+  if(from && to && from > to){
+    const swap = rangeStart(range.to); to = rangeEnd(range.from); from = swap;
+  }
+  if(from && t < from.getTime()) return false;
+  if(to   && t > to.getTime())   return false;
+  return true;
+}
+
+function rangeIsSet(range){ return !!(range.from || range.to); }
+
+function readRangeInputs(prefix){
+  return {
+    from: document.getElementById(`${prefix}-from`)?.value || '',
+    to:   document.getElementById(`${prefix}-to`)?.value   || ''
+  };
+}
+
+/* Keeps the two inputs from offering impossible dates in the first
+   place — picking a From date pushes the To picker's minimum forward. */
+function syncRangeBounds(prefix){
+  const f = document.getElementById(`${prefix}-from`);
+  const t = document.getElementById(`${prefix}-to`);
+  if(f && t){ t.min = f.value || ''; f.max = t.value || ''; }
+}
+
+function setReportRange(){
+  reportRange = readRangeInputs('rpt');
+  syncRangeBounds('rpt');
+  renderReports();
+}
+
+function clearReportRange(){
+  reportRange = { from: '', to: '' };
+  ['rpt-from','rpt-to'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){ el.value = ''; el.min = ''; el.max = ''; }
+  });
   renderReports();
 }
 
@@ -3272,157 +3333,45 @@ function exportSalesHistoryCSV(){
   a.click();
 }
 
-/* ── HISTORY FILTERS ── */
-function setHistFilter(prefix, mode){
-  histFilterState[prefix] = mode;
-  ['today','week','all'].forEach(m=>{
-    const btn = document.getElementById(`${prefix}-btn-${m}`);
-    if(btn) btn.classList.toggle('active', m === mode);
+/* ── HISTORY FILTERS ──
+   The three history tables each carry their own From–To range, so an
+   admin can line up a transaction list against a different stretch of
+   ingredient movements without one filter dragging the other along. */
+function setHistRange(prefix){
+  histRangeState[prefix] = readRangeInputs(prefix);
+  syncRangeBounds(prefix);
+  renderHistFor(prefix);
+}
+
+function clearHistRange(prefix){
+  histRangeState[prefix] = { from: '', to: '' };
+  [`${prefix}-from`, `${prefix}-to`].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){ el.value = ''; el.min = ''; el.max = ''; }
   });
-  if(mode !== 'date'){
-    const dateEl = document.getElementById(`${prefix}-date`);
-    if(dateEl) dateEl.value = '';
-    const lbl = document.getElementById(`${prefix}-date-label`);
-    if(lbl) lbl.textContent = 'Select date';
-    const clr = document.getElementById(`${prefix}-date-clear`);
-    if(clr) clr.style.display = 'none';
-    const dp = document.getElementById(`${prefix}-datepicker`);
-    if(dp){ dp.classList.remove('has-value','open'); }
-    if(calState.selected) calState.selected[prefix] = null;
-  } else {
-    ['today','week','all'].forEach(m=>{
-      const btn = document.getElementById(`${prefix}-btn-${m}`);
-      if(btn) btn.classList.remove('active');
-    });
-  }
+  renderHistFor(prefix);
+}
+
+function renderHistFor(prefix){
   if(prefix === 'tx')    renderTxHistory();
   if(prefix === 'sales') renderSalesHistoryFiltered();
   if(prefix === 'ing')   renderIngHistory();
 }
 
-/* ── Custom Calendar Picker ── */
-const CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-let calState = { prefix: null, year: new Date().getFullYear(), month: new Date().getMonth(), selected: {} };
-
-function openDatePicker(e, prefix){
-  e.stopPropagation();
-  const popup = document.getElementById('cal-popup');
-  if(popup.classList.contains('show') && calState.prefix === prefix){
-    closeDatePicker(); return;
-  }
-  if(calState.prefix && calState.prefix !== prefix){
-    const prev = document.getElementById(`${calState.prefix}-datepicker`);
-    if(prev) prev.classList.remove('open');
-  }
-  calState.prefix = prefix;
-  const sel = calState.selected[prefix];
-  if(sel){ calState.year = sel.getFullYear(); calState.month = sel.getMonth(); }
-  else   { const n = new Date(); calState.year = n.getFullYear(); calState.month = n.getMonth(); }
-  calRender();
-  const trigger = document.getElementById(`${prefix}-datepicker`);
-  trigger.classList.add('open');
-  popup.classList.add('show');
-  const rect = trigger.getBoundingClientRect();
-  popup.style.top  = (rect.bottom + 6) + 'px';
-  popup.style.left = rect.left + 'px';
-  requestAnimationFrame(()=>{
-    const pr = popup.getBoundingClientRect();
-    if(pr.right  > window.innerWidth)  popup.style.left = (rect.right - pr.width) + 'px';
-    if(pr.bottom > window.innerHeight) popup.style.top  = (rect.top - pr.height - 6) + 'px';
-  });
+/* Says what the range left behind, so an empty table reads as "nothing
+   happened then" rather than as a broken page. */
+function showRangeCount(prefix, shown, total){
+  const el = document.getElementById(`${prefix}-range-count`);
+  if(!el) return;
+  const range = histRangeState[prefix] || {};
+  el.textContent = rangeIsSet(range) ? `${shown} of ${total}` : '';
 }
 
-function closeDatePicker(){
-  const popup = document.getElementById('cal-popup');
-  popup.classList.remove('show');
-  if(calState.prefix){
-    const dp = document.getElementById(`${calState.prefix}-datepicker`);
-    if(dp) dp.classList.remove('open');
-  }
-}
-
-function calNav(dir){
-  calState.month += dir;
-  if(calState.month > 11){ calState.month = 0; calState.year++; }
-  if(calState.month < 0) { calState.month = 11; calState.year--; }
-  calRender();
-}
-
-function calRender(){
-  document.getElementById('cal-month-lbl').textContent = CAL_MONTHS[calState.month] + ' ' + calState.year;
-  const firstDay     = new Date(calState.year, calState.month, 1).getDay();
-  const daysInMonth  = new Date(calState.year, calState.month + 1, 0).getDate();
-  const today        = new Date();
-  const sel          = calState.selected[calState.prefix];
-  let html = '';
-  for(let i = 0; i < firstDay; i++) html += '<div class="cal-day cal-empty"></div>';
-  for(let d = 1; d <= daysInMonth; d++){
-    const isToday = today.getDate()===d && today.getMonth()===calState.month && today.getFullYear()===calState.year;
-    const isSel   = sel && sel.getDate()===d && sel.getMonth()===calState.month && sel.getFullYear()===calState.year;
-    let cls = 'cal-day';
-    if(isToday) cls += ' cal-today';
-    if(isSel)   cls += ' cal-selected';
-    html += `<div class="${cls}" onclick="calSelectDay(${d})">${d}</div>`;
-  }
-  document.getElementById('cal-days').innerHTML = html;
-}
-
-function calSelectDay(d){
-  const date = new Date(calState.year, calState.month, d);
-  calState.selected[calState.prefix] = date;
-  const val = `${calState.year}-${String(calState.month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-  const hidden = document.getElementById(`${calState.prefix}-date`);
-  if(hidden) hidden.value = val;
-  const lbl = document.getElementById(`${calState.prefix}-date-label`);
-  if(lbl) lbl.textContent = date.toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
-  const clr = document.getElementById(`${calState.prefix}-date-clear`);
-  if(clr) clr.style.display = '';
-  const dp = document.getElementById(`${calState.prefix}-datepicker`);
-  if(dp) dp.classList.add('has-value');
-  closeDatePicker();
-  setHistFilter(calState.prefix, 'date');
-}
-
-function calClearDate(e, prefix){
-  e.stopPropagation();
-  calState.selected[prefix] = null;
-  const hidden = document.getElementById(`${prefix}-date`);
-  if(hidden) hidden.value = '';
-  const lbl = document.getElementById(`${prefix}-date-label`);
-  if(lbl) lbl.textContent = 'Select date';
-  const clr = document.getElementById(`${prefix}-date-clear`);
-  if(clr) clr.style.display = 'none';
-  const dp = document.getElementById(`${prefix}-datepicker`);
-  if(dp) dp.classList.remove('has-value');
-  setHistFilter(prefix, 'all');
-}
-
-document.addEventListener('click', function(e){
-  const popup = document.getElementById('cal-popup');
-  if(popup && popup.classList.contains('show') && !popup.contains(e.target) && !e.target.closest('.hist-datepicker')){
-    closeDatePicker();
-  }
-});
-
-function applyQuickFilter(rows, prefix, dateKey){
-  const mode = histFilterState[prefix] || 'all';
-  const now  = new Date();
-  if(mode === 'today'){
-    return rows.filter(r => new Date(r[dateKey]).toDateString() === now.toDateString());
-  }
-  if(mode === 'week'){
-    const start = new Date(now);
-    start.setDate(now.getDate() - now.getDay());
-    start.setHours(0,0,0,0);
-    return rows.filter(r => new Date(r[dateKey]) >= start);
-  }
-  if(mode === 'date'){
-    const val = document.getElementById(`${prefix}-date`)?.value;
-    if(!val) return rows;
-    const picked = new Date(val).toDateString();
-    return rows.filter(r => new Date(r[dateKey]).toDateString() === picked);
-  }
-  return rows;
+function applyRangeFilter(rows, prefix, dateKey){
+  const range = histRangeState[prefix] || { from:'', to:'' };
+  const out = rangeIsSet(range) ? rows.filter(r => inRange(r[dateKey], range)) : rows;
+  showRangeCount(prefix, out.length, rows.length);
+  return out;
 }
 
 function filterIngHistCat(cat, btn){
@@ -3434,7 +3383,7 @@ function filterIngHistCat(cat, btn){
 
 function renderIngHistory(){
   if(!DB.stockLog) DB.stockLog = [];
-  const filtered = applyQuickFilter(
+  const filtered = applyRangeFilter(
     [...DB.stockLog].filter(l=>l.type==='ingredient'),
     'ing', 'date'
   );
@@ -3487,7 +3436,7 @@ function exportIngHistoryCSV(){
 
 function renderTxHistory(){
   const txs = getFilteredTxs();
-  const filtered = applyQuickFilter(
+  const filtered = applyRangeFilter(
     [...txs].sort((a,b)=>new Date(b.date)-new Date(a.date)),
     'tx', 'date'
   );
@@ -3504,7 +3453,7 @@ function renderTxHistory(){
 
 function renderSalesHistoryFiltered(){
   const all  = buildDailySummaries();
-  const rows = applyQuickFilter(all, 'sales', 'date');
+  const rows = applyRangeFilter(all, 'sales', 'date');
   const tbody = document.getElementById('sales-history-body');
   if(!rows.length){
     tbody.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-2)">No sales history yet</td></tr>';
@@ -3522,43 +3471,82 @@ function renderSalesHistoryFiltered(){
 }
 
 function getFilteredTxs(){
-  const now = new Date();
-  return DB.transactions.filter(t=>{
-    const d = new Date(t.date);
-    if(reportPeriod==='day')   return d.toDateString()===now.toDateString();
-    if(reportPeriod==='week'){
-      const start = new Date(now);
-      start.setDate(now.getDate()-6);
-      start.setHours(0,0,0,0);
-      return d>=start;
+  if(!rangeIsSet(reportRange)) return DB.transactions;
+  return DB.transactions.filter(t => inRange(t.date, reportRange));
+}
+
+/* Buckets revenue across whatever range the admin picked. The old chart
+   had three fixed shapes because there were only three buttons; a free
+   range needs the x-axis to follow it, so the bucket size is chosen from
+   how long the range is: a single day splits into three-hour slots, a
+   few weeks into days, a few months into weeks, longer into months. The
+   aim is a readable number of points rather than one per day of a year.
+
+   With no range set, the chart covers the span the transactions
+   themselves occupy, so the page still shows a trend on first open. */
+function txRevenue(t){ return t.items.reduce((s,i)=>s+(i.qty*(i.price||0)),0); }
+
+function bucketRevenue(txs, range){
+  const times = txs.map(t => new Date(t.date).getTime()).filter(n => !isNaN(n));
+
+  let from = rangeStart(range.from);
+  let to   = rangeEnd(range.to);
+  if(from && to && from > to){ const s = rangeStart(range.to); to = rangeEnd(range.from); from = s; }
+
+  /* Fill in an open end from the data, falling back to the last week so
+     an empty range on an empty database still draws an axis. */
+  if(!from) from = new Date(times.length ? Math.min(...times) : Date.now() - 6*86400000);
+  if(!to)   to   = new Date(times.length ? Math.max(...times) : Date.now());
+  if(from > to) from = new Date(to);
+
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const days = Math.floor((startOfDay(to) - startOfDay(from)) / 86400000) + 1;
+
+  const labels = [], slots = [], edges = [];
+  const push = (label, start, end) => { labels.push(label); slots.push(0); edges.push([start.getTime(), end.getTime()]); };
+
+  if(days <= 1){
+    const base = startOfDay(from);
+    const names = ['12am–3am','3am–6am','6am–9am','9am–12pm','12pm–3pm','3pm–6pm','6pm–9pm','9pm–12am'];
+    names.forEach((name, i) => {
+      const s = new Date(base); s.setHours(i*3);
+      const e = new Date(base); e.setHours(i*3+3);
+      push(name, s, e);
+    });
+  } else if(days <= 31){
+    for(let i = 0; i < days; i++){
+      const s = new Date(startOfDay(from)); s.setDate(s.getDate()+i);
+      const e = new Date(s); e.setDate(e.getDate()+1);
+      push(s.toLocaleDateString('en',{month:'short',day:'numeric'}), s, e);
     }
-    if(reportPeriod==='month'){
-      const start = new Date(now);
-      start.setDate(now.getDate()-29);
-      start.setHours(0,0,0,0);
-      return d>=start;
+  } else if(days <= 182){
+    for(let s = startOfDay(from); s <= to; ){
+      const e = new Date(s); e.setDate(e.getDate()+7);
+      push(s.toLocaleDateString('en',{month:'short',day:'numeric'}), s, e);
+      s = e;
     }
-    return true;
+  } else {
+    for(let s = new Date(from.getFullYear(), from.getMonth(), 1); s <= to; ){
+      const e = new Date(s.getFullYear(), s.getMonth()+1, 1);
+      push(s.toLocaleDateString('en',{month:'short',year:'2-digit'}), s, e);
+      s = e;
+    }
+  }
+
+  txs.forEach(t => {
+    const ms = new Date(t.date).getTime();
+    if(isNaN(ms)) return;
+    const i = edges.findIndex(([s,e]) => ms >= s && ms < e);
+    if(i >= 0) slots[i] += txRevenue(t);
+    else if(ms >= edges[edges.length-1]?.[1]) slots[slots.length-1] += txRevenue(t); // the final bucket's own end
   });
+
+  return { labels, slots };
 }
 
 let revenueTrendChart = null;
 function renderRevenueTrend(txs){
-  const now = new Date();      // the month branch below used this without declaring it
-  let labels=[], slots=[];
-  if(reportPeriod==='day'){
-    labels=['12am–3am','3am–6am','6am–9am','9am–12pm','12pm–3pm','3pm–6pm','6pm–9pm','9pm–12am'];
-    slots=Array(8).fill(0);
-    txs.forEach(t=>{ const h=new Date(t.date).getHours(); const rev=t.items.reduce((s,i)=>s+(i.qty*(i.price||0)),0); slots[Math.floor(h/3)]+=rev; });
-  } else if(reportPeriod==='week'){
-    for(let i=6;i>=0;i--){ const d=new Date(); d.setDate(d.getDate()-i); labels.push(d.toLocaleDateString('en',{weekday:'short',month:'short',day:'numeric'})); slots.push(0); }
-    txs.forEach(t=>{ const d=new Date(t.date); const di=6-Math.floor((new Date()-d)/86400000); const rev=t.items.reduce((s,i)=>s+(i.qty*(i.price||0)),0); if(di>=0&&di<7) slots[di]+=rev; });
-  } else {
-    const monthStart = new Date(now); monthStart.setDate(now.getDate()-29); monthStart.setHours(0,0,0,0);
-    labels=['Week 1','Week 2','Week 3','Week 4'];
-    slots=Array(4).fill(0);
-    txs.forEach(t=>{ const d=new Date(t.date); const dayOffset=Math.floor((d-monthStart)/86400000); const w=Math.min(3,Math.floor(dayOffset/7)); const rev=t.items.reduce((s,i)=>s+(i.qty*(i.price||0)),0); if(w>=0) slots[w]+=rev; });
-  }
+  const { labels, slots } = bucketRevenue(txs, reportRange);
   const canvas = document.getElementById('revenue-trend-info');
   if(revenueTrendChart){ revenueTrendChart.destroy(); revenueTrendChart=null; }
   revenueTrendChart = new Chart(canvas.getContext('2d'), {

@@ -456,10 +456,10 @@
       <section id="view-reports" class="view">
         <div class="page-header">
           <div><h1>Sales Reports</h1><p>Business performance overview</p></div>
-          <div class="report-period">
-            <button class="period-btn active" onclick="setReportPeriod('day',this)">Today</button>
-            <button class="period-btn" onclick="setReportPeriod('week',this)">This Week</button>
-            <button class="period-btn" onclick="setReportPeriod('month',this)">This Month</button>
+          <div class="date-range">
+            <label>From <input type="date" id="rpt-from" onchange="setReportRange()"></label>
+            <label>To <input type="date" id="rpt-to" onchange="setReportRange()"></label>
+            <button class="btn-ghost sm" onclick="clearReportRange()">Clear</button>
           </div>
         </div>
 
@@ -513,15 +513,11 @@
             <button class="btn-secondary sm" onclick="exportCSV()"><i class='bx bx-export'></i> Export CSV</button>
           </div>
           <div class="hist-filter-bar">
-            <button class="hist-btn" id="tx-btn-today" onclick="setHistFilter('tx','today')">Today</button>
-            <button class="hist-btn" id="tx-btn-week" onclick="setHistFilter('tx','week')">This Week</button>
-            <button class="hist-btn active" id="tx-btn-all" onclick="setHistFilter('tx','all')">All</button>
-            <div class="hist-filter-sep"></div>
-            <div class="hist-datepicker" id="tx-datepicker" onclick="openDatePicker(event,'tx')">
-              <i class='bx bx-calendar'></i>
-              <span class="dp-label" id="tx-date-label">Select date</span>
-              <span class="dp-clear" id="tx-date-clear" onclick="calClearDate(event,'tx')" style="display:none">×</span>
-              <input type="hidden" id="tx-date">
+            <div class="date-range">
+              <label>From <input type="date" id="tx-from" onchange="setHistRange('tx')"></label>
+              <label>To <input type="date" id="tx-to" onchange="setHistRange('tx')"></label>
+              <button class="btn-ghost sm" onclick="clearHistRange('tx')">Clear</button>
+              <span class="range-count" id="tx-range-count"></span>
             </div>
           </div>
           <table class="data-table">
@@ -540,15 +536,11 @@
             <button class="btn-secondary sm" onclick="exportSalesHistoryCSV()"><i class='bx bx-export'></i> Export CSV</button>
           </div>
           <div class="hist-filter-bar">
-            <button class="hist-btn" id="sales-btn-today" onclick="setHistFilter('sales','today')">Today</button>
-            <button class="hist-btn" id="sales-btn-week" onclick="setHistFilter('sales','week')">This Week</button>
-            <button class="hist-btn active" id="sales-btn-all" onclick="setHistFilter('sales','all')">All</button>
-            <div class="hist-filter-sep"></div>
-            <div class="hist-datepicker" id="sales-datepicker" onclick="openDatePicker(event,'sales')">
-              <i class='bx bx-calendar'></i>
-              <span class="dp-label" id="sales-date-label">Select date</span>
-              <span class="dp-clear" id="sales-date-clear" onclick="calClearDate(event,'sales')" style="display:none">×</span>
-              <input type="hidden" id="sales-date">
+            <div class="date-range">
+              <label>From <input type="date" id="sales-from" onchange="setHistRange('sales')"></label>
+              <label>To <input type="date" id="sales-to" onchange="setHistRange('sales')"></label>
+              <button class="btn-ghost sm" onclick="clearHistRange('sales')">Clear</button>
+              <span class="range-count" id="sales-range-count"></span>
             </div>
           </div>
           <table class="data-table">
@@ -571,15 +563,11 @@
             <button class="btn-secondary sm" onclick="exportIngHistoryCSV()"><i class='bx bx-export'></i> Export CSV</button>
           </div>
           <div class="hist-filter-bar">
-            <button class="hist-btn" id="ing-btn-today" onclick="setHistFilter('ing','today')">Today</button>
-            <button class="hist-btn" id="ing-btn-week" onclick="setHistFilter('ing','week')">This Week</button>
-            <button class="hist-btn active" id="ing-btn-all" onclick="setHistFilter('ing','all')">All</button>
-            <div class="hist-filter-sep"></div>
-            <div class="hist-datepicker" id="ing-datepicker" onclick="openDatePicker(event,'ing')">
-              <i class='bx bx-calendar'></i>
-              <span class="dp-label" id="ing-date-label">Select date</span>
-              <span class="dp-clear" id="ing-date-clear" onclick="calClearDate(event,'ing')" style="display:none">×</span>
-              <input type="hidden" id="ing-date">
+            <div class="date-range">
+              <label>From <input type="date" id="ing-from" onchange="setHistRange('ing')"></label>
+              <label>To <input type="date" id="ing-to" onchange="setHistRange('ing')"></label>
+              <button class="btn-ghost sm" onclick="clearHistRange('ing')">Clear</button>
+              <span class="range-count" id="ing-range-count"></span>
             </div>
             <div class="hist-filter-sep"></div>
             <button class="hist-btn ing-hist-cat-btn active" onclick="filterIngHistCat('All',this)">All</button>
@@ -1098,19 +1086,6 @@
 </div>
 
 <div id="toast" class="toast hidden"></div>
-
-<!-- ===== CUSTOM CALENDAR POPUP ===== -->
-<div id="cal-popup" class="cal-popup">
-  <div class="cal-popup-hdr">
-    <button class="cal-nav-btn" onclick="calNav(-1)">&#8249;</button>
-    <span class="cal-month-lbl" id="cal-month-lbl"></span>
-    <button class="cal-nav-btn" onclick="calNav(1)">&#8250;</button>
-  </div>i cant checkout 
-  <div class="cal-weekdays">
-    <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
-  </div>
-  <div class="cal-days" id="cal-days"></div>
-</div>
 
 <script src="../js/api-config.js"></script>
 <script src="lalamove-sim.js"></script>
