@@ -90,14 +90,26 @@ where n.nspname = 'public' and c.relname = 'audit_log';
 --  TESTING IT YOURSELF
 --
 --  Not from this SQL editor: queries here run as the table owner, which
---  bypasses RLS entirely, so a delete will appear to succeed. The
+--  bypasses RLS entirely, so a delete really will succeed. The
 --  restriction applies to the anon key the browser uses. To see it,
 --  try a delete with that key:
 --
 --    curl -X DELETE "https://ruclytedzkdbranurfcq.supabase.co/rest/v1/audit_log?id=eq.SOMEID" \
 --         -H "apikey: <anon key from js/supabase-config.js>"
 --
---  It should come back refused, while the panel keeps recording normally.
+--  ⚠ DON'T READ THE STATUS CODE AS THE ANSWER. It comes back 204, which
+--  normally means success — but 204 here means "zero rows matched", not
+--  "row deleted". With no delete policy, no row is visible to a delete,
+--  so none qualifies and none is removed. Count the rows before and
+--  after instead; that is the test that means something:
+--
+--    curl "…/rest/v1/audit_log?select=id" -H "apikey: <key>" \
+--         -H "Prefer: count=exact" -I     # read the Content-Range header
+--
+--  Verified on this project: a blanket DELETE and a blanket UPDATE with
+--  the anon key both returned 204 and changed nothing, while an INSERT
+--  returned 201 and a SELECT returned 200 — exactly the split the panel
+--  needs.
 --
 --  WHAT THIS STILL DOES NOT COVER
 --
