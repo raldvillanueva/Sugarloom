@@ -95,6 +95,13 @@ create table if not exists inquiries (
 
 create index if not exists idx_inquiries_date on inquiries (date desc);
 
+-- Settings the panel can change at runtime. Currently just how long
+-- audit entries are kept, which the scheduled purge reads.
+create table if not exists app_settings (
+  id   text primary key,
+  data jsonb not null
+);
+
 -- Who did what in the admin panel (Super Admin → Audit Trail).
 -- The panel only inserts and reads here, never updates or deletes, so
 -- this table gets a narrower policy than the rest: run
@@ -121,5 +128,6 @@ alter table profiles       disable row level security;
 alter table site_content   disable row level security;
 alter table inquiries      disable row level security;
 alter table supplier_orders disable row level security;
+alter table app_settings   disable row level security;
 -- audit_log is left out on purpose — see supabase-audit-log.sql, which
 -- enables RLS on it with insert and select only.

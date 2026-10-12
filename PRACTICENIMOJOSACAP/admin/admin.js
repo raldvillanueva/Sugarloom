@@ -4378,20 +4378,99 @@ function logRead(area, action, entity, detail){
 }
 
 /* ── RETENTION ──
-   How long entries are kept. The panel cannot enforce this itself, by
-   design: audit_log grants insert and select and nothing else, so the
-   browser has no way to delete a row. Enforcement belongs to the
-   database, where supabase-audit-log.sql installs a scheduled purge.
+   How long entries are kept, set by the Super Admin and stored in
+   app_settings. The panel cannot enforce it: audit_log grants insert
+   and select and nothing else, so the browser has no way to delete a
+   row. The scheduled purge in the database reads this same setting, so
+   what the page says and what the database does are one thing rather
+   than two that can drift.
 
-   What the panel does is state the policy and say when something is
-   past it, so a trail that has quietly stopped being purged shows up
-   rather than being assumed. */
-const AUDIT_RETENTION_DAYS = 365;
+   The bounds are enforced in both places. Here they stop a careless
+   choice; in audit_retention_days() they stop a deliberate one, since
+   app_settings is writable with the public anon key and a one-day
+   retention would let the next purge destroy the trail without anyone
+   deleting a row. */
+const AUDIT_RETENTION_MIN  = 30;
+const AUDIT_RETENTION_MAX  = 3650;
+const AUDIT_RETENTION_DEFAULT = 365;
+
+const AUDIT_RETENTION_CHOICES = [
+  { days: 30,   label: '30 days' },
+  { days: 90,   label: '90 days' },
+  { days: 180,  label: '6 months' },
+  { days: 365,  label: '1 year' },
+  { days: 730,  label: '2 years' },
+  { days: 1095, label: '3 years' },
+  { days: 1825, label: '5 years' }
+];
+
+let auditRetentionDays = AUDIT_RETENTION_DEFAULT;
+
+function clampRetention(days){
+  const n = parseInt(days, 10);
+  if(!Number.isFinite(n)) return AUDIT_RETENTION_DEFAULT;
+  return Math.min(AUDIT_RETENTION_MAX, Math.max(AUDIT_RETENTION_MIN, n));
+}
 
 function auditRetentionCutoff(){
   const d = new Date();
-  d.setDate(d.getDate() - AUDIT_RETENTION_DAYS);
+  d.setDate(d.getDate() - auditRetentionDays);
   return d;
+}
+
+async function loadAuditRetention(){
+  const { data, error } = await _supa.from('app_settings')
+    .select('data').eq('id', 'audit').maybeSingle();
+  if(error){
+    /* No settings table yet — the page falls back to the default and
+       says so rather than claiming a policy nobody installed. */
+    console.warn('retention setting unavailable, using the default:', error.message);
+    return;
+  }
+  if(data?.data?.retentionDays) auditRetentionDays = clampRetention(data.data.retentionDays);
+}
+
+function setAuditRetention(value){
+  if(!isSuperAdmin()){ toast('Only a Super Admin can change retention', 'danger'); return; }
+
+  const days = clampRetention(value);
+  const was  = auditRetentionDays;
+  if(days === was) return;
+
+  const label   = d => (AUDIT_RETENTION_CHOICES.find(c => c.days === d) || {}).label || `${d} days`;
+  const shorter = days < was;
+
+  showConfirm({
+    title:   shorter ? 'Shorten how long the trail is kept' : 'Change how long the trail is kept',
+    message: `Keep audit entries for ${label(days)} instead of ${label(was)}.` +
+             (shorter
+               ? ` The next scheduled purge will permanently delete everything older than ${label(days)}. That cannot be undone, and this change is itself recorded in the trail.`
+               : ` Nothing is deleted by this; entries simply live longer from now on.`),
+    okText:  shorter ? 'Shorten retention' : 'Save retention',
+    okClass: shorter ? 'btn-danger' : 'btn-primary',
+    icon:    'bx-shield-quarter',
+    onConfirm: async () => {
+      /* Recorded before it takes effect, so a shortening leaves its own
+         evidence in the entries it is about to remove. */
+      await logAudit('Access', 'Retention period changed', 'Audit trail',
+                     `${label(was)} → ${label(days)}`);
+
+      const { error } = await _supa.from('app_settings').upsert({
+        id: 'audit',
+        data: { retentionDays: days, updatedAt: new Date().toISOString(),
+                updatedBy: `${currentUser.fname} ${currentUser.lname}`.trim() }
+      }, { onConflict: 'id' });
+
+      if(error){
+        console.error('could not save the retention setting:', error);
+        toast('Could not save: ' + error.message, 'danger');
+        return;
+      }
+      auditRetentionDays = days;
+      renderAudit();
+      toast(`Audit entries are now kept for ${label(days)}`, 'success');
+    }
+  });
 }
 
 /* Re-read from Supabase when the view is opened, so a Super Admin sees
@@ -4399,6 +4478,7 @@ function auditRetentionCutoff(){
    one view where stale data would defeat the purpose. */
 async function refreshAudit(){
   logRead('Access', 'Audit trail viewed', 'Activity log', '');
+  await loadAuditRetention();
   if(!auditUnavailable){
     const { data, error } = await _supa.from('audit_log')
       .select('date, data').order('date', { ascending: false }).limit(500);
@@ -4513,16 +4593,33 @@ function renderAuditRetention(all){
   const oldest = dated.length ? new Date(Math.min(...dated)) : null;
   const stale  = dated.filter(d => d < cutoff).length;
 
-  const months = Math.round(AUDIT_RETENTION_DAYS / 30);
+  /* The choices, plus whatever is currently set if it is not one of
+     them — a value typed straight into the database should still show
+     as selected rather than silently reading as something else. */
+  const choices = [...AUDIT_RETENTION_CHOICES];
+  if(!choices.some(c => c.days === auditRetentionDays)){
+    choices.push({ days: auditRetentionDays, label: `${auditRetentionDays} days` });
+    choices.sort((a, b) => a.days - b.days);
+  }
+
   el.innerHTML = `
     <i class='bx bx-shield-quarter'></i>
     <span>
-      Kept for <strong>${AUDIT_RETENTION_DAYS} days</strong> (about ${months} months), then purged by the
-      database on a daily schedule. The panel cannot delete an entry, which is why the purge lives there.
-      ${oldest ? `Oldest entry held: <strong>${fmtDate(oldest)}</strong>.` : ''}
+      Entries are kept, then permanently deleted by the database on a daily schedule.
+      The panel cannot delete an entry itself — that is why the purge lives in the database,
+      and why it reads this same setting.
+      ${oldest ? ` Oldest entry held: <strong>${fmtDate(oldest)}</strong>.` : ''}
+      ${stale ? `<span class="audit-retention-warn"> ${stale} entr${stale === 1 ? 'y is' : 'ies are'} past
+         retention — the scheduled purge may not be running. See supabase-audit-log.sql.</span>` : ''}
     </span>
-    ${stale ? `<span class="audit-retention-warn">${stale} entr${stale === 1 ? 'y is' : 'ies are'} past retention —
-       the scheduled purge may not be running. See supabase-audit-log.sql.</span>` : ''}`;
+    ${isSuperAdmin() ? `
+      <label class="audit-retention-set">Keep for
+        <select class="audit-select" onchange="setAuditRetention(this.value)">
+          ${choices.map(c => `<option value="${c.days}" ${c.days === auditRetentionDays ? 'selected' : ''}>${c.label}</option>`).join('')}
+        </select>
+      </label>` : `<span class="audit-retention-set">Keep for <strong>${
+          (AUDIT_RETENTION_CHOICES.find(c => c.days === auditRetentionDays) || {}).label || auditRetentionDays + ' days'
+        }</strong></span>`}`;
   el.classList.toggle('overdue', stale > 0);
 }
 

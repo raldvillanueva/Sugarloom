@@ -63,17 +63,58 @@ create policy "audit: read"
 
 
 -- ══════════════════════════════════════════════════════════════
---  RETENTION — 365 days
+--  RETENTION
 --
 --  The panel deliberately cannot delete an audit row: the policies
 --  above grant insert and select and nothing else. That is what makes
 --  the trail trustworthy, and it is also why retention cannot be
 --  enforced from the browser. It has to happen here.
 --
---  Keep this number the same as AUDIT_RETENTION_DAYS in admin/admin.js,
---  which is what the Audit Trail page tells staff. If the two drift,
---  the page states a policy that is not the one being applied.
+--  The Super Admin sets how long entries are kept, from the Audit Trail
+--  page. That setting is stored in app_settings and READ BY THE PURGE
+--  BELOW, so the number on the page is the number the database applies.
+--  A retention policy the page states but the database ignores would be
+--  worse than none at all.
 -- ══════════════════════════════════════════════════════════════
+
+-- Small key/value table for settings the panel can change.
+create table if not exists app_settings (
+  id   text primary key,
+  data jsonb not null
+);
+
+alter table app_settings enable row level security;
+drop policy if exists "app access" on app_settings;
+create policy "app access" on app_settings
+  for all to anon, authenticated using (true) with check (true);
+
+insert into app_settings (id, data)
+values ('audit', jsonb_build_object('retentionDays', 365))
+on conflict (id) do nothing;
+
+
+-- The retention period actually in force.
+--
+-- Clamped, and that matters. app_settings is writable with the public
+-- anon key, like every other table here. Without a floor, anyone
+-- holding that key could set retention to one day and have the next
+-- scheduled purge quietly destroy the trail — undoing the append-only
+-- policy above without ever deleting a row themselves. The floor is the
+-- backstop for that; changes are also written to the trail before they
+-- take effect, so a shortening leaves its own evidence.
+create or replace function audit_retention_days()
+returns integer
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select greatest(30, least(3650,
+    coalesce(
+      nullif((select data->>'retentionDays' from app_settings where id = 'audit'), '')::integer,
+      365)
+  ));
+$$;
 
 create or replace function purge_audit_log()
 returns integer
@@ -83,9 +124,10 @@ set search_path = public
 as $$
 declare
   removed integer;
+  keep    integer := audit_retention_days();
 begin
   delete from audit_log
-  where date < now() - interval '365 days';
+  where date < now() - make_interval(days => keep);
   get diagnostics removed = row_count;
   return removed;
 end;
@@ -94,6 +136,8 @@ $$;
 -- Nobody using the anon key should be able to call this. Only the
 -- scheduler and the project owner.
 revoke all on function purge_audit_log() from public, anon, authenticated;
+-- Reading the setting is harmless; the panel shows it on the page.
+grant execute on function audit_retention_days() to anon, authenticated;
 
 
 -- ── Run it daily ──
@@ -133,6 +177,10 @@ where n.nspname = 'public' and c.relname = 'audit_log';
 
 -- And that the purge is scheduled. Expect one row, active = true.
 select jobname, schedule, active from cron.job where jobname = 'purge-audit-log';
+
+-- And what retention is currently in force, which is what the Audit
+-- Trail page should be showing.
+select audit_retention_days() as retention_days_in_force;
 
 
 -- ══════════════════════════════════════════════════════════════

@@ -38,6 +38,7 @@ Supabase (project `ruclytedzkdbranurfcq`) holds everything, mostly as
 - `profiles` — customer details, keyed to Supabase Auth users
 - `admin_users` — staff accounts, separate from Supabase Auth
 - `audit_log` — who did what in the panel (Super Admin → Audit Trail)
+- `app_settings` — runtime settings; currently the audit retention period
 - `site_content` — editable homepage copy (Admin → Content)
 - `inquiries` — contact-form messages (Admin → Messages)
 - `reviews` — customer reviews awaiting approval
@@ -97,11 +98,19 @@ one customer's details or reviews, opening an order, and viewing the
 trail; exports and prints are logged through `logAudit` directly and are
 never folded, since each one is a separate copy of the data leaving.
 
-Retention is 365 days (`AUDIT_RETENTION_DAYS`), enforced by
-`purge_audit_log()` on a daily pg_cron schedule in
-`supabase-audit-log.sql` — not by the panel, which has no delete policy
-and so cannot remove a row. Keep the two numbers in step; the page
-states the constant and the database applies the SQL. The page flags
+Retention is set by the Super Admin on the Audit Trail page and stored
+in `app_settings` (id `audit`, default 365 days). `purge_audit_log()`
+reads that same row, so there is one number rather than a page and a
+database that can drift. Enforcement is in the database on a daily
+pg_cron schedule because the panel has no delete policy and cannot
+remove a row.
+
+Both ends clamp it to 30–3650 days. The database clamp is the one that
+matters: `app_settings` is writable with the public anon key, so
+without a floor anyone holding it could set one day and let the next
+purge destroy the trail without deleting anything themselves. A change
+is written to the trail *before* it is applied, so a shortening leaves
+evidence among the entries it is about to remove. The page flags
 entries past retention, so a purge that has stopped is visible.
 
 Both write straight to `audit_log` rather than through

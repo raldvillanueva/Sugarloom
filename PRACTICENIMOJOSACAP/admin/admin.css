@@ -477,6 +477,10 @@ textarea { resize: vertical; }
 .audit-retention.overdue { background: #FEF3C7; color: #78350F; }
 .audit-retention.overdue i { color: #B45309; }
 .audit-retention-warn { font-weight: 600; color: #92400E; }
+.audit-retention-set {
+  display: flex; align-items: center; gap: 6px;
+  font-weight: 600; white-space: nowrap;
+}
 
 /* Dropdown filters in a filter bar, sized to match the date inputs. */
 .audit-select {
