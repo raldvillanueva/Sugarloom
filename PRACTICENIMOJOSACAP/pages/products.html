@@ -7,6 +7,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="../js/supabase-config.js"></script>
   <script src="../js/products.js" defer></script>
+  <script src="../js/content.js" defer></script>
   <script src="../js/inquiry.js" defer></script>
 </head>
 <body>
@@ -92,14 +93,14 @@
     <div class="contact-card">
       <div class="contact-icon">📧</div>
       <h3>Email</h3>
-      <p>sugarloomph@gmail.com</p>
-      <a href="mailto:sugarloomph@gmail.com" class="contact-link">Send us a message →</a>
+      <p data-cms="contact_email">sugarloomph@gmail.com</p>
+      <a href="mailto:sugarloomph@gmail.com" class="contact-link" data-cms-mailto="contact_email">Send us a message →</a>
     </div>
     <div class="contact-card">
       <div class="contact-icon">📞</div>
       <h3>Phone</h3>
-      <p>0912 345 6789</p>
-      <a href="tel:09123456789" class="contact-link">Call or text us →</a>
+      <p data-cms="contact_phone">0912 345 6789</p>
+      <a href="tel:09123456789" class="contact-link" data-cms-tel="contact_phone">Call or text us →</a>
     </div>
     <div class="contact-card">
       <div class="contact-icon">📸</div>

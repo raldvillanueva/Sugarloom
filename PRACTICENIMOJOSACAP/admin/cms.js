@@ -95,10 +95,8 @@ const CMS_SECTIONS = [
       { key: 'contact_label',         label: 'Small label',        placeholder: 'Get in Touch' },
       { key: 'contact_title',         label: 'Heading',            placeholder: 'Contact Us' },
       { key: 'contact_sub',           label: 'Subtitle',           placeholder: "We'd love to hear from you — orders, questions, or just to say hi 🍪" },
-      { key: 'contact_email',         label: 'Email shown',        placeholder: 'sugarloomph@gmail.com' },
-      { key: 'contact_email_link',    label: 'Email link',         placeholder: 'mailto:sugarloomph@gmail.com', hint: 'Keep the mailto: prefix' },
-      { key: 'contact_phone',         label: 'Phone shown',        placeholder: '0912 345 6789' },
-      { key: 'contact_phone_link',    label: 'Phone link',         placeholder: 'tel:09123456789', hint: 'Keep the tel: prefix, no spaces' },
+      { key: 'contact_email',         label: 'Email address',      placeholder: 'sugarloomph@gmail.com', hint: 'Shown on the homepage, the shop page and in the footer. The "Send us a message" link writes to it.' },
+      { key: 'contact_phone',         label: 'Phone number',       placeholder: '0912 345 6789', hint: 'Shown on the homepage, the shop page and in the footer. The "Call or text us" link dials it.' },
       { key: 'contact_facebook',      label: 'Facebook shown',     placeholder: '@sugarloomph' },
       { key: 'contact_facebook_link', label: 'Facebook link',      placeholder: 'https://facebook.com/sugarloomph' },
       { key: 'inquiry_title',         label: 'Message form title', placeholder: 'Send us a quick message' },
@@ -110,10 +108,10 @@ const CMS_SECTIONS = [
     fields: [
       { key: 'footer_logo',      label: 'Footer name',    placeholder: 'SugarLoomPh' },
       { key: 'footer_text',      label: 'Footer blurb',   placeholder: 'Freshly baked handcrafted cookies delivered across Metro Manila. Made with love, baked with purpose.', type: 'textarea' },
-      { key: 'footer_email',     label: 'Contact line 1', placeholder: '📧 sugarloomph@gmail.com' },
-      { key: 'footer_phone',     label: 'Contact line 2', placeholder: '📞 0912 345 6789' },
-      { key: 'footer_social',    label: 'Contact line 3', placeholder: '📸 @sugarloomph' },
-      { key: 'footer_address',   label: 'Contact line 4', placeholder: '📍 Manila, Philippines' },
+      // The footer's email and phone lines read the Contact section's
+      // fields above, so there is one number and one address to keep right.
+      { key: 'footer_social',    label: 'Social line',    placeholder: '📸 @sugarloomph' },
+      { key: 'footer_address',   label: 'Address line',   placeholder: '📍 Manila, Philippines' },
       { key: 'footer_copyright', label: 'Copyright line', placeholder: '© 2026 SugarLoom Ph · All rights reserved · Handcrafted with 🍪' }
     ]
   }

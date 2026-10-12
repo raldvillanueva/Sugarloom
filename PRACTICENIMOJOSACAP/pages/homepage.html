@@ -316,13 +316,13 @@
       <div class="contact-icon">📧</div>
       <h3>Email</h3>
       <p data-cms="contact_email">sugarloomph@gmail.com</p>
-      <a href="mailto:sugarloomph@gmail.com" class="contact-link" data-cms-href="contact_email_link">Send us a message →</a>
+      <a href="mailto:sugarloomph@gmail.com" class="contact-link" data-cms-mailto="contact_email">Send us a message →</a>
     </div>
     <div class="contact-card">
       <div class="contact-icon">📞</div>
       <h3>Phone</h3>
       <p data-cms="contact_phone">0912 345 6789</p>
-      <a href="tel:09123456789" class="contact-link" data-cms-href="contact_phone_link">Call or text us →</a>
+      <a href="tel:09123456789" class="contact-link" data-cms-tel="contact_phone">Call or text us →</a>
     </div>
     <div class="contact-card">
       <div class="contact-icon">📘</div>
@@ -381,8 +381,10 @@
     <div class="footer-col">
       <h4>Contact</h4>
       <ul>
-        <li data-cms="footer_email">📧 sugarloomph@gmail.com</li>
-        <li data-cms="footer_phone">📞 0912 345 6789</li>
+        <!-- Same keys as the contact cards, so the address and number are
+             set in one place and cannot disagree between the two. -->
+        <li>📧 <span data-cms="contact_email">sugarloomph@gmail.com</span></li>
+        <li>📞 <span data-cms="contact_phone">0912 345 6789</span></li>
         <li data-cms="footer_social">📸 @sugarloomph</li>
         <li data-cms="footer_address">📍 Manila, Philippines</li>
       </ul>
