@@ -152,9 +152,35 @@ function goToShop(){
   window.location.href = "../pages/products.html";
 }
 
+/* Opens the shop already filtered to one category. The shop reads
+   selectedCategory on load and clears it, so the filter applies to this
+   visit only — otherwise picking Brownies once would leave every later
+   trip to the shop stuck on brownies.
+
+   Boxes is not a category here: it has goToBoxes() below, because the
+   shop hides the Boxes pill unless it was opened that way. */
+function goToCategory(cat){
+  sessionStorage.removeItem("boxesOnlyMode");
+  localStorage.removeItem("customizeMode");
+  localStorage.setItem("selectedCategory", cat);
+  window.location.href = "../pages/products.html";
+}
+
 function goToBoxes(){
   sessionStorage.setItem("boxesOnlyMode", "true");
   window.location.href = "../pages/products.html";
+}
+
+/* There is no separate delivery page, and the answer people want is
+   already the first question in the FAQ, so this opens that question
+   rather than dropping them at the top of the list to hunt for it. */
+function openDeliveryInfo(){
+  const faq = document.getElementById("faq");
+  if(!faq) return;
+  const item = [...faq.querySelectorAll(".faq-item")]
+    .find(i => /deliver/i.test(i.querySelector(".faq-q")?.textContent || ""));
+  if(item) item.classList.add("open");
+  faq.scrollIntoView({ behavior: "smooth" });
 }
 
 function goToCustomize(){

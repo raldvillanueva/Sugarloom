@@ -202,7 +202,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     localStorage.removeItem("customizePage");
     window._customizeMode = false;
     window._boxesOnlyMode = false;
+    /* Consume the category the footer handed over. Leaving it behind
+       would pin the shop to that category on every later visit. */
     const selected = localStorage.getItem("selectedCategory") || "all";
+    localStorage.removeItem("selectedCategory");
     filterProducts(selected);
   }
 

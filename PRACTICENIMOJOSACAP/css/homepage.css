@@ -26,6 +26,19 @@
   --transition: 0.22s ease;
 }
 
+/* The nav is fixed, so an anchor jump would otherwise park the section's
+   heading underneath it — you land on a section with its title hidden and
+   no clear sign anything moved. Holding every jump short of the nav keeps
+   the heading you asked for on screen. */
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 96px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
 body {
   background: var(--bg);
   color: var(--text);

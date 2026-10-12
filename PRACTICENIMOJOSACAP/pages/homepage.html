@@ -361,10 +361,10 @@
     <div class="footer-col">
       <h4>Shop</h4>
       <ul>
-        <li><a href="#" onclick="goToShop()">All Cookies</a></li>
-        <li><a href="#" onclick="goToShop()">Brownies</a></li>
-        <li><a href="#" onclick="goToShop()">Cupcakes</a></li>
-        <li><a href="#" onclick="goToShop()">Boxes</a></li>
+        <li><a href="products.html" onclick="goToCategory('cookie'); return false">All Cookies</a></li>
+        <li><a href="products.html" onclick="goToCategory('brownie'); return false">Brownies</a></li>
+        <li><a href="products.html" onclick="goToCategory('cupcake'); return false">Cupcakes</a></li>
+        <li><a href="products.html" onclick="goToBoxes(); return false">Boxes</a></li>
       </ul>
     </div>
 
@@ -372,9 +372,9 @@
       <h4>Info</h4>
       <ul>
         <li><a href="#about">Our Story</a></li>
-        <li><a href="#" onclick="goToShop(); showSection('faq')">FAQ</a></li>
-        <li><a href="#" onclick="goToShop(); showSection('contact')">Contact Us</a></li>
-        <li><a href="#">Delivery Info</a></li>
+        <li><a href="#faq">FAQ</a></li>
+        <li><a href="#contact">Contact Us</a></li>
+        <li><a href="#faq" onclick="openDeliveryInfo(); return false">Delivery Info</a></li>
       </ul>
     </div>
 
