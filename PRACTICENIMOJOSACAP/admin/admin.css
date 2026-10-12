@@ -1377,6 +1377,22 @@ textarea { resize: vertical; }
   vertical-align: middle;
 }
 
+/* How near an unfinished order is to the day it was promised. Sits on
+   the order row so it is seen while working the queue, which is where
+   an order gets forgotten — not on the dashboard. */
+.due-tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .04em;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.due-tag.warn { background: #FEF3C7; color: #92400E; }
+.due-tag.high { background: #FEE2E2; color: #991B1B; }
+
 /* Lalamove demo controls */
 .llm-demo {
   margin-top: 12px;

@@ -121,8 +121,19 @@ shelf.
 are returned if the order is later cancelled. `order.stockDeducted`
 guards against deducting twice for the same bake.
 
-Orders whose delivery date has passed are archived automatically.
-Restoring one exempts it from that sweep.
+Orders whose delivery date has passed are archived automatically, but
+**only if they were Fulfilled or Cancelled** (`ORDER_SETTLED`). An order
+nobody finished is not a finished order: it stays in its tab flagged
+LATE, because sweeping it away is indistinguishable from the customer
+never being served. Restoring an archived order exempts it from the
+sweep for good.
+
+`deliveryUrgency(order)` drives the warnings — a DUE TOMORROW / DUE
+TODAY / LATE chip on the order row, an escalating notification (the id
+carries the urgency, so dismissing one step does not silence the next),
+and a red banner on Orders that cannot be dismissed. The admin recovers
+by rescheduling the delivery date from the order, or cancelling it so
+the ingredients go back to stock.
 
 ## The backend
 

@@ -1247,9 +1247,24 @@ function renderOrders(){
   const isPacker = currentUser.role === 'Packer';
   const isAdmin  = currentUser.role === 'Administrator';
 
-  // Sweep past-due orders into Archived before building any of the lists
+  // Tidy away finished orders whose date has passed, before building the lists
   const sweptNow = archiveOverdueOrders();
-  if(sweptNow) toast(`${sweptNow} past-due order${sweptNow===1?'':'s'} moved to Archived`, 'warning');
+  if(sweptNow) toast(`${sweptNow} completed order${sweptNow===1?'':'s'} moved to Archived`, '');
+
+  /* Orders past their promised day that nobody finished. These are not
+     archived, so this banner is the thing standing between a forgotten
+     order and a customer who never hears from anyone. */
+  const lateBanner = document.getElementById('late-orders-alert');
+  if(lateBanner){
+    const late = overdueUnsettledOrders();
+    lateBanner.style.display = (isAdmin && late.length) ? 'flex' : 'none';
+    const msg = document.getElementById('late-orders-msg');
+    if(msg){
+      msg.textContent = late.length === 1
+        ? `Order ${late[0].id} for ${late[0].customer || 'a customer'} was due ${fmtDate(late[0].preferredDate)} and is still ${late[0].status}.`
+        : `${late.length} orders are past their delivery date and still unfinished.`;
+    }
+  }
 
   // Role alert banners
   const bakerAlert  = document.getElementById('baker-alert');
@@ -1409,6 +1424,16 @@ function renderOrders(){
       ? `<span class="auto-archived-tag" title="${o.archivedReason || 'Delivery date has passed'}">PAST DUE</span>`
       : '';
 
+    /* The promised delivery day, on the row itself. The dashboard had a
+       TOMORROW badge, but an admin working through the Orders tab never
+       saw it — which is how an order reaches its delivery date still
+       sitting on Pending. */
+    const due = deliveryUrgency(o);
+    const dueTag = due
+      ? `<span class="due-tag ${due.tone}" title="Delivery promised for ${fmtDate(o.preferredDate)}${
+           due.key === 'late' ? ' — this has passed and the order is still ' + o.status : ''}">${due.label}</span>`
+      : '';
+
     /* Worth a phone call before anyone starts baking */
     const risk = o.status === 'Pending' ? codRiskFor(o) : null;
     const riskTag = risk
@@ -1417,7 +1442,7 @@ function renderOrders(){
     return `
     <tr class="order-row ${isQueue && idx===0 ? 'queue-next-row' : ''}"
         onclick="openOrderModal('${o.id}', true)" title="Click to view details">
-      <td class="fw-bold">${queueTag}${o.id}${deferTag}${overdueTag}${riskTag}</td>
+      <td class="fw-bold">${queueTag}${o.id}${deferTag}${dueTag}${overdueTag}${riskTag}</td>
       <td>${escHTML(o.customer)}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
       <td class="fw-bold">₱${o.total.toLocaleString()}</td>
@@ -1628,6 +1653,36 @@ function unarchiveOrder(id){
    still live, only the day after does it go. Reversible — restoring one
    from the Archived tab keeps it out of the sweep for good.
    ============================================= */
+/* An order nobody acted on is not a finished order. Only these two are
+   safe to tidy away on their own — everything else still represents a
+   customer waiting, and hiding it would turn a missed cake into a
+   silent one. */
+const ORDER_SETTLED = ['Fulfilled', 'Cancelled'];
+
+function isOrderSettled(o){ return ORDER_SETTLED.includes(o.status); }
+
+/* How close an unfinished order is to the day it was promised. Returns
+   null once it is settled, or if no date was given. */
+function deliveryUrgency(o){
+  if(!o || o.archived || isOrderSettled(o) || !o.preferredDate) return null;
+  const d = new Date(o.preferredDate);
+  if(isNaN(d.getTime())) return null;
+  d.setHours(0,0,0,0);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const days = Math.round((d - today) / 86400000);
+  if(days <   0) return { key:'late',     days, label:'LATE',         tone:'high' };
+  if(days === 0) return { key:'today',    days, label:'DUE TODAY',    tone:'high' };
+  if(days === 1) return { key:'tomorrow', days, label:'DUE TOMORROW', tone:'warn' };
+  return null;
+}
+
+function overdueUnsettledOrders(){
+  return DB.orders.filter(o => {
+    const u = deliveryUrgency(o);
+    return u && u.key === 'late';
+  });
+}
+
 function archiveOverdueOrders(){
   const today = new Date(); today.setHours(0,0,0,0);
   const swept = [];
@@ -1635,6 +1690,14 @@ function archiveOverdueOrders(){
   DB.orders.forEach(o => {
     if(o.archived || o.noAutoArchive) return;
     if(!o.preferredDate) return;              // no delivery date promised — leave it alone
+
+    /* Never sweep an order that was not fulfilled or cancelled. It used
+       to go quietly into Archived marked "delivery date has passed",
+       which is exactly what an order the admin forgot to confirm looks
+       like — the customer gets nothing and the evidence files itself
+       away. Those stay in their tab, flagged LATE, until a person
+       decides what to do with them. */
+    if(!isOrderSettled(o)) return;
 
     const d = new Date(o.preferredDate);
     if(isNaN(d.getTime())) return;
@@ -4529,6 +4592,27 @@ function buildNotifs(){
     notifList.push({ id, view:'inventory', icon:'bx-cart-add', color:'#EA580C',
       text:`Restock form ${escHTML(f.reference || f.id)} is waiting for your review — ${escHTML(names.slice(0,3).join(', '))}${names.length > 3 ? ` +${names.length - 3} more` : ''}`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); setTimeout(()=>viewRestockForm(f.id), 200); }
+    });
+  });
+
+  /* Orders approaching, or past, the day they were promised and still
+     not finished. The id carries the urgency, so dismissing "due
+     tomorrow" does not also silence "due today" and then "late" — each
+     step is a new warning rather than one the admin already waved
+     away. */
+  DB.orders.filter(o => !o.archived).forEach(o => {
+    const due = deliveryUrgency(o);
+    if(!due) return;
+    const id = `due_${due.key}_${o.id}`;
+    if(seen.has(id)) return;
+    const late = due.key === 'late';
+    notifList.push({ id, view:'orders',
+      icon: late ? 'bx-error' : 'bx-time-five',
+      color: late ? '#DC2626' : due.key === 'today' ? '#EA580C' : '#D97706',
+      text: late
+        ? `Order ${o.id} for ${escHTML(o.customer || 'a customer')} was due ${fmtDate(o.preferredDate)} and is still ${escHTML(o.status)}`
+        : `Order ${o.id} for ${escHTML(o.customer || 'a customer')} is due ${due.key === 'today' ? 'today' : 'tomorrow'} and is still ${escHTML(o.status)}`,
+      action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id, true),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
   });
 
