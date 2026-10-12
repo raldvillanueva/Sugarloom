@@ -69,14 +69,17 @@ sees what. The sidebar, the landing view and `switchView()` all read it,
 so a role cannot be shown a nav item it may not open, or open a view
 whose nav item is hidden. To add a view to a role, add it there.
 
+The two senior roles divide rather than overlap.
+
 - **Super Admin** — Customers, Reports, Content, Users, Audit Trail.
-  An oversight role, deliberately not "an Administrator with extras":
-  it is the only role that can read the audit trail, and keeping
-  day-to-day operations out of it is the point. Seeded as
+  Governs people, published copy and the records. The only role that can
+  reach staff accounts, the CMS or the trail. Seeded as
   `superadmin@sugarloom.ph` / `super123`, and `ensureSuperAdmin()`
   creates the account on databases seeded before the role existed.
-- **Administrator** — everything except the audit trail, so the actions
-  being recorded cannot be read by whoever took them.
+- **Administrator** — runs the shop: Dashboard, Products, Orders,
+  Customers, Inventory, Reports, Messages, Reviews. No Content, no
+  Users, no Audit Trail — an administrator who could edit staff accounts
+  or read the log of their own actions is not being audited by it.
 - **Baker**, **Packer** — Orders only.
 
 Every recorded action goes through `logAudit(area, action, entity,

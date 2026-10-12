@@ -66,15 +66,18 @@ const PRODUCT_RECIPES = {
    all read this one map, so a role can never be shown a nav item it is
    not allowed to open, nor open a view whose nav item is hidden.
 
-   Super Admin is deliberately not "an Administrator with extras". It is
-   an oversight role — people, content, records — and it is the only role
-   that can read the audit trail. Keeping day-to-day operations out of it
-   is what makes the trail worth keeping: the administrator whose actions
-   are being recorded cannot reach the record of them. */
+   Super Admin is deliberately not "an Administrator with extras". The two
+   roles divide rather than overlap: Super Admin governs people, published
+   content and the records, while Administrator runs the shop day to day.
+
+   So staff accounts, the website copy and the audit trail sit with Super
+   Admin alone. That is what makes the trail worth keeping — an
+   administrator who could reach the log of their own actions, or grant
+   themselves a role, is not being audited by it. */
 const ROLE_VIEWS = {
   'Super Admin':   ['customers', 'reports', 'content', 'users', 'audit'],
   'Administrator': ['dashboard', 'products', 'orders', 'customers', 'inventory',
-                    'reports', 'messages', 'content', 'users', 'reviews'],
+                    'reports', 'messages', 'reviews'],
   'Baker':         ['orders'],
   'Packer':        ['orders']
 };
