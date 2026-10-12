@@ -60,6 +60,11 @@ create policy "own profile: update"
 --  than left as "RLS disabled". The real fix is to move staff logins onto
 --  Supabase Auth, or to put the admin panel behind a server holding the
 --  service_role key — see the notes at the bottom.
+--
+--  audit_log is deliberately NOT in this list. The panel only inserts and
+--  reads there, never updates or deletes, so it gets a narrower policy of
+--  its own in supabase-audit-log.sql that withholds update and delete and
+--  makes the trail append-only. Adding it here would hand that back.
 -- ──────────────────────────────────────────────────────────────
 
 do $$
@@ -70,7 +75,7 @@ begin
   foreach t in array array[
     'products', 'ingredients', 'admin_users', 'orders', 'transactions',
     'stock_log', 'order_tracking', 'site_content', 'inquiries', 'reviews',
-    'supplier_orders', 'audit_log'
+    'supplier_orders'
   ] loop
     -- Skip anything that isn't here rather than aborting the whole script,
     -- which would leave some tables locked and others untouched.

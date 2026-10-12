@@ -96,8 +96,10 @@ create table if not exists inquiries (
 create index if not exists idx_inquiries_date on inquiries (date desc);
 
 -- Who did what in the admin panel (Super Admin → Audit Trail).
--- Append-only by convention: the panel writes rows here and never
--- updates or deletes them, which is the whole point of the record.
+-- The panel only inserts and reads here, never updates or deletes, so
+-- this table gets a narrower policy than the rest: run
+-- supabase-audit-log.sql to make the trail append-only at the database
+-- level. It is the one table where RLS buys real protection.
 create table if not exists audit_log (
   id   text        primary key,
   date timestamptz default now(),
@@ -119,4 +121,5 @@ alter table profiles       disable row level security;
 alter table site_content   disable row level security;
 alter table inquiries      disable row level security;
 alter table supplier_orders disable row level security;
-alter table audit_log      disable row level security;
+-- audit_log is left out on purpose — see supabase-audit-log.sql, which
+-- enables RLS on it with insert and select only.
