@@ -1492,9 +1492,6 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
      anywhere on the row does that now. */
   const menu = [];
 
-  if(isAdmin && live)
-    menu.push({ label: 'Edit order', icon: 'bx-edit', fn: `openOrderEditModal('${o.id}')` });
-
   if(isAdmin && canReorder){
     menu.push({ label: 'Move to front of queue', icon: 'bx-up-arrow-circle',   fn: `adminQueueToFront('${o.id}')` });
     menu.push({ label: 'Move to back of queue',  icon: 'bx-down-arrow-circle', fn: `adminQueueToBack('${o.id}')` });
@@ -2420,86 +2417,6 @@ function deleteOrder(id){
       toast(putBack.length ? 'Order deleted — ingredients returned to stock' : 'Order deleted', 'success');
     }
   });
-}
-
-let _editingOrderId = null;
-
-function openOrderEditModal(id){
-  const o = DB.orders.find(oo => oo.id === id);
-  if(!o) return;
-  _editingOrderId = id;
-
-  document.getElementById('oe-title').textContent = 'Edit ' + o.id;
-  document.getElementById('oe-customer').value = o.customer || '';
-  document.getElementById('oe-phone').value    = o.phone || '';
-  document.getElementById('oe-address').value  = o.address || '';
-  document.getElementById('oe-date').value     = o.preferredDate ? String(o.preferredDate).slice(0,10) : '';
-  document.getElementById('oe-time').value     = o.preferredTime || '';
-  document.getElementById('oe-payment').value  = o.payment || 'GCash';
-
-  renderOrderEditItems(o.items || []);
-  openModal('order-edit-modal');
-}
-
-function renderOrderEditItems(items){
-  document.getElementById('oe-items').innerHTML = items.map((it, i) => `
-    <div class="oe-item" data-idx="${i}">
-      <span class="oe-item-name">${escHTML(it.name)}</span>
-      <span class="oe-item-price">₱${Number(it.price||0).toLocaleString()}</span>
-      <input type="number" min="0" value="${Number(it.qty)||1}" data-oe-qty
-             onchange="recalcOrderEditTotal()" oninput="recalcOrderEditTotal()">
-      <button class="btn-icon danger" title="Remove item" onclick="removeOrderEditItem(${i})"><i class='bx bx-trash'></i></button>
-    </div>`).join('') || '<p class="cms-hint">No items left — the order must have at least one.</p>';
-  recalcOrderEditTotal();
-}
-
-function currentOrderEditItems(){
-  const o = DB.orders.find(oo => oo.id === _editingOrderId);
-  if(!o) return [];
-  return [...document.querySelectorAll('#oe-items .oe-item')].map(row => {
-    const src = o.items[Number(row.dataset.idx)];
-    return { ...src, qty: Math.max(0, parseInt(row.querySelector('[data-oe-qty]').value) || 0) };
-  }).filter(it => it.qty > 0);
-}
-
-function recalcOrderEditTotal(){
-  const total = currentOrderEditItems().reduce((s, it) => s + (Number(it.price)||0) * it.qty, 0);
-  document.getElementById('oe-total').textContent = '₱' + total.toLocaleString();
-}
-
-function removeOrderEditItem(idx){
-  const o = DB.orders.find(oo => oo.id === _editingOrderId);
-  if(!o) return;
-  const kept = o.items.filter((_, i) => i !== idx);
-  o.items = kept;                 // staged; only persisted on Save
-  renderOrderEditItems(kept);
-}
-
-function saveOrderEdit(){
-  const o = DB.orders.find(oo => oo.id === _editingOrderId);
-  if(!o) return;
-
-  const items = currentOrderEditItems();
-  if(!items.length){ toast('An order needs at least one item', 'danger'); return; }
-
-  const customer = document.getElementById('oe-customer').value.trim();
-  if(!customer){ toast('Customer name is required', 'danger'); return; }
-
-  o.customer      = customer;
-  o.phone         = document.getElementById('oe-phone').value.trim();
-  o.address       = document.getElementById('oe-address').value.trim();
-  o.preferredDate = document.getElementById('oe-date').value || null;
-  o.preferredTime = document.getElementById('oe-time').value || null;
-  o.payment       = document.getElementById('oe-payment').value;
-  o.items         = items;
-  o.total         = items.reduce((s, it) => s + (Number(it.price)||0) * it.qty, 0);
-
-  /* A changed delivery date can pull an order back out of the overdue
-     sweep, so clear the flags that would otherwise re-archive it. */
-  delete o.autoArchived; delete o.archivedReason;
-
-  saveDB(); closeModal('order-edit-modal'); renderOrders(); updateBadges();
-  toast('Order updated', 'success');
 }
 
 /* ── ADMIN QUEUE CONTROL ──

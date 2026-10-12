@@ -1482,25 +1482,6 @@ textarea { resize: vertical; }
 .row-menu-item.danger i { color: var(--danger); }
 .row-menu-item.danger:hover { background: var(--danger-light); }
 
-/* Order edit / create modals */
-.oe-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px; margin-bottom: 6px;
-  border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--bg);
-}
-.oe-item-name { flex: 1; min-width: 0; font-size: 13px; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.oe-item-price { font-size: 12px; color: var(--text-2); white-space: nowrap; }
-.oe-item input[type="number"] {
-  width: 70px; padding: 6px 8px; font-size: 13px;
-  border: 1.5px solid var(--border); border-radius: 8px;
-}
-.oe-total-row {
-  text-align: right; font-size: 15px; margin-top: 12px;
-  padding-top: 12px; border-top: 1px solid var(--border);
-}
-
 /* Whole order row opens its details */
 .order-row { cursor: pointer; transition: background var(--transition); }
 .order-row:hover { background: var(--bg); }
