@@ -131,6 +131,9 @@
       <a class="nav-item" id="users-nav" data-view="users" onclick="switchView('users')">
         <i class='bx bxs-user-detail'></i><span>Users</span>
       </a>
+      <a class="nav-item" id="audit-nav" data-view="audit" onclick="switchView('audit')">
+        <i class='bx bx-history'></i><span>Audit Trail</span>
+      </a>
       <a class="nav-item" data-view="reviews" onclick="switchView('reviews')">
         <i class='bx bxs-star'></i><span>Reviews</span>
         <span class="badge" id="reviews-pending-badge" style="display:none;background:#f59e0b">0</span>
@@ -638,6 +641,94 @@
         </div>
       </section>
 
+      <!-- ========== AUDIT TRAIL ========== -->
+      <section id="view-audit" class="view">
+        <div class="page-header">
+          <div><h1>Audit Trail</h1><p>A record of who did what in the admin panel</p></div>
+          <div class="date-range">
+            <label>From <input type="date" id="audit-from" onchange="setAuditRange()"></label>
+            <label>To <input type="date" id="audit-to" onchange="setAuditRange()"></label>
+            <button class="btn-ghost sm" onclick="clearAuditRange()">Clear</button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class='bx bx-history'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Entries Recorded</span>
+              <span class="stat-value" id="audit-total">0</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class='bx bx-calendar-check'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Today</span>
+              <span class="stat-value" id="audit-today">0</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><i class='bx bxs-user-detail'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Staff Active</span>
+              <span class="stat-value" id="audit-actors">0</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange"><i class='bx bx-lock-open-alt'></i></div>
+            <div class="stat-info">
+              <span class="stat-label">Rejected Sign-ins</span>
+              <span class="stat-value" id="audit-failures">0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <h3>Activity Log</h3>
+              <p style="font-size:12px;color:var(--text-2);margin:2px 0 0">Newest first. Entries are written as actions happen and are never edited or removed.</p>
+            </div>
+            <button class="btn-secondary sm" onclick="exportAuditCSV()"><i class='bx bx-export'></i> Export CSV</button>
+          </div>
+          <div class="hist-filter-bar">
+            <label>Role
+              <select id="audit-role" onchange="renderAudit()" class="audit-select">
+                <option value="All">All roles</option>
+                <option value="Super Admin">Super Admin</option>
+                <option value="Administrator">Administrator</option>
+                <option value="Baker">Baker</option>
+                <option value="Packer">Packer</option>
+              </select>
+            </label>
+            <label>Area
+              <select id="audit-area" onchange="renderAudit()" class="audit-select">
+                <option value="All">All areas</option>
+                <option value="Access">Access</option>
+                <option value="Users">Users</option>
+                <option value="Orders">Orders</option>
+                <option value="Products">Products</option>
+                <option value="Inventory">Inventory</option>
+                <option value="Content">Content</option>
+              </select>
+            </label>
+            <div class="hist-filter-sep"></div>
+            <div style="position:relative;display:flex;align-items:center">
+              <i class='bx bx-search' style="position:absolute;left:8px;color:var(--text-2);font-size:14px;pointer-events:none"></i>
+              <input id="audit-search" type="text" placeholder="Search..." oninput="renderAudit()"
+                style="padding:5px 10px 5px 28px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:var(--bg);color:var(--text);outline:none;width:200px">
+            </div>
+            <span class="range-count" id="audit-range-count"></span>
+          </div>
+          <table class="data-table">
+            <thead>
+              <tr><th>When</th><th>Who</th><th>Role</th><th>Area</th><th>Action</th><th>Details</th></tr>
+            </thead>
+            <tbody id="audit-body"></tbody>
+          </table>
+        </div>
+      </section>
+
       <!-- ========== MESSAGES ========== -->
       <section id="view-messages" class="view">
         <div class="page-header">
@@ -975,6 +1066,9 @@
         <div class="form-group">
           <label>Role *</label>
           <select id="um-role">
+            <!-- The Super Admin option is shown only to a Super Admin —
+                 see openUserModal(). -->
+            <option value="Super Admin" id="um-role-super">Super Admin</option>
             <option value="Administrator">Administrator</option>
             <option value="Baker">Baker</option>
             <option value="Packer">Packer</option>

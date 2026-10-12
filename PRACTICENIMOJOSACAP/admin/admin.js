@@ -61,9 +61,33 @@ const PRODUCT_RECIPES = {
   p12: [{ ingredientId:'i1',qty:240 },{ ingredientId:'i2',qty:210 },{ ingredientId:'i3',qty:300 },{ ingredientId:'i5',qty:7 },{ ingredientId:'i6',qty:180 },{ ingredientId:'i7',qty:60 },{ ingredientId:'i15',qty:30 },{ ingredientId:'i16',qty:6 },{ ingredientId:'i17',qty:30 }],
 };
 
+/* ── ROLES ──
+   What each role may open. The sidebar, the landing view and switchView()
+   all read this one map, so a role can never be shown a nav item it is
+   not allowed to open, nor open a view whose nav item is hidden.
+
+   Super Admin is deliberately not "an Administrator with extras". It is
+   an oversight role — people, content, records — and it is the only role
+   that can read the audit trail. Keeping day-to-day operations out of it
+   is what makes the trail worth keeping: the administrator whose actions
+   are being recorded cannot reach the record of them. */
+const ROLE_VIEWS = {
+  'Super Admin':   ['customers', 'reports', 'content', 'users', 'audit'],
+  'Administrator': ['dashboard', 'products', 'orders', 'customers', 'inventory',
+                    'reports', 'messages', 'content', 'users', 'reviews'],
+  'Baker':         ['orders'],
+  'Packer':        ['orders']
+};
+
+function allowedViews(role){ return ROLE_VIEWS[role] || ROLE_VIEWS['Administrator']; }
+function canView(view){ return !!currentUser && allowedViews(currentUser.role).includes(view); }
+function homeView(){ return allowedViews(currentUser && currentUser.role)[0]; }
+function isSuperAdmin(){ return !!currentUser && currentUser.role === 'Super Admin'; }
+
 /* ---- SEED DATA ---- */
 const SEED = {
   users: [
+    { id:'u0', fname:'Super',  lname:'Admin',     email:'superadmin@sugarloom.ph', password:'super123', role:'Super Admin', active:true },
     { id:'u1', fname:'Admin',  lname:'SugarLoom', email:'admin@sugarloom.ph',  password:'admin123',  role:'Administrator', active:true },
     { id:'u2', fname:'Baker',  lname:'SugarLoom', email:'baker@sugarloom.ph',  password:'baker123',  role:'Baker',         active:true },
     { id:'u3', fname:'Packer', lname:'SugarLoom', email:'packer@sugarloom.ph', password:'packer123', role:'Packer',        active:true },
@@ -186,7 +210,8 @@ async function initDB(){
         orders:         toArr(oRes),
         transactions:   toArr(txRes).sort((a, b) => new Date(b.date) - new Date(a.date)),
         stockLog:       toArr(slRes),
-        supplierOrders: toArr(poRes)
+        supplierOrders: toArr(poRes),
+        auditLog:       []    // loaded on demand by refreshAudit(), Super Admin only
       };
       // Patch recipes for products that are missing them
       let patched = false;
@@ -201,9 +226,31 @@ async function initDB(){
     DB.orders = []; DB.transactions = []; DB.stockLog = []; DB.supplierOrders = [];
   }
 
+  await ensureSuperAdmin();
+
   // Prime the tracking cache so it's available before first poll
   await refreshTrackingCache().catch(() => {});
   checkDailyReset();
+}
+
+/* Every database seeded before the Super Admin role existed has no
+   account that can reach the audit trail, and seeding only runs on an
+   empty install — so add the account when it is missing rather than only
+   on a first run. Without this the role would be unreachable on every
+   database already out there, the live one included. */
+async function ensureSuperAdmin(){
+  try {
+    if((DB.users || []).some(u => u.role === 'Super Admin')) return;
+    const sa = { id:'u0', fname:'Super', lname:'Admin',
+                 email:'superadmin@sugarloom.ph', role:'Super Admin', active:true };
+    await setUserPassword(sa, 'super123');
+    DB.users.unshift(sa);
+    const { error } = await _supa.from('admin_users')
+      .upsert({ id: sa.id, data: sa }, { onConflict: 'id' });
+    if(error) console.error('could not create the Super Admin account:', error);
+  } catch(err){
+    console.error('ensureSuperAdmin failed:', err);
+  }
 }
 
 function saveDB(){
@@ -285,13 +332,25 @@ async function adminLogin(){
   const pw    = document.getElementById('login-password').value;
 
   const u = DB.users.find(u => u.email === email && u.active);
-  if(!u || !(await passwordMatches(u, pw))){ showLoginError('Invalid credentials'); return; }
+  if(!u || !(await passwordMatches(u, pw))){
+    /* Recorded against the account when the email is a real one, so a
+       run of rejected attempts on one account is visible in the trail.
+       The password typed is never written down. */
+    const known = DB.users.find(x => x.email === email);
+    currentUser = known || null;
+    logAudit('Access', 'Sign-in rejected', email,
+             !known ? 'No such account' : !known.active ? 'Account is deactivated' : 'Wrong password');
+    currentUser = null;
+    showLoginError('Invalid credentials');
+    return;
+  }
 
   // Quietly move legacy plain-text accounts onto a hash
   if(!u.passwordHash){ await setUserPassword(u, pw); saveDB(); }
 
   currentUser = u;
   sessionStorage.setItem('sl_admin_sess', JSON.stringify(u));
+  logAudit('Access', 'Signed in', u.email, '');
   showApp();
 }
 function showLoginError(msg){
@@ -300,8 +359,10 @@ function showLoginError(msg){
   setTimeout(()=>el.classList.add('hidden'), 3000);
 }
 function adminLogout(){
-  sessionStorage.removeItem('sl_admin_sess');
-  location.reload();
+  /* Awaited so the entry reaches Supabase before the reload tears the
+     page down — a fire-and-forget insert here is routinely lost. */
+  const done = () => { sessionStorage.removeItem('sl_admin_sess'); location.reload(); };
+  logAudit('Access', 'Signed out', currentUser?.email || '', '').then(done, done);
 }
 
 /* =============================================
@@ -400,28 +461,31 @@ function showApp(){
   });
   const defaultTab = document.getElementById('tab-all');
   if(defaultTab) defaultTab.classList.add('active');
-  // Reset all nav items and section labels to visible before applying role restrictions
-  document.querySelectorAll('.nav-item').forEach(el => el.style.display = '');
-  document.querySelectorAll('.sidebar-section-label').forEach(el => el.style.display = '');
-  const isBaker  = currentUser.role === 'Baker';
-  const isPacker = currentUser.role === 'Packer';
-  const isStaff  = isBaker || isPacker;
-  if(currentUser.role !== 'Administrator'){
-    document.getElementById('users-nav').style.display = 'none';
-    document.getElementById('content-nav').style.display = 'none';
-    document.getElementById('messages-nav').style.display = 'none';
-  }
-  if(isStaff){
-    ['dashboard','products','customers','inventory','reports','reviews','content','messages'].forEach(v => {
-      const el = document.querySelector(`.nav-item[data-view="${v}"]`);
-      if(el) el.style.display = 'none';
-    });
-    document.querySelectorAll('.sidebar-section-label').forEach(el => el.style.display = 'none');
-    const notifBtn = document.querySelector('.notif-btn');
-    if(notifBtn) notifBtn.style.display = 'none';
-  }
+  /* Show only what this role may open. One rule, read from ROLE_VIEWS,
+     rather than a list of roles to hide things from — adding a view or a
+     role used to mean remembering to update several places, and the item
+     that got forgotten was the one that leaked. */
+  document.querySelectorAll('.nav-item[data-view]').forEach(el => {
+    el.style.display = canView(el.dataset.view) ? '' : 'none';
+  });
+
+  /* A section heading with nothing left under it is just noise. MAIN sits
+     outside the <nav> and MANAGEMENT inside it, so walk the sidebar in
+     document order rather than by sibling. */
+  let label = null, labelHasItems = false;
+  const flushLabel = () => { if(label) label.style.display = labelHasItems ? '' : 'none'; };
+  document.querySelectorAll('.sidebar-section-label, .nav-item[data-view]').forEach(el => {
+    if(el.classList.contains('sidebar-section-label')){ flushLabel(); label = el; labelHasItems = false; }
+    else if(el.style.display !== 'none') labelHasItems = true;
+  });
+  flushLabel();
+
+  const isStaff = currentUser.role === 'Baker' || currentUser.role === 'Packer';
+  const notifBtn = document.querySelector('.notif-btn');
+  if(notifBtn) notifBtn.style.display = isStaff ? 'none' : '';
+
   syncStoreOrders().then(() => {
-    switchView(isStaff ? 'orders' : 'dashboard');
+    switchView(homeView());
     updateBadges();
     buildNotifs();
     renderNotifPanel();
@@ -510,9 +574,9 @@ function updateUserUI(){
 
 /* ---- NAVIGATION ---- */
 function switchView(view){
-  if(currentUser && (currentUser.role === 'Baker' || currentUser.role === 'Packer')){
-    if(view !== 'orders') view = 'orders';
-  }
+  /* Never land somewhere this role cannot reach — including by calling
+     switchView from the console or following a stale link. */
+  if(currentUser && !canView(view)) view = homeView();
   checkDailyReset();
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -531,6 +595,7 @@ function switchView(view){
   if(view==='reviews')    renderAdminReviews();
   if(view==='content')    renderContent();
   if(view==='messages')   renderInquiries();
+  if(view==='audit')      refreshAudit();
 }
 
 function toggleSidebar(){
@@ -1089,6 +1154,7 @@ function saveProduct(){
     const imgVal  = document.getElementById('pm-img').value.trim();
     if(imgVal) p.img = imgVal;
     saveDB(); closeModal('product-modal'); renderProducts(); updateBadges();
+    logAudit('Products', 'Product updated', p.name, `₱${p.price} · daily limit ${p.dailyLimit}`);
     toast('Product updated','success');
     return;
   }
@@ -1107,6 +1173,7 @@ function saveProduct(){
     recipe:      collectRecipeRows()
   };
   DB.products.push({id:'p'+Date.now(), ...data});
+  logAudit('Products', 'Product added', name, `${cat} · ₱${price}`);
   saveDB(); closeModal('product-modal'); renderProducts(); updateBadges();
   toast('Product added','success');
 }
@@ -2245,6 +2312,9 @@ function deleteOrder(id){
       localStorage.setItem('sl_store_orders', JSON.stringify(store.filter(x => x.id !== id)));
 
       saveDB(); renderOrders(); updateBadges(); renderInventory();
+      logAudit('Orders', 'Order deleted', `${o.id} — ${o.customer || 'Customer'}`,
+               `₱${Number(o.total||0).toLocaleString()}` +
+               (putBack.length ? `, ${putBack.length} ingredient${putBack.length===1?'':'s'} returned` : ''));
       toast(putBack.length ? 'Order deleted — ingredients returned to stock' : 'Order deleted', 'success');
     }
   });
@@ -2639,7 +2709,9 @@ function rejectCancelRequest(){
 function updateOrderStatus(id, status){
   const o = DB.orders.find(oo=>oo.id===id);
   if(!o) return;
+  const was = o.status;
   o.status = status;
+  logAudit('Orders', 'Status changed', `${o.id} — ${o.customer || 'Customer'}`, `${was} → ${status}`);
   // Keep sl_store_orders in sync so a DB re-init never re-imports a stale status
   const _soUpd = JSON.parse(localStorage.getItem('sl_store_orders') || '[]');
   const _soMatchUpd = _soUpd.find(x => x.id === id);
@@ -3107,6 +3179,8 @@ function confirmAdjustStock(){
     else if(op==='sub') item.dailyLimit = Math.max(0, (item.dailyLimit||0) - amount);
     else                item.dailyLimit = amount;
     logStock({ type, itemId: id, itemName: item.name, unit:'units', op, before, after: item.dailyLimit, note, ref: 'Manual Adjustment' });
+    logAudit('Inventory', 'Stock adjusted by hand', item.name,
+             `${before} → ${item.dailyLimit} units` + (note ? ` · ${note}` : ''));
   } else {
     const item = DB.ingredients.find(i=>i.id===id);
     const before = item.stock;
@@ -3114,6 +3188,8 @@ function confirmAdjustStock(){
     else if(op==='sub') item.stock = Math.max(0, item.stock - amount);
     else                item.stock = amount;
     logStock({ type, itemId: id, itemName: item.name, unit: item.unit||'units', op, before, after: item.stock, note, ref: 'Manual Adjustment' });
+    logAudit('Inventory', 'Stock adjusted by hand', item.name,
+             `${before} → ${item.stock} ${item.unit||'units'}` + (note ? ` · ${note}` : ''));
   }
 
   saveDB(); closeModal('adjust-stock-modal'); renderInventory(); updateBadges();
@@ -3179,11 +3255,16 @@ function saveIngredient(){
   };
 
   if(id){
-    const idx = DB.ingredients.findIndex(i=>i.id===id);
-    DB.ingredients[idx] = {...DB.ingredients[idx], ...fields};
+    const idx  = DB.ingredients.findIndex(i=>i.id===id);
+    const was  = DB.ingredients[idx];
+    const moved = was.stock !== stock ? `stock ${was.stock} → ${stock} ${unit}` : '';
+    DB.ingredients[idx] = {...was, ...fields};
+    logAudit('Inventory', 'Ingredient updated', name,
+             [moved, `threshold ${pct}%`].filter(Boolean).join(', '));
     toast('Ingredient updated','success');
   } else {
     DB.ingredients.push({ id:'i'+Date.now(), ...fields });
+    logAudit('Inventory', 'Ingredient added', name, `${stock} ${unit} · threshold ${pct}%`);
     toast('Ingredient added','success');
   }
   saveDB(); closeModal('ingredient-modal'); renderInventory(); updateBadges();
@@ -3851,6 +3932,17 @@ function renderUsers(){
 
 function openUserModal(id){
   const u = id ? DB.users.find(uu=>uu.id===id) : null;
+
+  /* Only a Super Admin can hand out, or take away, the role that reads
+     the audit trail. An administrator who could promote themselves could
+     also quietly clear their own record. */
+  if(u && u.role === 'Super Admin' && !isSuperAdmin()){
+    toast('Only a Super Admin can edit a Super Admin account','danger');
+    return;
+  }
+  const superOpt = document.getElementById('um-role-super');
+  if(superOpt) superOpt.hidden = !isSuperAdmin();
+
   document.getElementById('user-modal-title').textContent = u?'Edit User':'Add User';
   document.getElementById('um-id').value       = u?.id||'';
   document.getElementById('um-fname').value    = u?.fname||'';
@@ -3872,25 +3964,53 @@ async function saveUser(){
   const role  = document.getElementById('um-role').value;
   if(!fname||!lname||!email){ toast('Fill required fields','danger'); return; }
   if(!id && !pw){ toast('Password required for new user','danger'); return; }
+  if(role === 'Super Admin' && !isSuperAdmin()){
+    toast('Only a Super Admin can grant the Super Admin role','danger'); return;
+  }
   if(id){
     const idx = DB.users.findIndex(u=>u.id===id);
-    DB.users[idx] = {...DB.users[idx], fname, lname, email, role};
+    const was = DB.users[idx];
+    if(was.role === 'Super Admin' && role !== 'Super Admin' && lastActiveSuperAdmin(was)){
+      toast('This is the only Super Admin — give someone else the role first','danger'); return;
+    }
+    DB.users[idx] = {...was, fname, lname, email, role};
     if(pw) await setUserPassword(DB.users[idx], pw);   // blank means keep the current one
+
+    const changes = [];
+    if(was.role !== role)   changes.push(`role ${was.role} → ${role}`);
+    if(was.email !== email) changes.push(`email ${was.email} → ${email}`);
+    if(`${was.fname} ${was.lname}` !== `${fname} ${lname}`) changes.push('name changed');
+    if(pw) changes.push('password reset');
+    logAudit('Users', 'Account updated', `${fname} ${lname}`,
+             changes.length ? changes.join(', ') : 'no change');
     toast('User updated','success');
   } else {
     if(DB.users.find(u=>u.email===email)){ toast('Email already exists','danger'); return; }
     const user = {id:'u'+Date.now(), fname, lname, email, role, active:true};
     await setUserPassword(user, pw);
     DB.users.push(user);
+    logAudit('Users', 'Account created', `${fname} ${lname}`, `${role} · ${email}`);
     toast('User added','success');
   }
   saveDB(); closeModal('user-modal'); renderUsers();
+}
+
+/* True when this is the last Super Admin still able to sign in. Losing
+   the role entirely would leave the audit trail unreadable by anyone. */
+function lastActiveSuperAdmin(u){
+  return DB.users.filter(x => x.role === 'Super Admin' && x.active && x.id !== u.id).length === 0;
 }
 
 function toggleUser(id){
   const u = DB.users.find(uu=>uu.id===id);
   if(!u) return;
   const deactivating = u.active;
+  if(u.role === 'Super Admin' && !isSuperAdmin()){
+    toast('Only a Super Admin can deactivate a Super Admin account','danger'); return;
+  }
+  if(deactivating && u.role === 'Super Admin' && lastActiveSuperAdmin(u)){
+    toast('This is the only active Super Admin — nobody could read the audit trail','danger'); return;
+  }
   showConfirm({
     title: deactivating ? 'Deactivate User' : 'Activate User',
     message: deactivating
@@ -3902,9 +4022,176 @@ function toggleUser(id){
     onConfirm: () => {
       u.active = !u.active;
       saveDB(); renderUsers();
+      logAudit('Users', u.active ? 'Account activated' : 'Account deactivated',
+               `${u.fname} ${u.lname}`, u.role);
       toast(u.active ? 'User activated' : 'User deactivated', u.active ? 'success' : '');
     }
   });
+}
+
+/* =============================================
+   AUDIT TRAIL
+
+   An append-only record of who did what. Rows go straight to Supabase
+   rather than through saveDB(), which upserts whole tables from memory —
+   an entry the next save can rewrite is not an audit entry. Nothing in
+   the panel edits or deletes them, and only a Super Admin can read them.
+
+   A failed write is reported to the console but never blocks the action
+   being recorded: losing a line of the log is better than losing the
+   order it describes.
+   ============================================= */
+let auditRange = { from: '', to: '' };
+
+/* Set once if the table is missing, so a database that has not had
+   supabase-schema.sql run against it yet degrades to an empty log with
+   an explanation instead of a console full of 404s. */
+let auditUnavailable = false;
+
+async function logAudit(area, action, entity, detail){
+  const a = currentUser || {};
+  const entry = {
+    id:         'AU-' + Date.now() + '-' + Math.random().toString(36).slice(2, 6),
+    at:         new Date().toISOString(),
+    area:       area   || 'Other',        // 'Orders'
+    action:     action || '',             // 'Status changed'
+    entity:     entity || '',             // 'SL-1024 — Maria Santos'
+    detail:     detail || '',             // 'Pending → Confirmed'
+    actorId:    a.id    || '—',
+    actorName:  `${a.fname || 'Unknown'} ${a.lname || ''}`.trim(),
+    actorRole:  a.role  || '—',
+    actorEmail: a.email || ''
+  };
+
+  if(!DB.auditLog) DB.auditLog = [];
+  DB.auditLog.unshift(entry);
+  if(document.getElementById('view-audit')?.classList.contains('active')) renderAudit();
+
+  if(auditUnavailable) return;
+  const { error } = await _supa.from('audit_log')
+    .insert({ id: entry.id, date: entry.at, data: entry });
+  if(error){
+    if(error.code === 'PGRST205' || /does not exist/i.test(error.message || '')) auditUnavailable = true;
+    console.error('audit write failed:', error);
+  }
+}
+
+/* Re-read from Supabase when the view is opened, so a Super Admin sees
+   what other staff have done since the page was loaded — the log is the
+   one view where stale data would defeat the purpose. */
+async function refreshAudit(){
+  if(!auditUnavailable){
+    const { data, error } = await _supa.from('audit_log')
+      .select('data').order('date', { ascending: false }).limit(500);
+    if(error){
+      if(error.code === 'PGRST205' || /does not exist/i.test(error.message || '')) auditUnavailable = true;
+      console.error('audit read failed:', error);
+    } else if(data){
+      DB.auditLog = data.map(r => r.data).filter(Boolean);
+    }
+  }
+  renderAudit();
+}
+
+function setAuditRange(){
+  auditRange = readRangeInputs('audit');
+  syncRangeBounds('audit');
+  renderAudit();
+}
+
+function clearAuditRange(){
+  auditRange = { from: '', to: '' };
+  ['audit-from','audit-to'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){ el.value = ''; el.min = ''; el.max = ''; }
+  });
+  renderAudit();
+}
+
+function auditFiltered(){
+  let rows = [...(DB.auditLog || [])].sort((a, b) => new Date(b.at) - new Date(a.at));
+  if(rangeIsSet(auditRange)) rows = rows.filter(r => inRange(r.at, auditRange));
+
+  const role = document.getElementById('audit-role')?.value || 'All';
+  if(role !== 'All') rows = rows.filter(r => r.actorRole === role);
+
+  const area = document.getElementById('audit-area')?.value || 'All';
+  if(area !== 'All') rows = rows.filter(r => r.area === area);
+
+  const q = (document.getElementById('audit-search')?.value || '').trim().toLowerCase();
+  if(q) rows = rows.filter(r =>
+    [r.action, r.entity, r.detail, r.actorName, r.actorRole, r.area]
+      .join(' ').toLowerCase().includes(q));
+
+  return rows;
+}
+
+function renderAudit(){
+  const body = document.getElementById('audit-body');
+  if(!body) return;
+
+  const all  = DB.auditLog || [];
+  const rows = auditFiltered();
+  const today = new Date().toDateString();
+
+  document.getElementById('audit-total').textContent    = all.length;
+  document.getElementById('audit-today').textContent    = all.filter(r => new Date(r.at).toDateString() === today).length;
+  document.getElementById('audit-actors').textContent   = new Set(all.map(r => r.actorId).filter(id => id && id !== '—')).size;
+  document.getElementById('audit-failures').textContent = all.filter(r => r.action === 'Sign-in rejected').length;
+
+  const count = document.getElementById('audit-range-count');
+  if(count) count.textContent = rows.length === all.length ? '' : `${rows.length} of ${all.length}`;
+
+  if(auditUnavailable && !all.length){
+    body.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:22px;color:var(--text-2)">
+      The audit_log table is not in this Supabase project yet. Run <strong>supabase-schema.sql</strong>
+      in the SQL editor and reopen this page — actions taken before then are not recorded.</td></tr>`;
+    return;
+  }
+
+  if(!rows.length){
+    body.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:22px;color:var(--text-2)">
+      ${all.length ? 'Nothing recorded in this range.' : 'Nothing recorded yet.'}</td></tr>`;
+    return;
+  }
+
+  body.innerHTML = rows.map(r => `
+    <tr>
+      <td style="white-space:nowrap">${fmtDateTime(r.at)}</td>
+      <td class="fw-bold">${escHTML(r.actorName || '—')}</td>
+      <td><span class="pill ${auditRolePill(r.actorRole)}">${escHTML(r.actorRole || '—')}</span></td>
+      <td>${escHTML(r.area || '—')}</td>
+      <td>${escHTML(r.action || '—')}</td>
+      <td style="color:var(--text-2)">
+        ${r.entity ? `<span style="color:var(--text)">${escHTML(r.entity)}</span>` : ''}
+        ${r.entity && r.detail ? ' — ' : ''}${escHTML(r.detail || '')}
+      </td>
+    </tr>`).join('');
+}
+
+function auditRolePill(role){
+  if(role === 'Super Admin')   return 'cancelled';
+  if(role === 'Administrator') return 'confirmed';
+  if(role === 'Baker')         return 'preparing';
+  if(role === 'Packer')        return 'active';
+  return '';
+}
+
+function exportAuditCSV(){
+  const rows = auditFiltered();
+  if(!rows.length){ toast('Nothing to export for this filter', ''); return; }
+
+  const headers = ['When','Who','Role','Email','Area','Action','Item','Details'];
+  const data = rows.map(r => [fmtDateTime(r.at), r.actorName, r.actorRole, r.actorEmail,
+                              r.area, r.action, r.entity, r.detail]);
+  const csv = [headers, ...data]
+    .map(line => line.map(c => '"' + String(c == null ? '' : c).replace(/"/g,'""') + '"').join(','))
+    .join('\n');
+
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `sugarloom_audit_trail_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
 }
 
 /* =============================================

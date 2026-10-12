@@ -37,6 +37,7 @@ Supabase (project `ruclytedzkdbranurfcq`) holds everything, mostly as
 - `order_tracking` — Lalamove delivery state per order
 - `profiles` — customer details, keyed to Supabase Auth users
 - `admin_users` — staff accounts, separate from Supabase Auth
+- `audit_log` — who did what in the panel (Super Admin → Audit Trail)
 - `site_content` — editable homepage copy (Admin → Content)
 - `inquiries` — contact-form messages (Admin → Messages)
 - `reviews` — customer reviews awaiting approval
@@ -60,6 +61,31 @@ Pending → Confirmed → Preparing/baking → Ready for Packing
 Roles see only their own stage. Baker works the **Confirmed** queue,
 Packer the **Ready for Packing** queue; both run oldest-first and both
 can send an order to the back or hand it back a step with a reason.
+
+## Roles
+
+`ROLE_VIEWS` at the top of `admin.js` is the only place that decides who
+sees what. The sidebar, the landing view and `switchView()` all read it,
+so a role cannot be shown a nav item it may not open, or open a view
+whose nav item is hidden. To add a view to a role, add it there.
+
+- **Super Admin** — Customers, Reports, Content, Users, Audit Trail.
+  An oversight role, deliberately not "an Administrator with extras":
+  it is the only role that can read the audit trail, and keeping
+  day-to-day operations out of it is the point. Seeded as
+  `superadmin@sugarloom.ph` / `super123`, and `ensureSuperAdmin()`
+  creates the account on databases seeded before the role existed.
+- **Administrator** — everything except the audit trail, so the actions
+  being recorded cannot be read by whoever took them.
+- **Baker**, **Packer** — Orders only.
+
+Every recorded action goes through `logAudit(area, action, entity,
+detail)`. It writes straight to `audit_log` rather than through
+`saveDB()`, which upserts whole tables from memory — an entry the next
+save could rewrite is not an audit entry. A failed write is logged to
+the console and never blocks the action it describes. If the table is
+missing the page says so and the rest of the panel is unaffected; run
+`supabase-audit-log.sql`.
 
 **Ingredients are deducted when baking starts**, not at confirmation, and
 are returned if the order is later cancelled. `order.stockDeducted`

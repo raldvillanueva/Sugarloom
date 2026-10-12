@@ -464,7 +464,10 @@ async function saveSiteContent() {
 
     if (error) throw error;
 
+    const changed = Object.keys(content).filter(k => JSON.stringify(content[k]) !== JSON.stringify((siteContent || {})[k]));
     siteContent = content;
+    logAudit('Content', 'Website copy saved', 'Homepage',
+             changed.length ? `${changed.length} field${changed.length === 1 ? '' : 's'}: ${changed.slice(0, 6).join(', ')}` : 'no change');
     toast('Website content saved', 'success');
   } catch (err) {
     console.error('saveSiteContent error:', err);
