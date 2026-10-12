@@ -4361,12 +4361,18 @@ async function logAudit(area, action, entity, detail){
 async function refreshAudit(){
   if(!auditUnavailable){
     const { data, error } = await _supa.from('audit_log')
-      .select('data').order('date', { ascending: false }).limit(500);
+      .select('date, data').order('date', { ascending: false }).limit(500);
     if(error){
       if(error.code === 'PGRST205' || /does not exist/i.test(error.message || '')) auditUnavailable = true;
       console.error('audit read failed:', error);
     } else if(data){
-      DB.auditLog = data.map(r => r.data).filter(Boolean);
+      /* The row's own date column is the fallback for `at`. The table
+         cannot be edited to repair a row written without one, so the
+         reader has to cope — a row with no timestamp otherwise shows
+         as "Invalid Date" and counts as nothing. */
+      DB.auditLog = data
+        .filter(r => r.data)
+        .map(r => ({ ...r.data, at: r.data.at || r.date }));
     }
   }
   renderAudit();
@@ -4415,7 +4421,10 @@ function renderAudit(){
 
   document.getElementById('audit-total').textContent    = all.length;
   document.getElementById('audit-today').textContent    = all.filter(r => new Date(r.at).toDateString() === today).length;
-  document.getElementById('audit-actors').textContent   = new Set(all.map(r => r.actorId).filter(id => id && id !== '—')).size;
+  /* Identify people by id where there is one, by name otherwise, so a
+     row written without an id still counts as somebody. */
+  document.getElementById('audit-actors').textContent   =
+    new Set(all.map(r => r.actorId || r.actorName).filter(x => x && x !== '—')).size;
   document.getElementById('audit-failures').textContent = all.filter(r => r.action === 'Sign-in rejected').length;
 
   const count = document.getElementById('audit-range-count');
@@ -4436,7 +4445,7 @@ function renderAudit(){
 
   body.innerHTML = rows.map(r => `
     <tr>
-      <td style="white-space:nowrap">${fmtDateTime(r.at)}</td>
+      <td style="white-space:nowrap">${isNaN(new Date(r.at)) ? '<span style="color:var(--text-3)">—</span>' : fmtDateTime(r.at)}</td>
       <td class="fw-bold">${escHTML(r.actorName || '—')}</td>
       <td><span class="pill ${auditRolePill(r.actorRole)}">${escHTML(r.actorRole || '—')}</span></td>
       <td>${escHTML(r.area || '—')}</td>
@@ -4496,7 +4505,7 @@ function buildNotifs(){
     const remaining = Math.max(0,(p.dailyLimit||0)-(p.soldToday||0));
     const id = `product_${p.id||p.name}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-error-circle', color:'#DC2626',
+    notifList.push({ id, view:'inventory', icon:'bx-error-circle', color:'#DC2626',
       text:`Near daily limit: ${p.name} (${remaining} left today)`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4506,7 +4515,7 @@ function buildNotifs(){
   DB.ingredients.filter(isIngLow).forEach(ing=>{
     const id = `ingredient_${ing.id||ing.name}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-error-circle', color:'#EA580C',
+    notifList.push({ id, view:'inventory', icon:'bx-error-circle', color:'#EA580C',
       text:`Low stock ingredient: ${ing.name} (${ing.stock} left)`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4517,7 +4526,7 @@ function buildNotifs(){
     const id = `restock_${f.id}`;
     if(seen.has(id)) return;
     const names = formLines(f).map(l => l.name);
-    notifList.push({ id, icon:'bx-cart-add', color:'#EA580C',
+    notifList.push({ id, view:'inventory', icon:'bx-cart-add', color:'#EA580C',
       text:`Restock form ${escHTML(f.reference || f.id)} is waiting for your review — ${escHTML(names.slice(0,3).join(', '))}${names.length > 3 ? ` +${names.length - 3} more` : ''}`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); setTimeout(()=>viewRestockForm(f.id), 200); }
     });
@@ -4527,7 +4536,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Cancel Requested'&&!o.archived).forEach(o=>{
     const id = `cancel_req_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-x-circle', color:'#DC2626',
+    notifList.push({ id, view:'orders', icon:'bx-x-circle', color:'#DC2626',
       text:`Cancel request for order ${o.id} from ${escHTML(o.customer)}${o.cancelReason ? ' — "'+o.cancelReason+'"' : ''}`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4537,7 +4546,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Pending'&&!o.archived).forEach(o=>{
     const id = `order_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-shopping-bag', color:'#2563EB',
+    notifList.push({ id, view:'orders', icon:'bx-shopping-bag', color:'#2563EB',
       text:`New order ${o.id} from ${escHTML(o.customer)}`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4547,7 +4556,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Confirmed'&&!o.archived).forEach(o=>{
     const id = `prepare_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-dish', color:'#D97706',
+    notifList.push({ id, view:'orders', icon:'bx-dish', color:'#D97706',
       text:`Order ${o.id} from ${escHTML(o.customer)} needs to be prepared`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4559,7 +4568,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Ready for Packing'&&!o.archived).forEach(o=>{
     const id = `ready_pack_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-package', color:'#7C3AED',
+    notifList.push({ id, view:'orders', icon:'bx-package', color:'#7C3AED',
       text:`Order ${o.id} from ${escHTML(o.customer)} is ready to be packed`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id, true),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4569,7 +4578,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Preparing'&&!o.archived&&o.preparingSubStatus==='packed'&&!allTracking[o.id]).forEach(o=>{
     const id = `packed_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-box', color:'#0891B2',
+    notifList.push({ id, view:'orders', icon:'bx-box', color:'#0891B2',
       text:`Order ${o.id} from ${escHTML(o.customer)} is packed — mark ready for Lalamove`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4579,7 +4588,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Preparing'&&!o.archived&&o.preparingSubStatus==='readyForBook'&&!allTracking[o.id]).forEach(o=>{
     const id = `ready_book_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-map', color:'#16A34A',
+    notifList.push({ id, view:'orders', icon:'bx-map', color:'#16A34A',
       text:`Order ${o.id} from ${escHTML(o.customer)} is ready to book Lalamove`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4591,7 +4600,7 @@ function buildNotifs(){
     if(!t || t.status!=='COMPLETED') return;
     const id = `delivered_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, icon:'bx-check-circle', color:'#6366F1',
+    notifList.push({ id, view:'orders', icon:'bx-check-circle', color:'#6366F1',
       text:`Delivery complete for order ${o.id} — mark as Fulfilled`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -4605,12 +4614,19 @@ function buildNotifs(){
     Object.entries(reviews).forEach(([orderId, r]) => {
       const id = `review_${u.email}_${orderId}`;
       if(seen.has(id)) return;
-      notifList.push({ id, icon:'bx-star', color:'#f59e0b',
+      notifList.push({ id, view:'customers', icon:'bx-star', color:'#f59e0b',
         text:`${name} left a ${r.rating}★ review — "${r.comment}"`,
         action(){ switchView('customers'); document.getElementById('notif-panel').classList.add('hidden'); setTimeout(()=>viewCustomerReviews(u.email), 150); }
       });
     });
   });
+
+  /* Every notification opens a view, so a role is only told about things
+     it can actually go and deal with. A Super Admin was being offered
+     restock forms and new orders — tapping one took them nowhere,
+     because switchView sends them back to a view they are allowed. A
+     notification you cannot act on is not information, it is noise. */
+  notifList = notifList.filter(n => !n.view || canView(n.view));
 }
 
 function updateBadges(){
@@ -4634,11 +4650,17 @@ function updateBadges(){
 
   const low = getLowStockItems().length;
   const lb = document.getElementById('low-stock-badge');
-  lb.style.display = low ? '' : 'none';
+  if(lb) lb.style.display = (low && canView('inventory')) ? '' : 'none';
 
+  /* This counts pending orders, so it belongs to whoever works the
+     order queue. On the Super Admin's Customers tab it was a number
+     about something they cannot open. */
   const custPending = DB.orders.filter(o => o.status === 'Pending' && !o.archived).length;
   const cpb = document.getElementById('cust-pending-badge');
-  if(cpb){ cpb.textContent = custPending; cpb.style.display = custPending ? '' : 'none'; }
+  if(cpb){
+    cpb.textContent = custPending;
+    cpb.style.display = (custPending && canView('orders')) ? '' : 'none';
+  }
 
   buildNotifs();
   const read = getReadNotifs();
