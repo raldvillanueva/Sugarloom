@@ -214,7 +214,7 @@ let _gcashProof = null;
 function showGcashAccount(){
   const n = document.getElementById('gcash-acct-name');
   const u = document.getElementById('gcash-acct-number');
-  if(n) n.textContent = GCASH_ACCOUNT.name;
+  if(n) n.textContent = GCASH_ACCOUNT.label;
   if(u) u.textContent = GCASH_ACCOUNT.number;
 }
 
@@ -239,7 +239,7 @@ async function handleProofUpload(input){
   box.className = 'gcash-proof-result reading';
   box.innerHTML = '<strong>Reading your receipt…</strong><div class="proof-bar"><span id="proof-bar-fill"></span></div>';
 
-  const expected = { amount: Math.round(orderTotalNow()), name: GCASH_ACCOUNT.name };
+  const expected = { amount: Math.round(orderTotalNow()) };   // account comes from GCASH_ACCOUNT
 
   let result;
   try {

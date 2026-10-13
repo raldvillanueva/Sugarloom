@@ -165,11 +165,19 @@ the ingredients go back to stock.
 ## GCash payments
 
 Paying by GCash means uploading a receipt. The checkout shows the shop's
-account (`GCASH_ACCOUNT` in `js/gcash-proof.js` — name and number in one
-place) beside the QR, takes a screenshot, and reads it in the browser
+account (`GCASH_ACCOUNT` in `js/gcash-proof.js`) beside the QR
+(`Images/GCASHMOJO.png`), takes a screenshot, and reads it in the browser
 with Tesseract.js, fetched from a CDN only when someone actually
 uploads. The order then carries `paymentProof` (image, reference,
 amount read, the checks) and `paymentStatus: 'Awaiting verification'`.
+
+`GCASH_ACCOUNT` has a `label` and a `holder`, and they are not the same
+thing. Customers are told to send to **GCASHMOJO**; GCash prints the
+registered account holder on the receipt, masked, as **GE\*\*\*D V.**
+Matching against the label would fail on every genuine payment, so
+`holder` is what `nameLooksRight()` compares against, treating the mask
+as a wildcard. If the GCash account ever changes, update `holder` to
+exactly what the QR card shows, mask characters and all.
 
 **The reading is a first pass, not proof.** A screenshot is an image and
 can be edited; the only real confirmation is the money in the shop's

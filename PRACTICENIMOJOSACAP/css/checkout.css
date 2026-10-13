@@ -483,10 +483,15 @@ body {
   color: var(--text-muted);
   margin: 0 0 12px;
 }
+/* The GCash card is a tall portrait screenshot, not a bare square QR.
+   Fixing the height would letterbox it and shrink the code to the point
+   of being hard to scan, so only the width is set. */
 .gcash-qr-img {
-  width: 200px;
-  height: 200px;
-  object-fit: contain;
+  width: 240px;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
   border-radius: var(--radius);
   border: 1px solid var(--border);
 }

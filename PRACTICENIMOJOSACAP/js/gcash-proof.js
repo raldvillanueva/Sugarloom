@@ -19,10 +19,18 @@
    rather than guessed at.
    ──────────────────────────────────────────────────────────────── */
 
-/* The shop's own GCash account, shown to the customer and matched
-   against what the receipt says it was sent to. One place to change. */
+/* The shop's own GCash account. One place to change.
+
+   `label` and `holder` are two different things and the distinction
+   matters. The customer is told to send to GCASHMOJO, which is what the
+   shop calls its account — but GCash puts the registered account
+   HOLDER on the receipt, masked, as "GE***D V.". Matching a receipt
+   against the label would fail on every genuine payment, so `holder` is
+   what the reader compares against. Set it to exactly what the GCash
+   card shows, mask characters and all. */
 const GCASH_ACCOUNT = {
-  name:   'GCASHMOJO',
+  label:  'GCASHMOJO',          // shown to the customer
+  holder: 'GE***D V.',          // as GCash prints it on the receipt
   number: '0949 399 7899'
 };
 
@@ -122,17 +130,33 @@ function findDate(text){
   return isNaN(d.getTime()) ? null : d;
 }
 
-/* GCash masks the middle of a recipient name, so an exact match is not
-   available. Comparing the letters that survive catches a payment sent
-   to a different person without tripping over the masking. */
+/* GCash masks the middle of the account holder's name — "GE***D V." —
+   so there is no exact string to look for. The mask is treated as a
+   wildcard: the letters either side of it have to appear, in order, in
+   whatever the receipt calls the recipient.
+
+   That still catches a payment sent to someone else, because the
+   surviving letters and their order rarely line up by accident. What it
+   cannot do is distinguish two people whose names mask to the same
+   shape, and nothing reading a screenshot could. */
+function maskedNamePattern(expected){
+  const letters = expected.toUpperCase().replace(/[^A-Z*•·.]/g, '');
+  const parts = letters.split(/[*•·.]+/).filter(Boolean);
+  if(!parts.length) return null;
+  // the visible fragments, in order, with anything allowed between them
+  return new RegExp(parts.map(p => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('[A-Z]*'));
+}
+
 function nameLooksRight(text, expected){
-  const want = expected.toUpperCase().replace(/[^A-Z]/g, '');
-  const hay  = text.toUpperCase().replace(/[^A-Z]/g, '');
-  if(hay.includes(want)) return true;
-  // allow the masked form: first few and last few letters present in order
-  const head = want.slice(0, 4), tail = want.slice(-3);
-  const i = hay.indexOf(head);
-  return i >= 0 && hay.indexOf(tail, i + head.length) >= 0;
+  if(!expected) return false;
+  const hay = String(text).toUpperCase().replace(/[^A-Z]/g, '');
+
+  // a plain name, present as written
+  const plain = expected.toUpperCase().replace(/[^A-Z]/g, '');
+  if(plain && !/[*•·]/.test(expected) && hay.includes(plain)) return true;
+
+  const re = maskedNamePattern(expected);
+  return re ? re.test(hay) : false;
 }
 
 /* ── The verdict ──
@@ -172,10 +196,14 @@ function judgeGcashProof(rawText, expected = {}){
           : `Receipt says ₱${found.amount.toLocaleString()}, order is ₱${expected.amount.toLocaleString()}`);
   }
 
-  const name = expected.name || GCASH_ACCOUNT.name;
-  const nameOk = nameLooksRight(text, name);
-  add(nameOk, `Sent to ${name}`,
-      nameOk ? '' : `The receipt does not mention ${name}`);
+  /* Matched against the registered holder, reported as the name the
+     customer was given — they were told GCASHMOJO, so a message about
+     "GE***D V." would mean nothing to them. */
+  const holder = expected.holder || GCASH_ACCOUNT.holder;
+  const shown  = expected.label  || GCASH_ACCOUNT.label;
+  const nameOk = nameLooksRight(text, holder);
+  add(nameOk, `Sent to ${shown}`,
+      nameOk ? '' : `The receipt does not name ${holder}, the account behind ${shown}`);
 
   if(found.date){
     const ageDays = (Date.now() - found.date.getTime()) / 86400000;
