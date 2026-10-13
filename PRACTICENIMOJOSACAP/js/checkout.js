@@ -184,6 +184,134 @@ function updatePlaceOrderBtn(total){
   }
 
   if(qr) qr.style.display = isCOD ? 'none' : 'block';
+
+  /* Paying by GCash means a receipt has to be attached. The button is
+     a hint only — placeOrder() checks again, since a disabled button
+     can be re-enabled from the console. */
+  if(!isCOD && !_gcashProof && !btn.disabled){
+    btn.disabled = true;
+    if(notice){
+      notice.textContent = 'Upload your GCash payment screenshot to place the order.';
+      notice.style.display = 'block';
+    }
+  }
+
+  if(!isCOD) showGcashAccount();
+}
+
+/* ── GCASH PAYMENT PROOF ──
+   The customer pays, screenshots the receipt and uploads it here. The
+   screenshot is read in the browser and checked against this order, so
+   an obviously wrong one is caught while they can still fix it rather
+   than after the order is sitting in the admin's queue.
+
+   A failed check never blocks the order. The reading is a convenience,
+   not an authority — a screenshot is an image and proves nothing on its
+   own, so the decision stays with the admin, who can see the same
+   findings and the picture itself. */
+let _gcashProof = null;
+
+function showGcashAccount(){
+  const n = document.getElementById('gcash-acct-name');
+  const u = document.getElementById('gcash-acct-number');
+  if(n) n.textContent = GCASH_ACCOUNT.name;
+  if(u) u.textContent = GCASH_ACCOUNT.number;
+}
+
+function orderTotalNow(){
+  const cart = JSON.parse(localStorage.getItem('cart')) || [];
+  return cart.reduce((s, i) => s + i.price * (i.qty || 1), 0) + currentDeliveryFee();
+}
+
+async function handleProofUpload(input){
+  const file = input.files && input.files[0];
+  const box  = document.getElementById('gcash-proof-result');
+  if(!file || !box) return;
+
+  if(!/^image\//.test(file.type)){
+    box.style.display = 'block';
+    box.className = 'gcash-proof-result fail';
+    box.innerHTML = '<strong>That is not an image.</strong> Upload a screenshot of your GCash receipt.';
+    return;
+  }
+
+  box.style.display = 'block';
+  box.className = 'gcash-proof-result reading';
+  box.innerHTML = '<strong>Reading your receipt…</strong><div class="proof-bar"><span id="proof-bar-fill"></span></div>';
+
+  const expected = { amount: Math.round(orderTotalNow()), name: GCASH_ACCOUNT.name };
+
+  let result;
+  try {
+    result = await readGcashProof(file, expected, pct => {
+      const fill = document.getElementById('proof-bar-fill');
+      if(fill) fill.style.width = Math.round(pct * 100) + '%';
+    });
+  } catch(err){
+    console.error('proof upload failed:', err);
+    box.className = 'gcash-proof-result fail';
+    box.innerHTML = '<strong>Could not process that image.</strong> Try another screenshot.';
+    return;
+  }
+
+  _gcashProof = {
+    img:        result.img,
+    verdict:    result.verdict,
+    reference:  result.found?.reference || null,
+    amountRead: result.found?.amount    ?? null,
+    checks:     result.checks,
+    readAt:     new Date().toISOString()
+  };
+
+  renderProofResult(result);
+  updatePlaceOrderBtn();
+}
+
+function renderProofResult(r){
+  const box = document.getElementById('gcash-proof-result');
+  if(!box) return;
+
+  const headline = {
+    pass:   'Receipt looks right',
+    review: 'Uploaded — we will double-check this one',
+    fail:   'This does not match your order',
+    unread: 'Uploaded — we could not read it automatically'
+  }[r.verdict] || 'Uploaded';
+
+  box.className = 'gcash-proof-result ' + r.verdict;
+  box.innerHTML = `
+    <div class="proof-head">
+      <img src="${r.img}" alt="Your payment screenshot" class="proof-thumb">
+      <div>
+        <strong>${headline}</strong>
+        <ul class="proof-checks">
+          ${r.checks.map(c => `
+            <li class="${c.ok ? 'ok' : 'no'}">
+              <span aria-hidden="true">${c.ok ? '✓' : '!'}</span>
+              ${escapeProof(c.label)}${c.detail ? ` — <em>${escapeProof(c.detail)}</em>` : ''}
+            </li>`).join('')}
+        </ul>
+      </div>
+    </div>
+    <p class="proof-foot">${
+      r.verdict === 'fail'
+        ? 'You can still place the order, but it will be held until we have checked the payment by hand.'
+        : 'Your order will be confirmed once we have matched this against our GCash account.'
+    }</p>
+    <button type="button" class="proof-replace" onclick="clearProof()">Upload a different screenshot</button>`;
+}
+
+function clearProof(){
+  _gcashProof = null;
+  const f = document.getElementById('gcash-proof-file');
+  if(f) f.value = '';
+  const box = document.getElementById('gcash-proof-result');
+  if(box){ box.style.display = 'none'; box.innerHTML = ''; }
+  updatePlaceOrderBtn();
+}
+
+function escapeProof(s){
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
 function clearFieldErrors(){
@@ -248,6 +376,14 @@ async function placeOrder(){
     const cod    = judgeCod(sum, _customerRecord);
     if(chosen === 'Cash on Delivery' && !cod.allowed){
       showMsg(cod.reason, 'error');
+      return;
+    }
+
+    /* Same reasoning as the COD check above: the greyed button is a
+       hint, this is the part that holds. */
+    if(chosen === 'GCash' && !_gcashProof){
+      showMsg('Please upload your GCash payment screenshot before placing the order.', 'error');
+      document.getElementById('gcash-proof-drop')?.scrollIntoView({ behavior:'smooth', block:'center' });
       return;
     }
   }
@@ -368,7 +504,22 @@ async function placeOrder(){
     ...(_deliveryQuote?.km != null && { distanceKm: _deliveryQuote.km }),
     ...(_deliveryQuote?.coords && { deliveryCoords: _deliveryQuote.coords }),
     ...(preferredDate && { preferredDate }),
-    ...(preferredTime && { preferredTime })
+    ...(preferredTime && { preferredTime }),
+
+    /* A GCash order carries its receipt and what the reader made of it.
+       paymentStatus is the admin's decision, not the reader's — the
+       verdict only tells them where to look first. */
+    ...(selectedPayment === 'GCash' && _gcashProof && {
+      paymentStatus: 'Awaiting verification',
+      paymentProof: {
+        img:        _gcashProof.img,
+        reference:  _gcashProof.reference,
+        amountRead: _gcashProof.amountRead,
+        verdict:    _gcashProof.verdict,
+        checks:     _gcashProof.checks,
+        uploadedAt: _gcashProof.readAt
+      }
+    })
   };
 
   // Save order to Supabase (shared between customer and admin)

@@ -162,6 +162,34 @@ and a red banner on Orders that cannot be dismissed. The admin recovers
 by rescheduling the delivery date from the order, or cancelling it so
 the ingredients go back to stock.
 
+## GCash payments
+
+Paying by GCash means uploading a receipt. The checkout shows the shop's
+account (`GCASH_ACCOUNT` in `js/gcash-proof.js` — name and number in one
+place) beside the QR, takes a screenshot, and reads it in the browser
+with Tesseract.js, fetched from a CDN only when someone actually
+uploads. The order then carries `paymentProof` (image, reference,
+amount read, the checks) and `paymentStatus: 'Awaiting verification'`.
+
+**The reading is a first pass, not proof.** A screenshot is an image and
+can be edited; the only real confirmation is the money in the shop's
+GCash history, which a person checks. So the reader never sets
+`paymentStatus` — the admin does, with Verify or Reject in the order,
+and both are written to the audit trail. A failed read never blocks the
+customer either: it uploads as `unread` and goes to a human.
+
+What it does catch is the common stuff — a screenshot of the wrong
+transaction, the wrong amount, money sent to someone else, something
+that is not a receipt at all, and the same reference attached to two
+orders. Note `NOT_THE_AMOUNT` in `findAmount()`: the wallet balance is
+usually the largest figure on a receipt, so "take the biggest number"
+reads it as the payment.
+
+A GCash order cannot be confirmed through to the baker until the
+payment is verified — confirming is what consumes the ingredients.
+Orders placed before receipts existed have no `paymentStatus` and are
+not held up.
+
 ## The backend
 
 `js/server.js` is an Express app handling order emails, the admin

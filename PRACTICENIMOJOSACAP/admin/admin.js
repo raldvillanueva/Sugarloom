@@ -1428,6 +1428,14 @@ function renderOrders(){
        TOMORROW badge, but an admin working through the Orders tab never
        saw it — which is how an order reaches its delivery date still
        sitting on Pending. */
+    /* A GCash order whose payment has not been settled, flagged where
+       the queue is worked rather than only inside the order. */
+    const payTag = (o.payment === 'GCash' && o.paymentStatus && o.paymentStatus !== 'Verified')
+      ? `<span class="pay-tag ${o.paymentStatus === 'Rejected' ? 'bad' : 'wait'}" title="${
+           o.paymentStatus === 'Rejected' ? 'GCash payment rejected' : 'GCash payment not checked yet'
+         }">${o.paymentStatus === 'Rejected' ? 'PAYMENT REJECTED' : 'CHECK PAYMENT'}</span>`
+      : '';
+
     const due = deliveryUrgency(o);
     const dueTag = due
       ? `<span class="due-tag ${due.tone}" title="Delivery promised for ${fmtDate(o.preferredDate)}${
@@ -1442,7 +1450,7 @@ function renderOrders(){
     return `
     <tr class="order-row ${isQueue && idx===0 ? 'queue-next-row' : ''}"
         onclick="openOrderModal('${o.id}', true)" title="Click to view details">
-      <td class="fw-bold">${queueTag}${o.id}${deferTag}${dueTag}${overdueTag}${riskTag}</td>
+      <td class="fw-bold">${queueTag}${o.id}${deferTag}${payTag}${dueTag}${overdueTag}${riskTag}</td>
       <td>${escHTML(o.customer)}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
       <td class="fw-bold">₱${o.total.toLocaleString()}</td>
@@ -1896,6 +1904,7 @@ function openOrderModal(id, viewOnly=false){
       <tbody>${o.items.map(i=>`<tr><td>${i.name}</td><td>${i.qty}</td><td>₱${i.price}</td><td class="fw-bold">₱${(i.qty*i.price).toLocaleString()}</td></tr>`).join('')}</tbody>
     </table>
     <div style="text-align:right;font-size:16px;font-weight:700;margin-top:12px">Total: ₱${o.total.toLocaleString()}</div>
+    ${buildPaymentProof(o)}
     ${o.status==='Pending' ? buildIngredientPreview(o) : ''}
     ${lalamoveHTML}`;
 
@@ -1933,6 +1942,16 @@ function openOrderModal(id, viewOnly=false){
     // no other actions for cancelled
   } else if(o.status==='Pending'){
     btn.textContent='Confirm Order'; btn.style.display='';
+    /* Confirming hands the order to the baker, who takes the
+       ingredients out of stock. Doing that on a GCash payment nobody
+       has checked is how a bakery bakes for free. Orders placed before
+       receipts existed have no paymentStatus and are not held up. */
+    if(o.payment === 'GCash' && o.paymentStatus && o.paymentStatus !== 'Verified'){
+      btn.disabled = true;
+      btn.title = o.paymentStatus === 'Rejected'
+        ? 'The payment was rejected — contact the customer before confirming'
+        : 'Check the payment first, then mark it received';
+    }
   } else if(o.status==='Confirmed'){
     prepareBtn.style.display='';
   } else if(o.status==='Ready for Packing'){
@@ -2180,6 +2199,157 @@ function collectRecipeRows(){
 }
 
 function buildIngredientPreview(){ return ''; }
+
+/* ── GCASH PAYMENT PROOF ──
+   The customer's receipt screenshot, what the reader made of it, and
+   the two buttons that settle it.
+
+   The reader's verdict is shown as a starting point, never as the
+   decision. A screenshot is an image and proves nothing on its own; the
+   only real confirmation is the money being in the shop's GCash
+   account, which is a thing a person checks. So the panel says what it
+   noticed, shows the picture full size, and leaves Verify and Reject to
+   the admin. */
+function buildPaymentProof(o){
+  if(o.payment !== 'GCash') return '';
+
+  const p = o.paymentProof;
+  if(!p){
+    return `
+      <div class="pay-proof none">
+        <strong>GCash payment</strong>
+        <p>No screenshot was attached. This order was placed before receipts were required,
+           or the upload failed — check the GCash account by hand before confirming.</p>
+      </div>`;
+  }
+
+  const status = o.paymentStatus || 'Awaiting verification';
+  const settled = status === 'Verified' || status === 'Rejected';
+
+  /* Same reference on another order is the one thing the reader can
+     spot that a person scanning a screenshot would not. */
+  const dupes = p.reference
+    ? DB.orders.filter(x => x.id !== o.id && x.paymentProof?.reference === p.reference)
+    : [];
+
+  const verdictClass = { pass:'pass', review:'review', fail:'fail', unread:'unread' }[p.verdict] || 'review';
+
+  return `
+    <div class="pay-proof ${verdictClass}">
+      <div class="pay-proof-head">
+        <strong>GCash payment</strong>
+        <span class="pill ${status === 'Verified' ? 'fulfilled' : status === 'Rejected' ? 'cancelled' : 'pending'}">${escHTML(status)}</span>
+      </div>
+
+      <div class="pay-proof-body">
+        <a href="${p.img}" target="_blank" rel="noopener" title="Open the full screenshot">
+          <img src="${p.img}" alt="GCash receipt uploaded by the customer" class="pay-proof-img">
+        </a>
+
+        <div class="pay-proof-detail">
+          <div class="pay-proof-facts">
+            <span>Reference</span><code>${p.reference ? escHTML(p.reference) : '—'}</code>
+            <span>Amount read</span><code>${p.amountRead != null ? '₱' + Number(p.amountRead).toLocaleString() : '—'}</code>
+            <span>Order total</span><code>₱${Number(o.total || 0).toLocaleString()}</code>
+            <span>Uploaded</span><code>${p.uploadedAt ? fmtDateTime(p.uploadedAt) : '—'}</code>
+          </div>
+
+          <ul class="pay-proof-checks">
+            ${(p.checks || []).map(c => `
+              <li class="${c.ok ? 'ok' : 'no'}">
+                <span aria-hidden="true">${c.ok ? '✓' : '!'}</span>
+                ${escHTML(c.label)}${c.detail ? ` — <em>${escHTML(c.detail)}</em>` : ''}
+              </li>`).join('')}
+          </ul>
+
+          ${dupes.length ? `
+            <p class="pay-proof-dupe">
+              <strong>This reference is already on ${dupes.length} other order${dupes.length === 1 ? '' : 's'}:</strong>
+              ${escHTML(dupes.map(d => d.id).join(', '))}. One payment cannot settle two orders.
+            </p>` : ''}
+
+          <p class="pay-proof-note">
+            Reading a screenshot is a first pass, not proof — an image can be edited.
+            Confirm the reference and amount against the shop's GCash history before verifying.
+          </p>
+
+          ${settled ? `
+            <p class="pay-proof-settled">
+              ${escHTML(status)}${o.paymentCheckedBy ? ' by ' + escHTML(o.paymentCheckedBy) : ''}${o.paymentCheckedAt ? ' on ' + fmtDateTime(o.paymentCheckedAt) : ''}
+              ${o.paymentRejectReason ? `<br><em>${escHTML(o.paymentRejectReason)}</em>` : ''}
+            </p>` : `
+            <div class="pay-proof-actions">
+              <button class="btn-primary sm" onclick="verifyPayment('${o.id}')"><i class='bx bx-check'></i> Payment received</button>
+              <button class="btn-ghost sm danger" onclick="rejectPayment('${o.id}')"><i class='bx bx-x'></i> Reject payment</button>
+            </div>`}
+        </div>
+      </div>
+    </div>`;
+}
+
+async function savePaymentDecision(o){
+  const { error } = await _supa.from('orders')
+    .upsert({ id: o.id, customer_email: o.customerEmail || '', status: o.status,
+              date: o.date, data: o }, { onConflict: 'id' });
+  if(error){
+    console.error('could not save the payment decision:', error);
+    toast('Could not save: ' + error.message, 'danger');
+    return false;
+  }
+  return true;
+}
+
+function verifyPayment(id){
+  const o = DB.orders.find(x => x.id === id);
+  if(!o) return;
+
+  showConfirm({
+    title: 'Mark the payment as received',
+    message: `Confirm that ₱${Number(o.total||0).toLocaleString()} for ${o.id} is in the GCash account` +
+             `${o.paymentProof?.reference ? ` under reference ${o.paymentProof.reference}` : ''}. ` +
+             `Check the GCash history rather than the screenshot — this is the record that says the money arrived.`,
+    okText: 'Payment received',
+    okClass: 'btn-primary',
+    icon: 'bx-check-shield',
+    onConfirm: async () => {
+      o.paymentStatus    = 'Verified';
+      o.paymentCheckedBy = `${currentUser.fname} ${currentUser.lname}`.trim();
+      o.paymentCheckedAt = new Date().toISOString();
+      if(!await savePaymentDecision(o)) return;
+      logAudit('Orders', 'GCash payment verified', `${o.id} — ${o.customer || 'Customer'}`,
+               `₱${Number(o.total||0).toLocaleString()}${o.paymentProof?.reference ? ' · ref ' + o.paymentProof.reference : ''}`);
+      renderOrders(); openOrderModal(o.id, true);
+      toast('Payment verified', 'success');
+    }
+  });
+}
+
+function rejectPayment(id){
+  const o = DB.orders.find(x => x.id === id);
+  if(!o) return;
+
+  showConfirm({
+    title: 'Reject this payment',
+    message: `The screenshot for ${o.id} does not match a payment in the GCash account. ` +
+             `The order stays Pending so you can contact the customer.`,
+    okText: 'Reject payment',
+    okClass: 'btn-danger',
+    icon: 'bx-x-circle',
+    inputLabel: 'What is wrong with it?',
+    inputPlaceholder: 'e.g. no matching payment, amount short, receipt belongs to another order',
+    onConfirm: async (reason) => {
+      o.paymentStatus       = 'Rejected';
+      o.paymentRejectReason = (reason || '').trim() || 'No matching payment found';
+      o.paymentCheckedBy    = `${currentUser.fname} ${currentUser.lname}`.trim();
+      o.paymentCheckedAt    = new Date().toISOString();
+      if(!await savePaymentDecision(o)) return;
+      logAudit('Orders', 'GCash payment rejected', `${o.id} — ${o.customer || 'Customer'}`,
+               o.paymentRejectReason);
+      renderOrders(); openOrderModal(o.id, true);
+      toast('Payment rejected', '');
+    }
+  });
+}
 
 function openFulfillModal(id){
   currentOrderId = id;

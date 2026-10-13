@@ -10,6 +10,7 @@
   <script src="../js/service-area.js"></script>
   <script src="../js/cod-policy.js"></script>
   <script src="../js/delivery-fee.js"></script>
+  <script src="../js/gcash-proof.js"></script>
   <script src="../js/checkout.js" defer></script>
 </head>
 <body>
@@ -144,6 +145,34 @@
         <div id="gcash-qr" class="gcash-qr-wrap" style="display:none;">
           <p class="gcash-qr-label">Scan to pay via GCash</p>
           <img src="../Images/QR CODE.png" alt="GCash QR Code" class="gcash-qr-img">
+
+          <!-- Filled from GCASH_ACCOUNT in js/gcash-proof.js, so the name
+               and number are set in one place. -->
+          <div class="gcash-acct">
+            <span>Send to</span>
+            <strong id="gcash-acct-name">—</strong>
+            <code id="gcash-acct-number">—</code>
+          </div>
+
+          <div class="gcash-proof">
+            <p class="gcash-proof-label">Upload your payment screenshot <span class="req">*</span></p>
+            <p class="gcash-proof-hint">
+              After paying, screenshot the GCash receipt and upload it here. We check it against your
+              order before baking starts.
+            </p>
+
+            <label class="gcash-proof-drop" id="gcash-proof-drop">
+              <input type="file" id="gcash-proof-file" accept="image/*" onchange="handleProofUpload(this)">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <span>Choose a screenshot</span>
+            </label>
+
+            <div id="gcash-proof-result" class="gcash-proof-result" style="display:none"></div>
+          </div>
         </div>
       </div>
 

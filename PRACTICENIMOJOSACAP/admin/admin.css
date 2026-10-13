@@ -1411,6 +1411,74 @@ textarea { resize: vertical; }
 .due-tag.warn { background: #FEF3C7; color: #92400E; }
 .due-tag.high { background: #FEE2E2; color: #991B1B; }
 
+/* A GCash payment still waiting on somebody's judgement. */
+.pay-tag {
+  display: inline-block; margin-left: 6px; padding: 2px 6px;
+  border-radius: 6px; font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; vertical-align: middle; white-space: nowrap;
+}
+.pay-tag.wait { background: #E0E7FF; color: #3730A3; }
+.pay-tag.bad  { background: #FEE2E2; color: #991B1B; }
+
+/* ── Payment proof panel, inside the order ── */
+.pay-proof {
+  margin-top: 18px; padding: 14px 16px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--bg-2, #f5f3ee);
+  border-left-width: 4px;
+}
+.pay-proof.pass   { border-left-color: #16A34A; }
+.pay-proof.review { border-left-color: #F59E0B; }
+.pay-proof.fail   { border-left-color: #DC2626; }
+.pay-proof.unread { border-left-color: #6B7280; }
+.pay-proof.none   { border-left-color: #DC2626; }
+.pay-proof.none p { margin: 6px 0 0; font-size: 13px; color: var(--text-2); line-height: 1.5; }
+
+.pay-proof-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 12px;
+}
+.pay-proof-head strong { font-size: 14px; }
+
+.pay-proof-body { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.pay-proof-img {
+  width: 150px; border-radius: 10px; border: 1px solid var(--border);
+  display: block; background: #fff; cursor: zoom-in;
+}
+.pay-proof-detail { flex: 1; min-width: 240px; }
+
+.pay-proof-facts {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+  font-size: 12.5px; margin-bottom: 10px;
+}
+.pay-proof-facts span { color: var(--text-2); }
+.pay-proof-facts code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; color: var(--text-1);
+}
+
+.pay-proof-checks { list-style: none; margin: 0 0 10px; padding: 0; }
+.pay-proof-checks li {
+  display: flex; gap: 6px; align-items: baseline;
+  font-size: 12.5px; margin-bottom: 3px; line-height: 1.45;
+}
+.pay-proof-checks li span { font-weight: 700; width: 12px; flex-shrink: 0; }
+.pay-proof-checks li.ok span { color: #16A34A; }
+.pay-proof-checks li.no span { color: #DC2626; }
+.pay-proof-checks li.no { color: var(--text-2); }
+.pay-proof-checks em { font-style: normal; color: var(--text-2); }
+
+.pay-proof-dupe {
+  margin: 0 0 10px; padding: 8px 10px; border-radius: 8px;
+  background: #FEE2E2; color: #991B1B; font-size: 12.5px; line-height: 1.5;
+}
+.pay-proof-note {
+  margin: 0 0 12px; font-size: 12px; color: var(--text-3); line-height: 1.5;
+}
+.pay-proof-settled { margin: 0; font-size: 12.5px; color: var(--text-2); }
+.pay-proof-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn-ghost.sm.danger { color: var(--danger); }
+
 /* Lalamove demo controls */
 .llm-demo {
   margin-top: 12px;
