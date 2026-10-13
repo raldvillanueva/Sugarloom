@@ -16,6 +16,15 @@ function goToLogin(){
 function renderCart(){
   let cart = JSON.parse(localStorage.getItem("cart")) || [];
 
+  /* Drop a stale minimum-order warning. Without this it stays on screen
+     after the customer has added what it asked for, so the cart goes on
+     telling them they cannot check out when they can. */
+  const minQtyError = document.getElementById("minQtyError");
+  if(minQtyError && minQtyError.style.display === "block" && judgeMinQty(cart).allowed){
+    minQtyError.style.display = "none";
+    minQtyError.innerText = "";
+  }
+
   // Sync prices from Supabase-cached products so cart always reflects current pricing
   if (_cartAdminProducts.length) {
     let changed = false;
@@ -140,6 +149,45 @@ function filterTimeSlots(selectedDateStr){
   }
 }
 
+/* ── MINIMUM ORDER ──
+   Loose pieces have to reach four, so the kitchen is not baking and
+   delivering a single cupcake. A box does not: it is already a bundle
+   and a worthwhile order on its own, which is what "boxes are exempt"
+   on the cart has always meant.
+
+   It did not mean that. The old rule exempted a cart only when EVERY
+   line was a box, and it counted the box towards the four at the same
+   time — so a box plus two cupcakes came to three and was refused.
+   Adding more to the order made it less acceptable, which is the
+   opposite of what a minimum is for. */
+const MIN_LOOSE_PIECES = 4;
+
+/* Category first, name second. Cart lines carry only name, price, img
+   and qty, so the catalogue is where the category lives; the name check
+   is the fallback for a line whose product has since been renamed or
+   removed. */
+function isBoxItem(item){
+  const name = (item?.name || '').toLowerCase();
+  const prod = (_cartAdminProducts || []).find(p => (p.name || '').toLowerCase() === name);
+  const cat  = (prod?.category || '').toLowerCase();
+  if(cat) return cat.startsWith('box');
+  return name.includes('box');
+}
+
+function judgeMinQty(cart){
+  if(cart.some(isBoxItem)) return { allowed: true };
+
+  const loose = cart.reduce((sum, i) => sum + (i.qty || 1), 0);
+  if(loose >= MIN_LOOSE_PIECES) return { allowed: true };
+
+  const short = MIN_LOOSE_PIECES - loose;
+  return {
+    allowed: false,
+    reason: `A minimum of ${MIN_LOOSE_PIECES} pieces is required — you have ${loose}. ` +
+            `Add ${short} more, or any box, to check out.`
+  };
+}
+
 // CHECKOUT
 function checkout(){
   let cart = JSON.parse(localStorage.getItem("cart")) || [];
@@ -150,10 +198,9 @@ function checkout(){
   }
 
   const minQtyError = document.getElementById("minQtyError");
-  const isBoxOnly = cart.every(i => i.name && i.name.toLowerCase().includes("box"));
-  const totalCartQty = cart.reduce((sum, i) => sum + (i.qty || 1), 0);
-  if(!isBoxOnly && totalCartQty < 4){
-    minQtyError.innerText = "A minimum of 4 pcs is required to checkout (boxes are exempt).";
+  const gate = judgeMinQty(cart);
+  if(!gate.allowed){
+    minQtyError.innerText = gate.reason;
     minQtyError.style.display = "block";
     return;
   }
