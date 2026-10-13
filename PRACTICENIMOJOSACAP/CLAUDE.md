@@ -79,15 +79,17 @@ with an empty label gets no heading. To change a role, edit `ROLE_NAV`.
 
 The two senior roles divide rather than overlap.
 
-- **Super Admin** — Customers, Reports, Content, Users, Audit Trail.
-  Governs people, published copy and the records. The only role that can
-  reach staff accounts, the CMS or the trail. Seeded as
-  `superadmin@sugarloom.ph` / `super123`, and `ensureSuperAdmin()`
-  creates the account on databases seeded before the role existed.
+- **Super Admin** — Audit Trail, Reports, Users, Customers. Governs
+  people and the records; the only role that can reach staff accounts
+  or the trail. Seeded as `superadmin@sugarloom.ph` / `super123`, and
+  `ensureSuperAdmin()` creates the account on databases seeded before
+  the role existed.
 - **Administrator** — runs the shop: Dashboard, Products, Orders,
-  Customers, Inventory, Reports, Messages, Reviews. No Content, no
-  Users, no Audit Trail — an administrator who could edit staff accounts
-  or read the log of their own actions is not being audited by it.
+  Customers, Inventory, Reports, Messages, Content, Reviews. The CMS is
+  here because keeping the homepage current is ordinary work, not
+  governance. No Users and no Audit Trail — an administrator who could
+  grant themselves a role, or read the log of their own actions, is not
+  being audited by it.
 - **Baker**, **Packer** — Orders only.
 
 Every recorded action goes through `logAudit(area, action, entity,

@@ -67,13 +67,14 @@ const PRODUCT_RECIPES = {
    not allowed to open, nor open a view whose nav item is hidden.
 
    Super Admin is deliberately not "an Administrator with extras". The two
-   roles divide rather than overlap: Super Admin governs people, published
-   content and the records, while Administrator runs the shop day to day.
+   roles divide rather than overlap: Super Admin governs people and the
+   records, while Administrator runs the shop day to day — and the shop
+   includes the website copy, which is ordinary work, not governance.
 
-   So staff accounts, the website copy and the audit trail sit with Super
-   Admin alone. That is what makes the trail worth keeping — an
-   administrator who could reach the log of their own actions, or grant
-   themselves a role, is not being audited by it.
+   Staff accounts and the audit trail sit with Super Admin alone. That is
+   what makes the trail worth keeping: an administrator who could grant
+   themselves a role, or reach the log of their own actions, is not being
+   audited by it.
 
    Each role gets its own sidebar: which items, in what order, under what
    headings. The markup carries the Administrator's layout and
@@ -83,11 +84,11 @@ const PRODUCT_RECIPES = {
    Packer want with a single item. */
 const ROLE_NAV = {
   'Super Admin': [
-    { label: 'OVERSIGHT', views: ['audit', 'reports', 'content', 'users', 'customers'] }
+    { label: 'OVERSIGHT', views: ['audit', 'reports', 'users', 'customers'] }
   ],
   'Administrator': [
     { label: 'MAIN',       views: ['dashboard', 'products', 'orders', 'customers'] },
-    { label: 'MANAGEMENT', views: ['inventory', 'reports', 'messages', 'reviews'] }
+    { label: 'MANAGEMENT', views: ['inventory', 'reports', 'messages', 'content', 'reviews'] }
   ],
   'Baker':  [{ label: '', views: ['orders'] }],
   'Packer': [{ label: '', views: ['orders'] }]
