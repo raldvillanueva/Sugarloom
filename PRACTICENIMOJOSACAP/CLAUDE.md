@@ -91,12 +91,16 @@ The two senior roles divide rather than overlap.
 - **Baker**, **Packer** — Orders only.
 
 Every recorded action goes through `logAudit(area, action, entity,
-detail)`, and deliberate reads through `logRead(...)`, which is the same
-thing folded over a ten-minute window per actor/record so working an
-order through the queue does not write forty lines. Reads cover opening
-one customer's details or reviews, opening an order, and viewing the
-trail; exports and prints are logged through `logAudit` directly and are
-never folded, since each one is a separate copy of the data leaving.
+detail)`. Reads go through `logRead(...)`, the same thing folded over a
+ten-minute window per actor and record.
+
+A read is logged only when it is **a customer's personal details** or
+**data leaving the system** (an export, a print). Navigation is not a
+read: opening a page, landing on your home view, opening an order you
+are working on. The first version logged all of those, and since the
+Super Admin lands on the Audit Trail it filled with "Audit trail
+viewed" — a log that mostly describes itself is one nobody reads.
+Before adding a `logRead`, check it clears that bar.
 
 Retention is set by the Super Admin on the Audit Trail page and stored
 in `app_settings` (id `audit`, default 365 days). `purge_audit_log()`

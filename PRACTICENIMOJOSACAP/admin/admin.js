@@ -1746,10 +1746,6 @@ function filterIngCat(cat, btn){
 }
 
 function openOrderModal(id, viewOnly=false){
-  {
-    const _o = DB.orders.find(oo => oo.id === id);
-    if(_o) logRead('Orders', 'Order details viewed', `${_o.id} — ${_o.customer || 'Customer'}`, '');
-  }
   currentOrderId = id;
   const o = DB.orders.find(oo=>oo.id===id);
   document.getElementById('order-modal-title').textContent = 'Order '+o.id;
@@ -4151,7 +4147,6 @@ function viewCustomer(email){
 }
 
 function viewCustomerReviews(email){
-  logRead('Customers', 'Customer reviews viewed', email, '');
   const storeUsers = JSON.parse(localStorage.getItem('sl_users')) || [];
   const u = storeUsers.find(x => x.email.toLowerCase() === email.toLowerCase());
   const name = u ? (u.fname + ' ' + u.lname).trim() || email : email;
@@ -4351,20 +4346,31 @@ async function logAudit(area, action, entity, detail){
 
 /* ── READ EVENTS ──
    Changes are the obvious thing to record, but who *looked* is the other
-   half of a trail. A customer's address and phone number can be read
+   half of a trail: a customer's phone number and address can be read
    without anything being modified, and an export takes the data out of
-   the system altogether — neither leaves a mark if only writes are
-   logged.
+   the system altogether.
 
-   Not every read, though. Rendering a list is not an access decision,
-   and a line per render would bury the entries that matter under
-   thousands that do not. What is recorded is someone deliberately
-   opening one record, or taking data out. Reopening the same record is
-   folded together for READ_WINDOW_MS, so working an order through the
-   queue does not write a line every time it is looked at.
+   THE RULE, because the first attempt at this got it wrong. A read is
+   recorded only when it is
 
-   Exports are never folded: each one is a separate copy of the data
-   leaving, and that is exactly the thing worth counting. */
+     (a) a customer's personal details, or
+     (b) data leaving the system — an export or a print.
+
+   Navigation is not a read. Opening a page, landing on your own home
+   view, opening an order you are in the middle of working: that is
+   someone doing their job, not an access worth keeping for a year.
+
+   Logging those buried everything else. The Super Admin lands on the
+   Audit Trail, so the trail recorded "Audit trail viewed" on every
+   sign-in and every refresh and filled up with entries about being
+   looked at. A log that mostly describes itself is one nobody reads,
+   and a log nobody reads is not a control.
+
+   What remains is low-volume by construction: one line when somebody
+   opens a customer's record, one line per export. Reopening the same
+   record inside READ_WINDOW_MS folds into the first, so a second look
+   does not double it. Exports are never folded — each one is a separate
+   copy of the data leaving, which is exactly the thing worth counting. */
 const READ_WINDOW_MS = 10 * 60 * 1000;
 const _readSeen = new Map();
 
@@ -4477,7 +4483,6 @@ function setAuditRetention(value){
    what other staff have done since the page was loaded — the log is the
    one view where stale data would defeat the purpose. */
 async function refreshAudit(){
-  logRead('Access', 'Audit trail viewed', 'Activity log', '');
   await loadAuditRetention();
   if(!auditUnavailable){
     const { data, error } = await _supa.from('audit_log')
