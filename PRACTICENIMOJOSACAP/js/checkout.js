@@ -223,9 +223,15 @@ function orderTotalNow(){
   return cart.reduce((s, i) => s + i.price * (i.qty || 1), 0) + currentDeliveryFee();
 }
 
-async function handleProofUpload(input){
-  const file = input.files && input.files[0];
-  const box  = document.getElementById('gcash-proof-result');
+/* Three ways in — the file picker, a dragged file, a pasted
+   screenshot — all landing on one handler, so the checks and the
+   reading cannot drift between them. */
+function handleProofUpload(input){
+  return processProofFile(input.files && input.files[0]);
+}
+
+async function processProofFile(file){
+  const box = document.getElementById('gcash-proof-result');
   if(!file || !box) return;
 
   if(!/^image\//.test(file.type)){
@@ -312,6 +318,62 @@ function clearProof(){
 
 function escapeProof(s){
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+/* ── DRAG, DROP AND PASTE ──
+   Dragging the screenshot straight onto the box, rather than going
+   through a file dialog to find it again. Pasting works too: on
+   Windows a screenshot usually goes to the clipboard first, so Ctrl+V
+   is often fewer steps than saving the file and picking it. */
+function setupProofDropzone(){
+  const drop = document.getElementById('gcash-proof-drop');
+  if(!drop) return;
+
+  const show = on => drop.classList.toggle('dragging', on);
+
+  /* dragover has to be cancelled or the browser refuses the drop. */
+  ['dragenter', 'dragover'].forEach(evt =>
+    drop.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); show(true); }));
+
+  ['dragleave', 'dragend'].forEach(evt =>
+    drop.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); show(false); }));
+
+  drop.addEventListener('drop', e => {
+    e.preventDefault(); e.stopPropagation();
+    show(false);
+    const file = [...(e.dataTransfer?.files || [])].find(f => /^image\//.test(f.type));
+    if(file) processProofFile(file);
+    else if(e.dataTransfer?.files?.length)
+      showProofError('That file is not an image. Drop a screenshot of your GCash receipt.');
+  });
+
+  /* A file dropped anywhere else would otherwise open in the tab,
+     throwing away a checkout form they have just filled in. */
+  ['dragover', 'drop'].forEach(evt =>
+    window.addEventListener(evt, e => {
+      if(!drop.contains(e.target)) e.preventDefault();
+    }));
+
+  /* Only while GCash is the chosen method, so Ctrl+V in an address
+     field is never hijacked. */
+  document.addEventListener('paste', e => {
+    const chosen = document.querySelector('input[name="payment"]:checked')?.value;
+    if(chosen !== 'GCash') return;
+    if(/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) return;
+
+    const item = [...(e.clipboardData?.items || [])].find(i => /^image\//.test(i.type));
+    if(!item) return;
+    const file = item.getAsFile();
+    if(file){ e.preventDefault(); processProofFile(file); }
+  });
+}
+
+function showProofError(msg){
+  const box = document.getElementById('gcash-proof-result');
+  if(!box) return;
+  box.style.display = 'block';
+  box.className = 'gcash-proof-result fail';
+  box.innerHTML = `<strong>${escapeProof(msg)}</strong>`;
 }
 
 function clearFieldErrors(){
@@ -665,6 +727,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   _adminIngredients = (iRes.data || []).map(r => r.data);
 
   loadCheckout();
+  setupProofDropzone();
   prefillFromProfile();
 
   setupServiceAreaSelects();
