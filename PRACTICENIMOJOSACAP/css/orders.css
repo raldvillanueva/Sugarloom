@@ -1092,3 +1092,22 @@ body {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
+/* The card a notification sent you to. It fades after a moment —
+   long enough to catch the eye on a long list, not so long that it
+   looks like a permanent state of the order. */
+.order-card-focus {
+  animation: orderCardFocus 2.6s ease-out;
+}
+
+@keyframes orderCardFocus {
+  0%, 55% {
+    box-shadow: 0 0 0 3px var(--pink, #e8527a), 0 8px 28px rgba(232, 82, 122, 0.22);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(232, 82, 122, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .order-card-focus { animation: none; box-shadow: 0 0 0 3px var(--pink, #e8527a); }
+}

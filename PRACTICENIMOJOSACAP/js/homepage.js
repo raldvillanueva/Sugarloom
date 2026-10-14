@@ -378,6 +378,11 @@ function renderNotifBadge(notifs){
   countEl.classList.toggle('hidden', unseen === 0);
 }
 
+function escNotif(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function toggleNotifPanel(){
   const panel = document.getElementById('notifPanel');
   const user  = JSON.parse(localStorage.getItem('loggedInUser'));
@@ -404,12 +409,31 @@ function renderNotifPanel(notifs){
     container.innerHTML = '<div class="notif-empty">No notifications</div>';
     return;
   }
+  /* Each notification is about one order, so it opens that order
+     rather than the top of the list — with a dozen orders the customer
+     was being dropped at the top to scroll and find the one the
+     message was about. */
   container.innerHTML = notifs.slice(0, 15).map(n => `
-    <div class="notif-item" onclick="goToOrders()">
+    <div class="notif-item" ${n.orderId ? `data-order-id="${escNotif(n.orderId)}"` : ''}>
       <div class="notif-msg">${n.message}</div>
       <div class="notif-ts">${formatNotifTime(n.ts)}</div>
     </div>
   `).join('');
+
+  /* Delegated, and the id travels in an attribute rather than inside
+     an inline handler — an order id with an apostrophe would break out
+     of one of those. */
+  if(!container.dataset.bound){
+    container.addEventListener('click', e => {
+      const item = e.target.closest('.notif-item');
+      if(!item) return;
+      const id = item.dataset.orderId;
+      window.location.href = id
+        ? '../pages/orders.html#order-' + encodeURIComponent(id)
+        : '../pages/orders.html';
+    });
+    container.dataset.bound = '1';
+  }
 }
 
 function formatNotifTime(ts){

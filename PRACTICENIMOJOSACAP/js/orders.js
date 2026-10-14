@@ -198,6 +198,40 @@ function showView(view){
   }
 }
 
+/* ── ARRIVING FROM A NOTIFICATION ──
+   The bell links to #order-<id>. The browser's own hash jump is no use
+   here: the cards are rendered after an await, so at the moment the
+   page loads the element does not exist yet. This runs once the list
+   is on screen.
+
+   A finished order is not in the active list at all — it has moved to
+   Reviews — so if it is not found here the matching tab is opened and
+   searched before giving up. */
+async function focusOrderFromHash(){
+  const id = decodeURIComponent((location.hash || '').replace(/^#order-/, ''));
+  if(!id || !location.hash.startsWith('#order-')) return;
+
+  let el = document.getElementById('order-card-' + id);
+
+  if(!el){
+    // delivered or cancelled — it lives under Reviews now
+    showView('reviewsView');
+    await new Promise(r => setTimeout(r, 120));   // let renderReviews() paint
+    el = document.getElementById('review-card-' + id);
+  }
+
+  if(!el){
+    // nothing to jump to; leave the customer on the list rather than
+    // on a blank tab they did not ask for
+    showView('ordersView');
+    return;
+  }
+
+  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  el.classList.add('order-card-focus');
+  setTimeout(() => el.classList.remove('order-card-focus'), 2600);
+}
+
 function updateOrderBadge(){
   // Badge hidden on the orders page itself — nothing needed here
   const userIcon = document.getElementById('userIcon');
@@ -216,6 +250,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadProfile();
   await renderOrders();
   updateOrderBadge();
+
+  /* Arrived from a notification about one order — go to it. */
+  await focusOrderFromHash();
 
   // Refresh tracking display every 30 seconds
   setInterval(async () => { await renderOrders(); updateOrderBadge(); }, 30000);
@@ -336,7 +373,7 @@ async function renderOrders() {
       : `<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${statusColor}1a;color:${statusColor}">${status}</span>`;
 
     return `
-      <div class="order-card">
+      <div class="order-card" id="order-card-${order.id}">
         <div class="order-header" style="display:flex;justify-content:space-between;align-items:center">
           <span>Order • ${dateStr}</span>
           ${statusBadge}
