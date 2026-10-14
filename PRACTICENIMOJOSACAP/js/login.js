@@ -164,6 +164,12 @@ async function submitPassword() {
   showPanel('panel-otp');
 }
 
+/* Supabase refuses a second email inside 60s, so the cooldown matches
+   that rather than the 30s it used to be — a link that re-enables
+   itself before the server will act just produces a failure the user
+   cannot explain. */
+const RESEND_COOLDOWN_MS = 60000;
+
 async function resendOTP() {
   const email = document.getElementById('email').value.trim();
   const btn   = document.getElementById('resend-btn');
@@ -174,12 +180,15 @@ async function resendOTP() {
   const { error } = await sendEmailOtp(email);
 
   if (!error) {
-    btn.textContent = 'Sent!';
-    setTimeout(() => { btn.textContent = 'Resend code'; btn.style.pointerEvents = ''; }, 30000);
+    clearOtp();
+    otpBoxes()[0]?.focus();
+    btn.textContent = 'Sent — check the newest email';
+    setTimeout(() => { btn.textContent = 'Resend code'; btn.style.pointerEvents = ''; }, RESEND_COOLDOWN_MS);
   } else {
+    console.warn('resend failed:', error.code || error.status, error.message);
     btn.textContent = 'Resend code';
     btn.style.pointerEvents = '';
-    flashError(document.getElementById('otp-error'), 'Failed to resend. Try again.');
+    flashError(document.getElementById('otp-error'), otpErrorMessage(error), 6000);
   }
 }
 
@@ -201,9 +210,10 @@ async function submitOTP() {
   _otpSubmitting = false;
 
   if (error) {
+    console.warn('verifyOtp failed:', error.code || error.status, error.message);
     clearOtp();
     otpBoxes()[0]?.focus();
-    return flashError(errEl, 'Incorrect code. Please try again.');
+    return flashError(errEl, otpErrorMessage(error), 8000);
   }
 
   await storeSession(data.user);

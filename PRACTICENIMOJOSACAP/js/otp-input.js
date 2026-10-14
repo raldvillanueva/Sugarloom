@@ -16,6 +16,33 @@ function otpBoxesIn(containerId) {
   return Array.from(document.querySelectorAll(`#${containerId} .otp-box`));
 }
 
+/* Supabase answers a mistyped code and a dead one with the same
+   403 otp_expired / "Token has expired or is invalid", so the page
+   cannot tell them apart and must not pretend it can. Saying
+   "Incorrect code" to someone holding a consumed token sends them
+   retyping the same six digits forever; naming both causes points at
+   the one action that actually works — send a new one.
+
+   A token dies on being used once, on expiry, and on a newer code
+   being issued for the same address, so an older email in the inbox
+   is a dead code even though it was never typed. */
+function otpErrorMessage(error) {
+  const code = error?.code || error?.error_code || '';
+  const msg  = (error?.message || '').toLowerCase();
+
+  if (code === 'otp_expired' || msg.includes('expired') || msg.includes('invalid')) {
+    return 'That code did not work. It may have expired, already been used, ' +
+           'or been replaced by a newer email — send a new code and use the latest one.';
+  }
+  if (code === 'over_email_send_rate_limit' || msg.includes('rate limit') || msg.includes('too many')) {
+    return 'Too many attempts. Wait about a minute, then send a new code.';
+  }
+  if (msg.includes('failed to fetch') || msg.includes('network')) {
+    return 'Could not reach the server. Check your connection and try again.';
+  }
+  return error?.message || 'That code could not be verified. Send a new code and try again.';
+}
+
 function otpBoxValue(containerId) {
   return otpBoxesIn(containerId).map(b => b.value).join('');
 }

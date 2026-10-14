@@ -84,12 +84,18 @@ async function resendResetOTP() {
     options: { shouldCreateUser: false }
   });
 
+  if (!error) { clearOtpBoxes(FP_OTP); focusFirstOtpBox(FP_OTP); }
+
   if (btn) {
-    btn.textContent = error ? 'Send again' : 'Sent!';
+    /* 60s, matching Supabase's own limit on a second email — see login.js. */
+    btn.textContent = error ? 'Send again' : 'Sent — check the newest email';
     if (error) btn.style.pointerEvents = '';
-    else setTimeout(() => { btn.textContent = 'Send again'; btn.style.pointerEvents = ''; }, 30000);
+    else setTimeout(() => { btn.textContent = 'Send again'; btn.style.pointerEvents = ''; }, 60000);
   }
-  if (error) showMsg('Could not resend. Try again.');
+  if (error) {
+    console.warn('resend failed:', error.code || error.status, error.message);
+    flashFieldError('otp-error', otpErrorMessage(error), 6000);
+  }
 }
 
 /* STEP 2 — verify the code */
@@ -110,9 +116,10 @@ async function verifyOTP() {
   _fpVerifying = false;
 
   if (error) {
+    console.warn('verifyOtp failed:', error.code || error.status, error.message);
     clearOtpBoxes(FP_OTP);
     focusFirstOtpBox(FP_OTP);
-    flashFieldError('otp-error', 'Incorrect code. Please try again.');
+    flashFieldError('otp-error', otpErrorMessage(error), 8000);
     return;
   }
 
