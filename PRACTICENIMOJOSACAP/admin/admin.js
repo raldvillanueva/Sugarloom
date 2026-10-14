@@ -4742,7 +4742,11 @@ function renderAudit(){
   renderAuditRetention(all);
 
   body.innerHTML = rows.map(r => `
-    <tr>
+    <!-- The id goes in an attribute, not an inline onclick. escHTML does
+         not escape apostrophes, and these ids come from a table the
+         public anon key can insert into — an id carrying a quote would
+         break out of the handler and run in the panel. -->
+    <tr class="audit-row" data-audit-id="${escHTML(r.id || '')}" title="Open this entry">
       <td style="white-space:nowrap">${isNaN(new Date(r.at)) ? '<span style="color:var(--text-3)">—</span>' : fmtDateTime(r.at)}</td>
       <td class="fw-bold">${escHTML(r.actorName || '—')}</td>
       <td><span class="pill ${auditRolePill(r.actorRole)}">${escHTML(r.actorRole || '—')}</span></td>
@@ -4753,6 +4757,86 @@ function renderAudit(){
         ${r.entity && r.detail ? ' — ' : ''}${escHTML(r.detail || '')}
       </td>
     </tr>`).join('');
+
+  /* Bound once on the tbody rather than per row, so re-rendering the
+     table does not pile up listeners. */
+  if(!body.dataset.rowsBound){
+    body.addEventListener('click', e => {
+      const tr = e.target.closest('.audit-row');
+      if(tr) viewAuditEntry(tr.dataset.auditId);
+    });
+    body.dataset.rowsBound = '1';
+  }
+}
+
+/* One entry, in full. The table trims long details to keep the rows
+   scannable and leaves out the actor's email and the entry id
+   altogether; this is where the whole record lives, which is what you
+   want when an entry is the thing being questioned rather than just
+   something you are scrolling past.
+
+   Opening it is not logged. Reading the trail is navigation, not an
+   access to personal data — see the rule above logRead(). */
+function viewAuditEntry(id){
+  const r = (DB.auditLog || []).find(x => x.id === id);
+  if(!r) return;
+
+  const when = isNaN(new Date(r.at))
+    ? 'Not recorded'
+    : new Date(r.at).toLocaleString('en-PH', {
+        weekday:'long', day:'numeric', month:'long', year:'numeric',
+        hour:'numeric', minute:'2-digit', second:'2-digit'
+      });
+
+  const row = (label, value, mono) => value
+    ? `<div class="ae-row"><span>${escHTML(label)}</span><div class="${mono ? 'mono' : ''}">${escHTML(value)}</div></div>`
+    : '';
+
+  document.getElementById('audit-entry-body').innerHTML = `
+    <div class="ae-headline">
+      <span class="pill ${auditRolePill(r.actorRole)}">${escHTML(r.actorRole || '—')}</span>
+      <strong>${escHTML(r.action || '—')}</strong>
+      <span class="ae-area">${escHTML(r.area || '—')}</span>
+    </div>
+
+    <div class="ae-grid">
+      ${row('When', when)}
+      ${row('Who', r.actorName || '—')}
+      ${row('Email', r.actorEmail)}
+      ${row('Account', r.actorId, true)}
+      ${row('Area', r.area || '—')}
+      ${row('Action', r.action || '—')}
+      ${row('Item', r.entity)}
+      ${row('Details', r.detail)}
+      ${row('Entry', r.id, true)}
+    </div>
+
+    <p class="ae-note">
+      Written when the action happened and never edited since. If this entry is wrong,
+      the action it describes is what to question — not the record of it.
+    </p>`;
+
+  document.getElementById('audit-entry-copy').onclick = () => copyAuditEntry(r);
+  openModal('audit-entry-modal');
+}
+
+/* Plain text, for pasting into a report or an email. */
+function copyAuditEntry(r){
+  const when = isNaN(new Date(r.at)) ? 'not recorded' : new Date(r.at).toLocaleString('en-PH');
+  const lines = [
+    `Audit entry ${r.id || ''}`.trim(),
+    `When:    ${when}`,
+    `Who:     ${r.actorName || '—'}${r.actorEmail ? ' <' + r.actorEmail + '>' : ''}`,
+    `Role:    ${r.actorRole || '—'}`,
+    `Area:    ${r.area || '—'}`,
+    `Action:  ${r.action || '—'}`,
+    r.entity ? `Item:    ${r.entity}` : null,
+    r.detail ? `Details: ${r.detail}` : null
+  ].filter(Boolean).join('\n');
+
+  navigator.clipboard?.writeText(lines)
+    .then(() => toast('Entry copied', 'success'))
+    .catch(() => toast('Could not copy — select the text instead', ''));
 }
 
 /* States the retention policy, and flags a purge that is not running.

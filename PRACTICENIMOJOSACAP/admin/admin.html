@@ -1001,6 +1001,21 @@
   </div>
 </div>
 
+<!-- One audit entry, in full -->
+<div class="modal-overlay hidden" id="audit-entry-modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h3><i class='bx bx-history' style="margin-right:6px;color:#2563EB"></i>Activity entry</h3>
+      <button class="modal-close" onclick="closeModal('audit-entry-modal')"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body" id="audit-entry-body"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="closeModal('audit-entry-modal')">Close</button>
+      <button class="btn-secondary" id="audit-entry-copy"><i class='bx bx-copy'></i> Copy as text</button>
+    </div>
+  </div>
+</div>
+
 <!-- Refund Modal -->
 <div class="modal-overlay hidden" id="refund-modal">
   <div class="modal sm">
