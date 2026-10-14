@@ -1852,3 +1852,14 @@ textarea { resize: vertical; }
   .rf-table { page-break-inside: auto; }
   .rf-table tr { page-break-inside: avoid; }
 }
+
+/* A required reason that was left blank. */
+.confirm-input-error {
+  margin: 6px 0 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--danger);
+}
+#confirm-modal-input.invalid {
+  border-color: var(--danger);
+}

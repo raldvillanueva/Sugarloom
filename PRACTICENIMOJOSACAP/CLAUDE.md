@@ -200,6 +200,17 @@ payment is verified — confirming is what consumes the ingredients.
 Orders placed before receipts existed have no `paymentStatus` and are
 not held up.
 
+**Rejecting a payment cancels the order.** An unpaid order is not a
+waiting order: left Pending it sits in the baker's path and in the
+overdue warnings for something nobody will make. The reason is
+required (8 characters minimum) because it reaches the customer
+verbatim — the old blank fallback put "No matching payment found" in
+their inbox under the shop's name whether or not that was what
+happened. The cancel reason is written as `Payment rejected — <why>`,
+and `checkOrderNotifications()` matches that prefix to suppress the
+generic "order cancelled" line, so one decision produces one email and
+one notification rather than two of each.
+
 ## Telling the customer
 
 `checkOrderNotifications()` in `js/homepage.js` drives the customer's

@@ -255,7 +255,7 @@ const NOTIF_STATUSES = {
    something is wrong. */
 const NOTIF_PAYMENT = {
   'Verified': '💳 Payment received for order #ID — thank you! We are getting started.',
-  'Rejected': '⚠️ We could not match the payment for order #ID. Please check your GCash receipt or message us and we will sort it out.'
+  'Rejected': '⚠️ We could not match the payment for order #ID, so it has been cancelled. Message us with your receipt if you think this is a mistake.'
 };
 const NOTIF_SUB_STATUSES = {
   'baking':  '🔥 Your order #ID is now being baked!',
@@ -309,9 +309,15 @@ async function checkOrderNotifications(){
     const last    = seen.hasOwnProperty(o.id) ? seen[o.id] : 'Pending';
     const lastSub = seen[o.id + '_sub'] || null;
 
+    /* A payment rejection cancels the order, and the payment line
+       below already says so. Without this the customer gets two
+       notifications for one decision. */
+    const cancelledByPayment = cur === 'Cancelled' &&
+      typeof o.cancelReason === 'string' && o.cancelReason.startsWith('Payment rejected');
+
     // Main status change
     if(last !== cur){
-      if(NOTIF_STATUSES[cur]){
+      if(NOTIF_STATUSES[cur] && !cancelledByPayment){
         notifs.unshift({ id: Date.now() + '_' + o.id, orderId: o.id, message: NOTIF_STATUSES[cur].replace('#ID', o.id), status: cur, seen: false, ts: Date.now() });
       }
       updatedSeen[o.id] = cur;

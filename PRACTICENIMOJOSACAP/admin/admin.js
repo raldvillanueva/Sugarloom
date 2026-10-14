@@ -20,7 +20,7 @@ function sendStatusEmail(order, status){
 
   const messages = {
     'Payment Received': 'We have matched your GCash payment to this order — thank you! Your order is now with the kitchen.',
-    'Payment Rejected': 'We could not match a payment to this order yet. Please check the GCash receipt you sent, or reply to this email and we will sort it out with you.',
+    'Payment Rejected': 'We could not match a payment to this order, so it has been cancelled and nothing has been charged. If you believe this is a mistake, reply to this email with your GCash receipt and we will put the order straight back through.',
     'Confirmed':      'Great news! Your order has been confirmed. We\'re preparing to bake your treats fresh.',
     'Preparing':      'We\'re baking your order right now! Your goodies will be ready soon.',
     'Ready for Packing': 'Your order is out of the oven and heading to our packing table.',
@@ -1607,7 +1607,7 @@ function archiveOrder(id){
   });
 }
 
-function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', inputLabel=null, inputPlaceholder='', onConfirm }){
+function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', inputLabel=null, inputPlaceholder='', inputRequired=false, inputMin=0, onConfirm }){
   document.getElementById('confirm-modal-title').textContent = title;
   document.getElementById('confirm-modal-message').textContent = message;
   document.getElementById('confirm-modal-icon').innerHTML = `<i class='bx ${icon}'></i>`;
@@ -1615,9 +1615,13 @@ function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='b
   // Optional free-text box, used for things like a decline reason
   const wrap  = document.getElementById('confirm-modal-input-wrap');
   const input = document.getElementById('confirm-modal-input');
+  const error = document.getElementById('confirm-modal-input-error');
   input.value = '';
+  error.classList.add('hidden');
+  input.classList.remove('invalid');
   if(inputLabel){
-    document.getElementById('confirm-modal-input-label').textContent = inputLabel;
+    document.getElementById('confirm-modal-input-label').textContent =
+      inputLabel + (inputRequired ? ' *' : '');
     input.placeholder = inputPlaceholder;
     wrap.classList.remove('hidden');
   } else {
@@ -1627,7 +1631,27 @@ function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='b
   const okBtn = document.getElementById('confirm-modal-ok');
   okBtn.textContent = okText;
   okBtn.className = okClass;
-  okBtn.onclick = () => { const v = input.value.trim(); closeConfirmModal(); onConfirm(v); };
+  okBtn.onclick = () => {
+    const v = input.value.trim();
+
+    /* A required reason holds the dialog open rather than closing and
+       filling in a default. Something written here is read by whoever
+       picks the problem up later, and sometimes by the customer — a
+       placeholder the system invented would read as if a person had
+       looked when nobody had. */
+    if(inputRequired && v.length < Math.max(1, inputMin)){
+      error.textContent = inputMin > 1
+        ? `Please give a reason — at least ${inputMin} characters.`
+        : 'Please give a reason.';
+      error.classList.remove('hidden');
+      input.classList.add('invalid');
+      input.focus();
+      return;
+    }
+
+    closeConfirmModal();
+    onConfirm(v);
+  };
   document.getElementById('confirm-modal').classList.remove('hidden');
 }
 
@@ -2342,23 +2366,54 @@ function rejectPayment(id){
   showConfirm({
     title: 'Reject this payment',
     message: `The screenshot for ${o.id} does not match a payment in the GCash account. ` +
-             `The order stays Pending so you can contact the customer.`,
-    okText: 'Reject payment',
+             `Rejecting it cancels the order and tells ${o.customer || 'the customer'} why, ` +
+             `so write something they can act on.`,
+    okText: 'Reject & cancel order',
     okClass: 'btn-danger',
     icon: 'bx-x-circle',
     inputLabel: 'What is wrong with it?',
     inputPlaceholder: 'e.g. no matching payment, amount short, receipt belongs to another order',
+    /* Required, and the reason reaches the customer verbatim. The old
+       fallback wrote "No matching payment found" whether or not that
+       was true, which is a sentence the system made up appearing in a
+       customer's inbox under the shop's name. */
+    inputRequired: true,
+    inputMin: 8,
     onConfirm: async (reason) => {
+      const why = reason.trim();
+
       o.paymentStatus       = 'Rejected';
-      o.paymentRejectReason = (reason || '').trim() || 'No matching payment found';
+      o.paymentRejectReason = why;
       o.paymentCheckedBy    = `${currentUser.fname} ${currentUser.lname}`.trim();
       o.paymentCheckedAt    = new Date().toISOString();
+
+      /* An unpaid order is not a waiting order. Leaving it Pending put
+         it in the baker's path and in the overdue warnings for
+         something that is never going to be made. */
+      const wasStatus = o.status;
+      o.status        = 'Cancelled';
+      o.cancelledAt   = new Date().toISOString();
+      o.cancelReason  = `Payment rejected — ${why}`;
+
+      /* Nothing is normally deducted at Pending, but an order confirmed
+         before the payment was checked would have been. Give it back. */
+      const putBack = restoreIngredientsFor(o);
+
       if(!await savePaymentDecision(o)) return;
-      sendStatusEmail(o, 'Payment Rejected');   // see the note above
+
+      /* One email, not two. syncStatusToCustomer() would send a
+         second for the cancellation; the rejection email already says
+         the order is off, and the customer's bell picks the cancelled
+         status straight out of Supabase. */
+      sendStatusEmail(o, 'Payment Rejected');
       logAudit('Orders', 'GCash payment rejected', `${o.id} — ${o.customer || 'Customer'}`,
-               o.paymentRejectReason);
-      renderOrders(); openOrderModal(o.id, true);
-      toast('Payment rejected', '');
+               `${why} · order cancelled from ${wasStatus}` +
+               (putBack.length ? ` · ${putBack.length} ingredient${putBack.length === 1 ? '' : 's'} returned` : ''));
+
+      renderOrders(); updateBadges(); renderInventory(); openOrderModal(o.id, true);
+      toast(putBack.length
+        ? 'Payment rejected — order cancelled, ingredients returned'
+        : 'Payment rejected — order cancelled', '');
     }
   });
 }
