@@ -95,6 +95,14 @@ create table if not exists inquiries (
 
 create index if not exists idx_inquiries_date on inquiries (date desc);
 
+-- Orders that have been deleted. A trigger refuses to re-insert these,
+-- so a browser still holding a deleted order cannot upload it again.
+-- See supabase-deleted-orders.sql for the trigger itself.
+create table if not exists deleted_orders (
+  id         text primary key,
+  deleted_at timestamptz default now()
+);
+
 -- Settings the panel can change at runtime. Currently just how long
 -- audit entries are kept, which the scheduled purge reads.
 create table if not exists app_settings (
@@ -129,5 +137,6 @@ alter table site_content   disable row level security;
 alter table inquiries      disable row level security;
 alter table supplier_orders disable row level security;
 alter table app_settings   disable row level security;
+alter table deleted_orders disable row level security;
 -- audit_log is left out on purpose — see supabase-audit-log.sql, which
 -- enables RLS on it with insert and select only.

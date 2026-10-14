@@ -2695,6 +2695,17 @@ function deleteOrder(id){
       const { error: trackErr } = await _supa.from('order_tracking').delete().eq('order_id', id);
       if(trackErr) console.error('could not clear tracking row:', trackErr);
 
+      /* Tombstone it in the database, not just in this tab. Another
+         browser still holding this order will upsert it back on its
+         next save, and _deletedOrderIds only lives in this session —
+         the trigger in supabase-deleted-orders.sql refuses the insert
+         for anyone. Missing table just means that file has not been
+         run; the delete itself still stands. */
+      const { error: tombErr } = await _supa.from('deleted_orders').insert({ id });
+      if(tombErr && tombErr.code !== 'PGRST205' && tombErr.code !== '23505'){
+        console.warn('could not tombstone the order:', tombErr.message);
+      }
+
       // Ingredients already taken out for a bake go back on the shelf
       const putBack = restoreIngredientsFor(o);
       DB.orders = DB.orders.filter(oo => oo.id !== id);

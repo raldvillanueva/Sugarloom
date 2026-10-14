@@ -75,7 +75,7 @@ begin
   foreach t in array array[
     'products', 'ingredients', 'admin_users', 'orders', 'transactions',
     'stock_log', 'order_tracking', 'site_content', 'inquiries', 'reviews',
-    'supplier_orders', 'app_settings'
+    'supplier_orders', 'app_settings', 'deleted_orders'
   ] loop
     -- Skip anything that isn't here rather than aborting the whole script,
     -- which would leave some tables locked and others untouched.
