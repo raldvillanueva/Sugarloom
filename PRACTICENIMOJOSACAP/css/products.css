@@ -193,8 +193,13 @@ a { text-decoration: none; color: inherit; }
 }
 
 /* ─── PRODUCTS ─── */
+/* Same fix as the product page: hold the grid to a readable width and
+   centre it, rather than letting it run the full width of the monitor
+   and leave the content hugging one edge. */
 .products {
-  padding: 60px 40px 80px;
+  padding: 56px 32px 88px;
+  max-width: 1240px;
+  margin: 0 auto;
 }
 
 .shop-title {
@@ -207,9 +212,12 @@ a { text-decoration: none; color: inherit; }
   color: var(--text);
 }
 
+/* auto-fill rather than a hard three, so the cards keep a sensible
+   size instead of stretching wider as the window grows. At the
+   max-width above this still lays out as three. */
 .products-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 28px;
 }
 
@@ -529,3 +537,17 @@ a { text-decoration: none; color: inherit; }
 }
 .site-toast.success { background: #1a1a1a; color: #fff; }
 .site-toast.error   { background: #d32f2f; color: #fff; }
+
+/* ─── NARROWER SCREENS ───
+   The grid tracks already reflow on their own; this is the padding and
+   the heading, which were sized for a desktop window only. */
+@media (max-width: 820px) {
+  .products { padding: 36px 20px 64px; }
+  .shop-title { font-size: 34px; margin-bottom: 32px; }
+}
+
+@media (max-width: 520px) {
+  .products { padding: 24px 16px 56px; }
+  .shop-title { font-size: 28px; }
+  .products-grid { gap: 18px; }
+}
