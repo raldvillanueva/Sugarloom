@@ -593,6 +593,23 @@ async function syncStoreOrders(){
   const { data: rows } = await _supa.from('orders').select('data, status').order('date', { ascending: false });
   if (!rows) return 0;
 
+  /* Drop anything that is no longer in the database.
+
+     This loop only ever added, and saveDB() upserts every order held
+     in memory — so an order deleted anywhere else came straight back
+     the next time this tab saved. One stale tab was enough to undo a
+     deletion, and the tab doing the undoing showed no sign of it.
+
+     Supabase is the source of truth: the panel does not create orders,
+     customers do. Anything not there has genuinely gone. The early
+     return above means a failed read prunes nothing. */
+  const remoteIds = new Set(rows.map(r => r.data && r.data.id).filter(Boolean));
+  const before = DB.orders.length;
+  DB.orders = DB.orders.filter(o => remoteIds.has(o.id));
+  if (DB.orders.length !== before) {
+    console.info(`Dropped ${before - DB.orders.length} order(s) deleted elsewhere.`);
+  }
+
   const today = todayDate();
   let added = 0;
 
