@@ -55,6 +55,14 @@ function focusFirstOtpBox(containerId) {
   otpBoxesIn(containerId)[0]?.focus();
 }
 
+/* Locked while a code is being verified, and left locked once one has
+   been accepted. A verified code is spent: letting the boxes stay live
+   through the redirect only invites a second verify that is certain to
+   fail. */
+function setOtpBoxesDisabled(containerId, disabled) {
+  otpBoxesIn(containerId).forEach(b => { b.disabled = !!disabled; });
+}
+
 /* Spread a run of digits across the boxes from `start`, then park the
    caret on the last one filled. */
 function fillOtpFrom(containerId, start, digits) {

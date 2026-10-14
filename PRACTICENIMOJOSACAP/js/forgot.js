@@ -101,6 +101,15 @@ async function resendResetOTP() {
 /* STEP 2 — verify the code */
 let _fpVerifying = false;
 
+function setFpOtpBusy(busy) {
+  setOtpBoxesDisabled(FP_OTP, busy);
+  const btn = document.getElementById('fp-verify-btn');
+  if (btn) {
+    btn.disabled = busy;
+    btn.textContent = busy ? 'Verifying...' : 'Verify code';
+  }
+}
+
 async function verifyOTP() {
   const otp = otpBoxValue(FP_OTP);
 
@@ -108,15 +117,20 @@ async function verifyOTP() {
   if (otp.length < 6) { flashFieldError('otp-error', 'Enter the 6-digit code'); return; }
 
   _fpVerifying = true;
+  setFpOtpBusy(true);
   const { error } = await _supa.auth.verifyOtp({
     email: _fpEmail,
     token: otp,
     type:  'email'
   });
-  _fpVerifying = false;
 
+  /* Released only on rejection — a verified code is spent, so leaving
+     the boxes live would just invite a second verify that must fail.
+     See the note in login.js. */
   if (error) {
     console.warn('verifyOtp failed:', error.code || error.status, error.message);
+    _fpVerifying = false;
+    setFpOtpBusy(false);
     clearOtpBoxes(FP_OTP);
     focusFirstOtpBox(FP_OTP);
     flashFieldError('otp-error', otpErrorMessage(error), 8000);

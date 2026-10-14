@@ -16,6 +16,7 @@ function showPanel(id) {
   document.getElementById(id).classList.remove('hidden');
 
   if (id === 'panel-otp') {
+    setOtpBusy(false);          // never land on the step with the boxes locked
     otpBoxes()[0]?.focus();
   } else {
     clearOtp();
@@ -193,8 +194,25 @@ async function resendOTP() {
 }
 
 /* The boxes auto-submit once full, so guard against Enter or the Submit
-   button firing a second verify while the first is still in flight. */
+   button firing a second verify.
+
+   The guard is released only when the code was rejected. A code that
+   verified is spent, and the work after it — loading the profile, then
+   the pause before the redirect — takes a second or two with the boxes
+   still on screen. Releasing the guard there let a stray Enter or an
+   impatient click re-verify the consumed token, which fails and paints
+   "Incorrect code" over a sign-in that had already succeeded. So on
+   success it stays latched until the page leaves. */
 let _otpSubmitting = false;
+
+function setOtpBusy(busy) {
+  setOtpBoxesDisabled(OTP_BOXES, busy);
+  const btn = document.getElementById('otp-btn');
+  if (btn) {
+    btn.disabled = busy;
+    btn.textContent = busy ? 'Verifying...' : 'Submit';
+  }
+}
 
 async function submitOTP() {
   const email = document.getElementById('email').value.trim();
@@ -206,11 +224,13 @@ async function submitOTP() {
   if (otp.length < 6) return flashError(errEl, 'Enter the 6-digit code');
 
   _otpSubmitting = true;
+  setOtpBusy(true);
   const { data, error } = await _supa.auth.verifyOtp({ email, token: otp, type: 'email' });
-  _otpSubmitting = false;
 
   if (error) {
     console.warn('verifyOtp failed:', error.code || error.status, error.message);
+    _otpSubmitting = false;
+    setOtpBusy(false);
     clearOtp();
     otpBoxes()[0]?.focus();
     return flashError(errEl, otpErrorMessage(error), 8000);
