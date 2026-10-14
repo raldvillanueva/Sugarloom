@@ -262,12 +262,23 @@ async function renderOrders() {
   // Load all tracking data from Supabase
   const allTracking = await fetchAllTracking(orders.map(o => o.id));
 
+  /* An order cancelled because its payment was refused stays on the
+     list until the customer dismisses it. Dropping it the way other
+     cancellations are dropped would make their order simply vanish,
+     with the explanation only in an email they may not have opened —
+     and this is the one cancellation they did not ask for. */
+  const rejectedPayment = order =>
+    (order.status || '') === 'Cancelled' &&
+    typeof order.cancelReason === 'string' &&
+    order.cancelReason.startsWith('Payment rejected') &&
+    order.paymentRejectedSeen !== true;
+
   // Exclude delivered and cancelled orders
   const activeOrders = orders.filter(order => {
     const t = allTracking[order.id] || order.tracking || null;
     if (t && (t.status === 'COMPLETED' || t.status === 'CANCELED')) return false;
     const s = order.status || 'Pending';
-    return s !== 'Cancelled';
+    return s !== 'Cancelled' || rejectedPayment(order);
   });
 
   if (activeOrders.length === 0) {
@@ -339,6 +350,17 @@ async function renderOrders() {
           <span style="font-size:13px;color:#92400E;font-weight:500">⚠️ Your cancellation request was rejected. Your order is still active.</span>
           <button onclick="dismissCancelRejected('${order.id}')" style="background:none;border:none;font-size:18px;cursor:pointer;color:#92400E;line-height:1">×</button>
         </div>` : ''}
+        ${rejectedPayment(order) ? `
+        <div style="margin-top:12px;padding:12px 14px;background:#FEE2E2;border:1px solid #DC2626;border-radius:10px">
+          <div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:4px">Payment could not be matched — order cancelled</div>
+          <div style="font-size:13px;color:#7F1D1D;line-height:1.5">
+            ${escOrderText(String(order.cancelReason).replace(/^Payment rejected — /, ''))}.
+            Nothing has been charged. Message us with your GCash receipt if you think this is a mistake
+            and we will put the order straight back through.
+          </div>
+          <button onclick="dismissPaymentRejected('${order.id}')"
+                  style="margin-top:10px;background:none;border:none;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:#991B1B;text-decoration:underline;cursor:pointer">Got it</button>
+        </div>` : ''}
         ${status === 'Pending' ? `
         <div style="margin-top:12px">
           <button class="cancel-order-btn" onclick="cancelOrder('${order.id}')">Cancel Order</button>
@@ -349,6 +371,22 @@ async function renderOrders() {
       </div>
     `;
   }).join("");
+}
+
+/* The customer's text is reflected back into the card, so it is
+   escaped on the way out like anything else from the database. */
+function escOrderText(t){
+  return String(t == null ? '' : t)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function dismissPaymentRejected(orderId){
+  const { data: row } = await _supa.from('orders').select('data').eq('id', orderId).single();
+  if (row) {
+    const updated = { ...row.data, paymentRejectedSeen: true };
+    await _supa.from('orders').update({ data: updated }).eq('id', orderId);
+  }
+  renderOrders();
 }
 
 async function dismissCancelRejected(orderId){

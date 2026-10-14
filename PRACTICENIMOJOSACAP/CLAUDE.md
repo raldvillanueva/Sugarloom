@@ -211,6 +211,22 @@ and `checkOrderNotifications()` matches that prefix to suppress the
 generic "order cancelled" line, so one decision produces one email and
 one notification rather than two of each.
 
+That same prefix is matched in three places — `admin.js` writes it,
+`homepage.js` and `orders.js` read it. Change the wording and the
+customer starts getting duplicate notifications and loses the
+explanation on their order; there is a test asserting all three agree.
+
+`cancelRejectedPayments()` runs at admin startup and cancels any order
+left Rejected-but-Pending, which is where orders refused before this
+behaviour existed are stuck. It also catches a cancel that failed to
+save after the rejection did.
+
+On the customer's side a payment-rejected cancellation is the one
+cancellation that stays on their active list, with the reason and a
+"Got it" that sets `paymentRejectedSeen`. Every other cancellation is
+filtered out — but this is the one they did not ask for, so the order
+silently disappearing is the wrong answer.
+
 ## Telling the customer
 
 `checkOrderNotifications()` in `js/homepage.js` drives the customer's

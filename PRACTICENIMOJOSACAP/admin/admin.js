@@ -288,10 +288,43 @@ async function initDB(){
   }
 
   await ensureSuperAdmin();
+  await cancelRejectedPayments();
 
   // Prime the tracking cache so it's available before first poll
   await refreshTrackingCache().catch(() => {});
   checkDailyReset();
+}
+
+/* Orders rejected before rejection cancelled the order are stranded:
+   payment refused, but still sitting Pending with a Confirm button, in
+   the baker's path and in the overdue warnings. Rejecting now cancels
+   as it goes, so this is for the ones already in that state — and a
+   safety net if a cancel ever fails to save after the rejection did.
+
+   It only ever moves an order that has been refused and not yet
+   cancelled, so it cannot touch anything a person has since decided
+   about. */
+async function cancelRejectedPayments(){
+  const stranded = (DB.orders || []).filter(o =>
+    o.paymentStatus === 'Rejected' && o.status !== 'Cancelled');
+  if(!stranded.length) return;
+
+  for(const o of stranded){
+    o.status       = 'Cancelled';
+    o.cancelledAt  = o.cancelledAt || new Date().toISOString();
+    o.cancelReason = `Payment rejected — ${o.paymentRejectReason || 'no matching payment'}`;
+    restoreIngredientsFor(o);
+
+    const { error } = await _supa.from('orders').upsert({
+      id: o.id, customer_email: o.customerEmail || '', status: o.status,
+      date: o.date, data: o
+    }, { onConflict: 'id' });
+    if(error){ console.error('could not cancel a rejected order:', error); continue; }
+
+    logAudit('Orders', 'Order cancelled — payment rejected', `${o.id} — ${o.customer || 'Customer'}`,
+             o.paymentRejectReason || '');
+  }
+  console.info(`Cancelled ${stranded.length} order(s) whose payment had been rejected.`);
 }
 
 /* Every database seeded before the Super Admin role existed has no
@@ -1481,7 +1514,13 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
   // The one step this order is waiting for
   let primary = null;
   if(live){
-    if(o.status === 'Pending' && isAdmin)
+    /* A rejected payment is not something to confirm. The modal's
+       Confirm is disabled for this too, but offering the word
+       "Confirm" on the row and then greying it out one click later
+       reads as a bug rather than a rule. */
+    if(o.status === 'Pending' && isAdmin && o.payment === 'GCash' && o.paymentStatus === 'Rejected')
+      primary = { label: 'Review',        icon: 'bx-x-circle',     cls: 'btn-secondary', fn: `openOrderModal('${o.id}')` };
+    else if(o.status === 'Pending' && isAdmin)
       primary = { label: 'Confirm',       icon: 'bx-check',        cls: 'btn-primary',   fn: `openOrderModal('${o.id}')` };
     else if(o.status === 'Confirmed' && (isAdmin || isBaker))
       primary = { label: 'Start baking',  icon: 'bx-dish',         cls: 'btn-primary',   fn: `openOrderModal('${o.id}')` };
