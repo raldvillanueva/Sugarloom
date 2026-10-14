@@ -19,9 +19,13 @@ function sendStatusEmail(order, status){
   if(!apiAvailable()) return;   // no backend reachable — see js/api-config.js
 
   const messages = {
+    'Payment Received': 'We have matched your GCash payment to this order — thank you! Your order is now with the kitchen.',
+    'Payment Rejected': 'We could not match a payment to this order yet. Please check the GCash receipt you sent, or reply to this email and we will sort it out with you.',
     'Confirmed':      'Great news! Your order has been confirmed. We\'re preparing to bake your treats fresh.',
     'Preparing':      'We\'re baking your order right now! Your goodies will be ready soon.',
+    'Ready for Packing': 'Your order is out of the oven and heading to our packing table.',
     'Packing':        'Your order is done baking and is now being packed for delivery! 📦',
+    'Packed':         'Your order is packed and sealed. Next stop: the rider.',
     'Finding Driver': 'Your order is packed and ready! We\'re finding a rider to deliver it to you.',
     'On the Way':     'Your rider has picked up your order and is heading your way! 🛵',
     'Fulfilled':      'Your order has been delivered! We hope you enjoy every bite. 🍪',
@@ -2317,6 +2321,12 @@ function verifyPayment(id){
       o.paymentCheckedBy = `${currentUser.fname} ${currentUser.lname}`.trim();
       o.paymentCheckedAt = new Date().toISOString();
       if(!await savePaymentDecision(o)) return;
+      /* Email only. syncStatusToCustomer() would write this into the
+         order's status field, and a payment decision is not an order
+         status — the order is still Pending until it is confirmed. The
+         in-app notification comes from paymentStatus, which
+         savePaymentDecision() has already written to Supabase. */
+      sendStatusEmail(o, 'Payment Received');
       logAudit('Orders', 'GCash payment verified', `${o.id} — ${o.customer || 'Customer'}`,
                `₱${Number(o.total||0).toLocaleString()}${o.paymentProof?.reference ? ' · ref ' + o.paymentProof.reference : ''}`);
       renderOrders(); openOrderModal(o.id, true);
@@ -2344,6 +2354,7 @@ function rejectPayment(id){
       o.paymentCheckedBy    = `${currentUser.fname} ${currentUser.lname}`.trim();
       o.paymentCheckedAt    = new Date().toISOString();
       if(!await savePaymentDecision(o)) return;
+      sendStatusEmail(o, 'Payment Rejected');   // see the note above
       logAudit('Orders', 'GCash payment rejected', `${o.id} — ${o.customer || 'Customer'}`,
                o.paymentRejectReason);
       renderOrders(); openOrderModal(o.id, true);

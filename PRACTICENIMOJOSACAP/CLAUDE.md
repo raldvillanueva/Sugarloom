@@ -200,6 +200,37 @@ payment is verified — confirming is what consumes the ingredients.
 Orders placed before receipts existed have no `paymentStatus` and are
 not held up.
 
+## Telling the customer
+
+`checkOrderNotifications()` in `js/homepage.js` drives the customer's
+bell. It reads orders **from Supabase**, not from localStorage. It used
+to read the local copy, which is why the bell was always empty on a
+real deployment: the admin panel writes that copy with
+`syncStatusToCustomer()`, but that runs in the admin's browser and
+writes to the admin's localStorage. It only appeared to work because
+both sides were open in the same browser during testing. The local copy
+is still the fallback when the network is down.
+
+Four things are watched per order, each on its own key in
+`sl_notif_seen_<email>` so one cannot mask another: `status`,
+`preparingSubStatus` (baking/packing/packed), Lalamove `tracking`, and
+`paymentStatus`. Payment needs its own key because an order sits
+**Pending** while the receipt is checked — a status-only watcher would
+never fire.
+
+Email goes through `sendStatusEmail()` in `admin.js`. Every status
+passed to `syncStatusToCustomer()` or `sendStatusEmail()` must have an
+entry in its `messages` map, or the customer gets "Your order status
+has been updated to: X". Payment decisions call `sendStatusEmail()`
+**directly** rather than `syncStatusToCustomer()`, because that
+function assigns its argument to `order.status` and a payment decision
+is not an order status.
+
+⚠ **Email does not actually send yet.** `apiAvailable()` is false until
+`js/server.js` is hosted and `HOSTED_API` is set in `js/api-config.js`,
+so `sendStatusEmail()` returns immediately. The in-app bell works
+either way.
+
 ## The backend
 
 `js/server.js` is an Express app handling order emails, the admin

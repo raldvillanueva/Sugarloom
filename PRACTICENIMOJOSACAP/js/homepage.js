@@ -241,9 +241,21 @@ function updateNavUser(){
 /* ── NOTIFICATION SYSTEM ── */
 const NOTIF_STATUSES = {
   'Confirmed':        '✅ Your order #ID has been confirmed!',
+  'Preparing':        '👩‍🍳 Your order #ID has gone to the kitchen.',
   'Ready for Packing':'🧁 Your order #ID is done baking and getting packaged!',
   'Fulfilled':        '🎉 Your order #ID has been delivered. Enjoy!',
-  'Cancelled':        '❌ Your order #ID was cancelled.'
+  'Cancelled':        '❌ Your order #ID was cancelled.',
+  'Cancel Requested': '📝 We have received your cancellation request for order #ID.'
+};
+
+/* GCash payments. The customer sent money and then heard nothing until
+   the order happened to move — this tells them the moment somebody has
+   actually looked at their receipt, which is the part they are anxious
+   about. The rejection says what to do next rather than only that
+   something is wrong. */
+const NOTIF_PAYMENT = {
+  'Verified': '💳 Payment received for order #ID — thank you! We are getting started.',
+  'Rejected': '⚠️ We could not match the payment for order #ID. Please check your GCash receipt or message us and we will sort it out.'
 };
 const NOTIF_SUB_STATUSES = {
   'baking':  '🔥 Your order #ID is now being baked!',
@@ -256,11 +268,32 @@ const NOTIF_TRACKING = {
   'PICKED_UP':        '📍 Your order #ID has been picked up by the rider!'
 };
 
-function checkOrderNotifications(){
+/* Orders come from Supabase, not localStorage.
+
+   They used to come from localStorage, and that is why this bell was
+   always empty. The admin panel writes the customer's copy with
+   syncStatusToCustomer() — but that runs in the ADMIN's browser and
+   writes to the ADMIN's localStorage. A customer on their own phone
+   never saw any of it. The bell only appeared to work because, during
+   testing, both sides were open in the same browser.
+
+   Supabase is the one place both sides agree on, so that is what this
+   reads. The local copy is kept as a fallback for when the network is
+   down. */
+async function checkOrderNotifications(){
   const user = JSON.parse(localStorage.getItem('loggedInUser'));
   if(!user) return;
 
-  const orders   = JSON.parse(localStorage.getItem('orders_' + user.email) || '[]');
+  let orders = [];
+  try {
+    const { data, error } = await _supa.from('orders')
+      .select('data').eq('customer_email', user.email);
+    if(error) throw error;
+    orders = (data || []).map(r => r.data).filter(Boolean);
+  } catch(err){
+    orders = JSON.parse(localStorage.getItem('orders_' + user.email) || '[]');
+  }
+
   const seenKey  = 'sl_notif_seen_'  + user.email;
   const notifKey = 'sl_buyer_notifs_' + user.email;
   const seen     = JSON.parse(localStorage.getItem(seenKey) || '{}');
@@ -286,6 +319,24 @@ function checkOrderNotifications(){
     } else if(!seen.hasOwnProperty(o.id)){
       // Order is still Pending and not yet recorded — just track it
       updatedSeen[o.id] = cur;
+      changed = true;
+    }
+
+    /* Payment decision. Tracked on its own key, because an order can
+       sit Pending while the receipt is checked — the status does not
+       move, so a status-only watcher would miss it entirely. */
+    const curPay  = o.paymentStatus || null;
+    const lastPay = seen[o.id + '_pay'] || null;
+    if(curPay && curPay !== lastPay && NOTIF_PAYMENT[curPay]){
+      const extra = (curPay === 'Rejected' && o.paymentRejectReason)
+        ? ' (' + o.paymentRejectReason + ')' : '';
+      notifs.unshift({
+        id: Date.now() + '_' + o.id + '_pay_' + curPay,
+        orderId: o.id,
+        message: NOTIF_PAYMENT[curPay].replace('#ID', o.id) + extra,
+        status: curPay, seen: false, ts: Date.now()
+      });
+      updatedSeen[o.id + '_pay'] = curPay;
       changed = true;
     }
 
