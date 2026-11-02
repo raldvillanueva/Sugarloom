@@ -433,50 +433,94 @@ function appealBlock(order){
 
   if (a) {
     return `
-      <div style="margin-top:12px;padding:10px 12px;background:#FFF;border:1px solid #FCA5A5;border-radius:8px">
-        <div style="font-size:12.5px;font-weight:700;color:#991B1B">Receipt sent — we are checking it</div>
-        <div style="font-size:12px;color:#7F1D1D;margin-top:3px;line-height:1.5">
-          Sent ${escOrderText(fmtWhen(a.sentAt))} · refund to <strong>${escOrderText(a.gcashNumber)}</strong>.
-          We will message you once someone has looked at it.
+      <div class="appeal-sent">
+        <span class="appeal-sent-tick" aria-hidden="true">✓</span>
+        <div>
+          <div class="appeal-sent-title">Receipt sent — we are checking it</div>
+          <div class="appeal-sent-sub">
+            Sent ${escOrderText(fmtWhen(a.sentAt))} · refund to <strong>${escOrderText(a.gcashNumber)}</strong>.
+            We will message you once someone has looked at it.
+          </div>
+          <button class="appeal-link" onclick="dismissPaymentRejected('${order.id}')">Hide this</button>
         </div>
-        <button onclick="dismissPaymentRejected('${order.id}')"
-                style="margin-top:8px;background:none;border:none;padding:0;font:inherit;font-size:12px;font-weight:600;color:#991B1B;text-decoration:underline;cursor:pointer">Hide this</button>
       </div>`;
   }
 
+  const prefill = order.phone ? (normalisePhone(order.phone) || order.phone) : '';
+
   return `
-    <div style="margin-top:10px">
-      <button onclick="openAppeal('${order.id}')"
-              style="background:#991B1B;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer">
-        Send my receipt
-      </button>
-      <button onclick="dismissPaymentRejected('${order.id}')"
-              style="margin-left:12px;background:none;border:none;padding:0;font:inherit;font-size:12.5px;color:#991B1B;text-decoration:underline;cursor:pointer">No thanks</button>
+    <div class="appeal-wrap">
+      <div class="appeal-cta">
+        <button class="appeal-btn" onclick="openAppeal('${order.id}')">Send my receipt</button>
+        <button class="appeal-link" onclick="dismissPaymentRejected('${order.id}')">No thanks</button>
+      </div>
 
-      <div id="appeal-${order.id}" class="hidden" style="margin-top:12px;padding:12px;background:#FFF;border:1px solid #FCA5A5;border-radius:8px">
-        <label style="display:block;font-size:12px;font-weight:700;color:#7F1D1D;margin-bottom:4px">GCash number to refund to</label>
-        <input id="appeal-phone-${order.id}" type="tel" inputmode="numeric" placeholder="09XXXXXXXXX"
-               value="${escOrderText(order.phone ? normalisePhone(order.phone) || order.phone : '')}"
-               style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #D1D5DB;border-radius:7px;font:inherit;font-size:13px">
+      <div id="appeal-${order.id}" class="appeal-form hidden">
+        <div class="appeal-field">
+          <label class="appeal-label" for="appeal-phone-${order.id}">GCash number to refund to</label>
+          <input class="appeal-input" id="appeal-phone-${order.id}" type="tel" inputmode="numeric"
+                 placeholder="09XXXXXXXXX" value="${escOrderText(prefill)}">
+        </div>
 
-        <label style="display:block;font-size:12px;font-weight:700;color:#7F1D1D;margin:10px 0 4px">Your GCash receipt</label>
-        <input id="appeal-file-${order.id}" type="file" accept="image/*"
-               style="width:100%;box-sizing:border-box;font-size:12.5px">
+        <div class="appeal-field">
+          <label class="appeal-label" for="appeal-file-${order.id}">Your GCash receipt</label>
+          <label class="appeal-drop" id="appeal-drop-${order.id}">
+            <input type="file" id="appeal-file-${order.id}" accept="image/*"
+                   onchange="appealFilePicked('${order.id}', this)">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <span id="appeal-dropmsg-${order.id}">Choose a screenshot</span>
+          </label>
+        </div>
 
-        <label style="display:block;font-size:12px;font-weight:700;color:#7F1D1D;margin:10px 0 4px">Anything to add <span style="font-weight:400">(optional)</span></label>
-        <textarea id="appeal-note-${order.id}" rows="2" placeholder="e.g. I sent it at 2:15 PM from a different number"
-                  style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #D1D5DB;border-radius:7px;font:inherit;font-size:13px;resize:vertical"></textarea>
+        <div class="appeal-field">
+          <label class="appeal-label" for="appeal-note-${order.id}">
+            Anything to add <span class="appeal-optional">(optional)</span>
+          </label>
+          <textarea class="appeal-input appeal-textarea" id="appeal-note-${order.id}" rows="2"
+                    placeholder="e.g. I sent it at 2:15 PM from a different number"></textarea>
+        </div>
 
-        <div id="appeal-err-${order.id}" class="hidden" style="margin-top:8px;font-size:12px;color:#B91C1C;font-weight:600"></div>
+        <div id="appeal-err-${order.id}" class="appeal-err hidden"></div>
 
-        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
-          <button id="appeal-send-${order.id}" onclick="submitAppeal('${order.id}')"
-                  style="background:#991B1B;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer">Send to the shop</button>
-          <button onclick="closeAppeal('${order.id}')"
-                  style="background:none;border:none;padding:0;font:inherit;font-size:12.5px;color:#7F1D1D;text-decoration:underline;cursor:pointer">Cancel</button>
+        <div class="appeal-actions">
+          <button class="appeal-btn" id="appeal-send-${order.id}" onclick="submitAppeal('${order.id}')">Send to the shop</button>
+          <button class="appeal-link" onclick="closeAppeal('${order.id}')">Cancel</button>
         </div>
       </div>
     </div>`;
+}
+
+/* Swaps the dropzone's prompt for the chosen file, with a thumbnail —
+   a file field that still says "Choose a screenshot" after you have
+   chosen one gives no sign it worked. */
+function appealFilePicked(orderId, input){
+  const drop = document.getElementById(`appeal-drop-${orderId}`);
+  const msg  = document.getElementById(`appeal-dropmsg-${orderId}`);
+  const file = input?.files?.[0];
+  if (!drop || !msg) return;
+
+  document.getElementById(`appeal-err-${orderId}`)?.classList.add('hidden');
+  drop.querySelector('.appeal-thumb')?.remove();
+
+  if (!file) {
+    drop.classList.remove('has-file');
+    msg.textContent = 'Choose a screenshot';
+    return;
+  }
+
+  drop.classList.add('has-file');
+  msg.textContent = file.name.length > 34 ? file.name.slice(0, 31) + '…' : file.name;
+
+  const img = document.createElement('img');
+  img.className = 'appeal-thumb';
+  img.alt = '';
+  img.onload = () => URL.revokeObjectURL(img.src);
+  img.src = URL.createObjectURL(file);
+  drop.prepend(img);
 }
 
 function fmtWhen(iso){

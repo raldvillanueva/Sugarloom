@@ -1116,3 +1116,122 @@ body {
    order card. The rules above only hide specific elements, so without
    this the form would render permanently open. */
 .hidden { display: none; }
+
+/* ── Appealing a refused payment ──
+   Lives inside the red rejection notice, which centres its text, so
+   everything here re-aligns left: a form whose labels are centred
+   over left-aligned inputs reads as broken. */
+.appeal-wrap { margin-top: 12px; text-align: left; }
+
+.appeal-cta {
+  display: flex; align-items: center; gap: 14px;
+  justify-content: center; flex-wrap: wrap;
+}
+
+.appeal-btn {
+  background: #991B1B; color: #fff; border: none; border-radius: 8px;
+  padding: 10px 18px; font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.appeal-btn:hover { background: #7F1D1D; }
+.appeal-btn:disabled { opacity: .6; cursor: default; }
+
+.appeal-link {
+  background: none; border: none; padding: 0; font: inherit;
+  font-size: 12.5px; font-weight: 600; color: #991B1B;
+  text-decoration: underline; cursor: pointer;
+}
+.appeal-link:hover { color: #7F1D1D; }
+
+.appeal-form {
+  margin-top: 12px; padding: 16px;
+  background: #fff; border: 1px solid #FCA5A5; border-radius: 10px;
+}
+.appeal-field { margin-bottom: 14px; }
+.appeal-field:last-of-type { margin-bottom: 0; }
+
+.appeal-label {
+  display: block; margin-bottom: 6px;
+  font-size: 12px; font-weight: 700; letter-spacing: .02em; color: #7F1D1D;
+}
+.appeal-optional { font-weight: 400; color: #B91C1C; opacity: .75; }
+
+.appeal-input {
+  width: 100%; box-sizing: border-box;
+  padding: 10px 12px; font: inherit; font-size: 13.5px; color: #1a1a1a;
+  border: 1px solid #E5D5D5; border-radius: 8px; background: #FFFBFB;
+  transition: border-color .15s, box-shadow .15s;
+}
+.appeal-input::placeholder { color: #b9a9a9; }
+.appeal-input:focus {
+  outline: none; border-color: #DC2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .12);
+}
+.appeal-textarea { resize: vertical; min-height: 58px; line-height: 1.5; }
+
+/* The browser's own file button is unstyleable and looks nothing like
+   the rest of the form, so the input is hidden inside a label that
+   carries the appearance — the same dropzone used at checkout. */
+.appeal-drop {
+  display: flex; align-items: center; justify-content: center; gap: 9px;
+  padding: 16px; cursor: pointer;
+  border: 1.5px dashed #E5A5A5; border-radius: 8px; background: #FFFBFB;
+  font-size: 13px; font-weight: 600; color: #B91C1C;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.appeal-drop:hover { border-color: #DC2626; background: #FEF2F2; }
+.appeal-drop input[type="file"] { display: none; }
+.appeal-drop svg { flex-shrink: 0; }
+
+.appeal-drop.has-file {
+  border-style: solid; border-color: #16A34A;
+  background: #F0FDF4; color: #15803D;
+  justify-content: flex-start; padding: 10px 12px;
+}
+.appeal-drop.has-file svg { display: none; }
+.appeal-drop.has-file span {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.appeal-thumb {
+  width: 38px; height: 38px; object-fit: cover; flex-shrink: 0;
+  border-radius: 6px; border: 1px solid #BBF7D0;
+}
+
+.appeal-err {
+  margin-top: 10px; padding: 8px 10px;
+  background: #FEF2F2; border-left: 3px solid #DC2626; border-radius: 4px;
+  font-size: 12.5px; font-weight: 600; color: #B91C1C;
+}
+
+.appeal-actions {
+  margin-top: 16px; padding-top: 14px; border-top: 1px solid #FEE2E2;
+  display: flex; align-items: center; gap: 16px;
+}
+
+/* After it has been sent. */
+.appeal-sent {
+  margin-top: 12px; padding: 12px 14px; text-align: left;
+  display: flex; gap: 10px; align-items: flex-start;
+  background: #fff; border: 1px solid #FCA5A5; border-radius: 10px;
+}
+.appeal-sent-tick {
+  flex-shrink: 0; width: 20px; height: 20px; border-radius: 50%;
+  background: #16A34A; color: #fff; font-size: 12px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
+.appeal-sent-title { font-size: 13px; font-weight: 700; color: #991B1B; }
+.appeal-sent-sub {
+  font-size: 12.5px; color: #7F1D1D; margin-top: 3px; line-height: 1.55;
+}
+.appeal-sent .appeal-link { margin-top: 8px; font-size: 12px; }
+
+@media (max-width: 520px) {
+  .appeal-form { padding: 13px; }
+  .appeal-actions { flex-direction: column; align-items: stretch; gap: 10px; }
+  .appeal-actions .appeal-btn { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .appeal-btn, .appeal-input, .appeal-drop { transition: none; }
+}
