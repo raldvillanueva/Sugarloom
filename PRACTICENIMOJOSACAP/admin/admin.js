@@ -2299,9 +2299,44 @@ function buildIngredientPreview(){ return ''; }
    account, which is a thing a person checks. So the panel says what it
    noticed, shows the picture full size, and leaves Verify and Reject to
    the admin. */
+/* What the customer sent back after their payment was refused: the
+   receipt again, and the number to refund to. Shown next to the
+   decision that caused it, because that is where the admin is
+   standing when they reconsider it. */
+function buildPaymentAppeal(o){
+  const a = o.paymentAppeal;
+  if(!a) return '';
+
+  return `
+    <div class="pay-appeal">
+      <div class="pay-appeal-head">
+        <strong><i class='bx bx-conversation'></i> The customer disputes this</strong>
+        <span class="pay-appeal-when">${a.sentAt ? fmtDateTime(a.sentAt) : ''}</span>
+      </div>
+      <div class="pay-appeal-body">
+        ${a.img ? `
+          <a href="${a.img}" target="_blank" rel="noopener" title="Open the full screenshot">
+            <img src="${a.img}" alt="Receipt the customer sent after the rejection" class="pay-appeal-img">
+          </a>` : ''}
+        <div class="pay-appeal-detail">
+          <div class="pay-proof-facts">
+            <span>Refund to</span><code>${escHTML(a.gcashNumber || '—')}</code>
+            <span>Order total</span><code>₱${Number(o.total || 0).toLocaleString()}</code>
+          </div>
+          ${a.note ? `<p class="pay-appeal-note">“${escHTML(a.note)}”</p>` : ''}
+          <p class="pay-proof-note">
+            Check this reference against the GCash history. If the money did arrive, refund it to the
+            number above with Process Refund; the order stays cancelled either way.
+          </p>
+        </div>
+      </div>
+    </div>`;
+}
+
 function buildPaymentProof(o){
   if(o.payment !== 'GCash') return '';
 
+  const appeal = buildPaymentAppeal(o);
   const p = o.paymentProof;
   if(!p){
     return `
@@ -2309,7 +2344,7 @@ function buildPaymentProof(o){
         <strong>GCash payment</strong>
         <p>No screenshot was attached. This order was placed before receipts were required,
            or the upload failed — check the GCash account by hand before confirming.</p>
-      </div>`;
+      </div>${appeal}`;
   }
 
   const status = o.paymentStatus || 'Awaiting verification';
@@ -2373,7 +2408,7 @@ function buildPaymentProof(o){
             </div>`}
         </div>
       </div>
-    </div>`;
+    </div>${appeal}`;
 }
 
 async function savePaymentDecision(o){
@@ -2959,7 +2994,13 @@ function openRefundModal(id){
   const o = DB.orders.find(oo=>oo.id===id);
   if(!o) return;
 
-  document.getElementById('refund-gcash-number').value = o.phone || '';
+  /* Prefer the number the customer gave when they disputed the
+     rejection: it is the one they asked to be paid back on, and it is
+     already in the 09XXXXXXXXX shape this form validates. o.phone is
+     stored as 10 digits, so it is padded rather than failing its own
+     validation the moment the modal opens. */
+  const onFile = /^9\d{9}$/.test(String(o.phone || '')) ? '0' + o.phone : (o.phone || '');
+  document.getElementById('refund-gcash-number').value = o.paymentAppeal?.gcashNumber || onFile;
   document.getElementById('refund-ref-number').value = '';
   document.getElementById('refund-note').value = '';
   document.getElementById('refund-modal-info').innerHTML = `
@@ -2986,6 +3027,11 @@ function confirmRefund(){
     note: document.getElementById('refund-note').value.trim() || null,
     date: new Date().toISOString()
   };
+
+  /* Paying the money back answers the dispute, so the notification
+     stops nagging. The appeal itself is kept as the record of why
+     the refund happened. */
+  if(o.paymentAppeal) o.paymentAppeal.resolved = true;
 
   saveDB();
   closeModal('refund-modal');
@@ -5094,6 +5140,18 @@ function buildNotifs(){
     notifList.push({ id, view:'inventory', icon:'bx-cart-add', color:'#EA580C',
       text:`Restock form ${escHTML(f.reference || f.id)} is waiting for your review — ${escHTML(names.slice(0,3).join(', '))}${names.length > 3 ? ` +${names.length - 3} more` : ''}`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); setTimeout(()=>viewRestockForm(f.id), 200); }
+    });
+  });
+
+  /* A customer who says a refused payment was real. Nobody is watching
+     the cancelled tab, so without this the receipt they sent sits on an
+     order the shop has already finished with. */
+  DB.orders.filter(o => o.paymentAppeal && !o.paymentAppeal.resolved).forEach(o => {
+    const id = `appeal_${o.id}`;
+    if(seen.has(id)) return;
+    notifList.push({ id, view:'orders', icon:'bx-conversation', color:'#DC2626',
+      text:`${escHTML(o.customer || 'A customer')} sent a receipt disputing the refused payment on ${o.id} — refund to ${escHTML(o.paymentAppeal.gcashNumber || 'the number on the order')}`,
+      action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id, true),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
   });
 

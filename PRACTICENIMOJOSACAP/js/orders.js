@@ -392,11 +392,10 @@ async function renderOrders() {
           <div style="font-size:13px;font-weight:700;color:#991B1B;margin-bottom:4px">Payment could not be matched — order cancelled</div>
           <div style="font-size:13px;color:#7F1D1D;line-height:1.5">
             ${escOrderText(String(order.cancelReason).replace(/^Payment rejected — /, ''))}.
-            Nothing has been charged. Message us with your GCash receipt if you think this is a mistake
-            and we will put the order straight back through.
+            Nothing has been charged. If you think this is a mistake, send us your GCash receipt and the
+            number to refund to, and we will look at it again.
           </div>
-          <button onclick="dismissPaymentRejected('${order.id}')"
-                  style="margin-top:10px;background:none;border:none;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:#991B1B;text-decoration:underline;cursor:pointer">Got it</button>
+          ${appealBlock(order)}
         </div>` : ''}
         ${status === 'Pending' ? `
         <div style="margin-top:12px">
@@ -408,6 +407,170 @@ async function renderOrders() {
       </div>
     `;
   }).join("");
+}
+
+/* ── APPEALING A REJECTED PAYMENT ───────────────────────────────
+   A refused payment used to end at "Got it", which closed the notice
+   and left the customer with nothing to do but find the shop on
+   Facebook. If they did pay, the two things the shop needs are the
+   receipt and the number to send the money back to, so the card asks
+   for exactly those and puts them on the order where the admin is
+   already standing when they make the decision. */
+
+/* Stored as 09XXXXXXXXX because that is the shape the admin's refund
+   form validates. Accepts what people actually type: +63 917…,
+   0917…, 917…, with or without spaces and dashes. */
+function normalisePhone(raw){
+  const d = String(raw || '').replace(/[\s()+-]/g, '');
+  if (/^639\d{9}$/.test(d))  return '0' + d.slice(2);
+  if (/^9\d{9}$/.test(d))    return '0' + d;
+  if (/^09\d{9}$/.test(d))   return d;
+  return null;
+}
+
+function appealBlock(order){
+  const a = order.paymentAppeal;
+
+  if (a) {
+    return `
+      <div style="margin-top:12px;padding:10px 12px;background:#FFF;border:1px solid #FCA5A5;border-radius:8px">
+        <div style="font-size:12.5px;font-weight:700;color:#991B1B">Receipt sent — we are checking it</div>
+        <div style="font-size:12px;color:#7F1D1D;margin-top:3px;line-height:1.5">
+          Sent ${escOrderText(fmtWhen(a.sentAt))} · refund to <strong>${escOrderText(a.gcashNumber)}</strong>.
+          We will message you once someone has looked at it.
+        </div>
+        <button onclick="dismissPaymentRejected('${order.id}')"
+                style="margin-top:8px;background:none;border:none;padding:0;font:inherit;font-size:12px;font-weight:600;color:#991B1B;text-decoration:underline;cursor:pointer">Hide this</button>
+      </div>`;
+  }
+
+  return `
+    <div style="margin-top:10px">
+      <button onclick="openAppeal('${order.id}')"
+              style="background:#991B1B;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer">
+        Send my receipt
+      </button>
+      <button onclick="dismissPaymentRejected('${order.id}')"
+              style="margin-left:12px;background:none;border:none;padding:0;font:inherit;font-size:12.5px;color:#991B1B;text-decoration:underline;cursor:pointer">No thanks</button>
+
+      <div id="appeal-${order.id}" class="hidden" style="margin-top:12px;padding:12px;background:#FFF;border:1px solid #FCA5A5;border-radius:8px">
+        <label style="display:block;font-size:12px;font-weight:700;color:#7F1D1D;margin-bottom:4px">GCash number to refund to</label>
+        <input id="appeal-phone-${order.id}" type="tel" inputmode="numeric" placeholder="09XXXXXXXXX"
+               value="${escOrderText(order.phone ? normalisePhone(order.phone) || order.phone : '')}"
+               style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #D1D5DB;border-radius:7px;font:inherit;font-size:13px">
+
+        <label style="display:block;font-size:12px;font-weight:700;color:#7F1D1D;margin:10px 0 4px">Your GCash receipt</label>
+        <input id="appeal-file-${order.id}" type="file" accept="image/*"
+               style="width:100%;box-sizing:border-box;font-size:12.5px">
+
+        <label style="display:block;font-size:12px;font-weight:700;color:#7F1D1D;margin:10px 0 4px">Anything to add <span style="font-weight:400">(optional)</span></label>
+        <textarea id="appeal-note-${order.id}" rows="2" placeholder="e.g. I sent it at 2:15 PM from a different number"
+                  style="width:100%;box-sizing:border-box;padding:9px 10px;border:1px solid #D1D5DB;border-radius:7px;font:inherit;font-size:13px;resize:vertical"></textarea>
+
+        <div id="appeal-err-${order.id}" class="hidden" style="margin-top:8px;font-size:12px;color:#B91C1C;font-weight:600"></div>
+
+        <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+          <button id="appeal-send-${order.id}" onclick="submitAppeal('${order.id}')"
+                  style="background:#991B1B;color:#fff;border:none;border-radius:8px;padding:9px 16px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer">Send to the shop</button>
+          <button onclick="closeAppeal('${order.id}')"
+                  style="background:none;border:none;padding:0;font:inherit;font-size:12.5px;color:#7F1D1D;text-decoration:underline;cursor:pointer">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function fmtWhen(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  return isNaN(d) ? '' : d.toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function openAppeal(orderId){
+  document.getElementById(`appeal-${orderId}`)?.classList.remove('hidden');
+  document.getElementById(`appeal-phone-${orderId}`)?.focus();
+}
+
+function closeAppeal(orderId){
+  document.getElementById(`appeal-${orderId}`)?.classList.add('hidden');
+}
+
+function appealError(orderId, msg){
+  const el = document.getElementById(`appeal-err-${orderId}`);
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.remove('hidden');
+}
+
+/* Receipts live inside a database row, so they are resized first —
+   the same reason checkout shrinks the original upload. */
+function shrinkAppealImage(file, maxW = 1000, quality = 0.72){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read that file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('That file is not an image'));
+      img.onload = () => {
+        const scale = Math.min(1, maxW / img.width);
+        const c = document.createElement('canvas');
+        c.width  = Math.round(img.width  * scale);
+        c.height = Math.round(img.height * scale);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        resolve(c.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function submitAppeal(orderId){
+  const phoneEl = document.getElementById(`appeal-phone-${orderId}`);
+  const fileEl  = document.getElementById(`appeal-file-${orderId}`);
+  const noteEl  = document.getElementById(`appeal-note-${orderId}`);
+  const btn     = document.getElementById(`appeal-send-${orderId}`);
+  document.getElementById(`appeal-err-${orderId}`)?.classList.add('hidden');
+
+  const phone = normalisePhone(phoneEl?.value);
+  if (!phone) return appealError(orderId, 'Enter the GCash number as 09XXXXXXXXX.');
+
+  const file = fileEl?.files?.[0];
+  if (!file) return appealError(orderId, 'Attach the GCash receipt screenshot.');
+  if (!/^image\//.test(file.type)) return appealError(orderId, 'That is not an image — attach a screenshot.');
+
+  btn.disabled = true;
+  btn.textContent = 'Sending...';
+
+  try {
+    const img = await shrinkAppealImage(file);
+
+    /* Read, change, write — the row holds the whole order as one blob,
+       so anything read before the admin's last edit would overwrite it. */
+    const { data: row, error: readErr } = await _supa
+      .from('orders').select('data').eq('id', orderId).single();
+    if (readErr || !row) throw new Error(readErr?.message || 'Could not find that order');
+
+    const updated = {
+      ...row.data,
+      paymentAppeal: {
+        gcashNumber: phone,
+        img,
+        note:   (noteEl?.value || '').trim() || null,
+        sentAt: new Date().toISOString(),
+        seen:   false
+      }
+    };
+
+    const { error: writeErr } = await _supa.from('orders').update({ data: updated }).eq('id', orderId);
+    if (writeErr) throw new Error(writeErr.message);
+
+    renderOrders();
+  } catch (err) {
+    console.warn('appeal failed:', err);
+    btn.disabled = false;
+    btn.textContent = 'Send to the shop';
+    appealError(orderId, 'Could not send that — check your connection and try again.');
+  }
 }
 
 /* The customer's text is reflected back into the card, so it is

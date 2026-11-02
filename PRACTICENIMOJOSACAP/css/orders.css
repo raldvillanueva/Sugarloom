@@ -1111,3 +1111,8 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .order-card-focus { animation: none; box-shadow: 0 0 0 3px var(--pink, #e8527a); }
 }
+
+/* A bare .hidden, used by the rejected-payment appeal form on the
+   order card. The rules above only hide specific elements, so without
+   this the form would render permanently open. */
+.hidden { display: none; }

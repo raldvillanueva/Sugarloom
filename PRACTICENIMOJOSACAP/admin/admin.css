@@ -1863,3 +1863,33 @@ textarea { resize: vertical; }
 #confirm-modal-input.invalid {
   border-color: var(--danger);
 }
+
+/* ── A customer disputing a refused payment ──
+   Sits directly under the payment panel it argues with, in the same
+   red the rejection uses, so the two read as one exchange rather than
+   two unrelated boxes. */
+.pay-appeal {
+  margin-top: 10px; padding: 14px;
+  border: 1px solid #FCA5A5; border-left: 3px solid #DC2626;
+  border-radius: 10px; background: #FEF2F2;
+}
+.pay-appeal-head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.pay-appeal-head strong {
+  font-size: 14px; color: #991B1B;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.pay-appeal-when { font-size: 12px; color: var(--text-2); }
+
+.pay-appeal-body { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; }
+.pay-appeal-img {
+  width: 150px; border-radius: 10px; border: 1px solid #FCA5A5;
+  display: block; background: #fff; cursor: zoom-in;
+}
+.pay-appeal-detail { flex: 1; min-width: 240px; }
+.pay-appeal-note {
+  margin: 0 0 10px; font-size: 13px; line-height: 1.55; color: #7F1D1D;
+  font-style: italic;
+}
