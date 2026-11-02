@@ -14,7 +14,7 @@
    permitted to call http://localhost, so trying would fail anyway, just
    noisily. */
 
-const HOSTED_API = '';   // e.g. 'https://sugarloom-api.onrender.com' — no trailing slash
+const HOSTED_API = 'https://sugarloom-api-d375.onrender.com';   // no trailing slash
 
 const LOCAL_API  = 'http://localhost:5000';
 const IS_LOCAL   = ['localhost', '127.0.0.1', ''].includes(location.hostname);

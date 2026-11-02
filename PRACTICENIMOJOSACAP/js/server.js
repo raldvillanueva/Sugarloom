@@ -1,8 +1,15 @@
 const express    = require("express");
 const cors       = require("cors");
 const crypto     = require("crypto");
+const dns        = require("dns");
 const nodemailer = require("nodemailer");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+/* smtp.gmail.com answers with an IPv6 address first, and Render's free
+   tier has no outbound IPv6 — every send died with
+   "connect ENETUNREACH 2607:f8b0:...:465" before it could authenticate.
+   Resolve IPv4 first so the host we actually dial is reachable. */
+if (dns.setDefaultResultOrder) dns.setDefaultResultOrder("ipv4first");
 
 const app = express();
 app.use(cors());
@@ -16,12 +23,21 @@ let otpStore = {};
    .env.example to .env and fill it in locally, or set the same variables
    in your host's dashboard. */
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host:   "smtp.gmail.com",
+  port:   465,
+  secure: true,
+  family: 4,            // belt and braces with the DNS order above
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   }
 });
+
+/* Gmail refuses to send as an address other than the one that signed
+   in, so the sender follows EMAIL_USER rather than being written here —
+   a hardcoded address silently breaks the moment the shop's account
+   changes. */
+const MAIL_FROM  = `"SugarLoomPh" <${process.env.EMAIL_USER || ""}>`;
 
 const MAIL_READY = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
 if (!MAIL_READY) {
@@ -239,7 +255,7 @@ app.post("/send-order-notification", async (req, res) => {
 
   try {
     await transporter.sendMail({
-      from:    '"SugarLoomPh" <villanuevagerald73@gmail.com>',
+      from:    MAIL_FROM,
       to:      to_email,
       subject: `Order ${order_id} — ${status}`,
       html
