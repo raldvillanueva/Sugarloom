@@ -1,0 +1,10 @@
+{
+  "name": "sugarloom-vercel-functions",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Dependencies for the Vercel serverless functions in api/. The static site is served from PRACTICENIMOJOSACAP; the Express server has its own package.json in there.",
+  "type": "commonjs",
+  "dependencies": {
+    "nodemailer": "^8.0.4"
+  }
+}

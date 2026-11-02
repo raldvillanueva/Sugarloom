@@ -1,0 +1,15 @@
+# Dependencies for the Vercel functions in api/ — installed by Vercel
+# at build time from package.json, never committed.
+node_modules/
+
+# Environment variables — NEVER commit these
+.env
+.env.local
+.env.production
+
+# Vercel's local build output
+.vercel/
+
+# OS files
+.DS_Store
+Thumbs.db

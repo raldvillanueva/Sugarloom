@@ -16,7 +16,11 @@ function toggleLoginPw(){
    ------------------------------------------------------------ */
 function sendStatusEmail(order, status){
   if(!order.customerEmail || order.customerEmail === 'guest') return;
-  if(!apiAvailable()) return;   // no backend reachable — see js/api-config.js
+
+  /* Deployed, this posts to a Vercel function on our own origin, which
+     is always there. Locally it needs js/server.js running. */
+  const url = mailUrl();
+  if(!url) return;   // no backend reachable — see js/api-config.js
 
   const messages = {
     'Payment Received': 'We have matched your GCash payment to this order — thank you! Your order is now with the kitchen.',
@@ -33,7 +37,7 @@ function sendStatusEmail(order, status){
     'Pending':        'Your cancellation request was not accepted. Your order is back to Pending.'
   };
 
-  fetch(apiUrl('/send-order-notification'), {
+  fetch(url, {
     method:  'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

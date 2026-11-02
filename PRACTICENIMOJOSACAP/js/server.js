@@ -4,6 +4,7 @@ const crypto     = require("crypto");
 const dns        = require("dns");
 const nodemailer = require("nodemailer");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { buildOrderEmail } = require("./order-email.js");
 
 /* smtp.gmail.com answers with an IPv6 address first, and Render's free
    tier has no outbound IPv6 — every send died with
@@ -205,79 +206,16 @@ RESPONSE GUIDELINES:
 
 /* SEND ORDER STATUS EMAIL */
 app.post("/send-order-notification", async (req, res) => {
-  const { to_email, to_name, order_id, status, status_message, items, order_total, product_img, website_url } = req.body;
+  const { to_email, order_id, status } = req.body;
   if (!to_email || !order_id) return res.json({ success: false, error: "Missing fields" });
   if (!MAIL_READY) return res.json({ success: false, error: "Mail relay is not configured" });
 
-  const itemsHtml = (items || []).map(i =>
-    `<tr>
-      <td style="padding:8px 0;font-size:14px">${i.name}</td>
-      <td style="padding:8px 0;font-size:14px;text-align:center">x${i.qty}</td>
-      <td style="padding:8px 0;font-size:14px;text-align:right">₱${((i.price||0)*i.qty).toLocaleString()}</td>
-    </tr>`
-  ).join("");
-
-  const html = `
-  <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:560px;margin:0 auto;background:#fafaf8;border-radius:16px;overflow:hidden;border:1px solid #e8e8e0">
-
-    <!-- Header -->
-    <div style="background:#1a1a1a;padding:28px 32px;text-align:center">
-      <p style="color:#fff;font-size:22px;font-weight:700;margin:0;letter-spacing:1px">🍪 SugarLoomPh</p>
-    </div>
-
-    <!-- Body -->
-    <div style="padding:32px">
-      <p style="font-size:15px;color:#555;margin:0 0 4px">Hi <strong>${to_name}</strong>,</p>
-      <h2 style="font-size:20px;color:#1a1a1a;margin:12px 0">${status_message}</h2>
-
-
-      <!-- Order Info -->
-      <div style="background:#fff;border:1px solid #e8e8e0;border-radius:12px;padding:20px;margin:20px 0">
-        <p style="font-size:12px;color:#999;font-weight:700;letter-spacing:1px;margin:0 0 12px">ORDER DETAILS</p>
-        <p style="font-size:13px;color:#777;margin:0 0 12px">Order ID: <strong style="color:#1a1a1a">${order_id}</strong> &nbsp;|&nbsp; Status: <strong style="color:#1a1a1a">${status}</strong></p>
-        <table style="width:100%;border-collapse:collapse;border-top:1px solid #eee">
-          <thead>
-            <tr>
-              <th style="text-align:left;font-size:11px;color:#999;padding:8px 0;font-weight:600">ITEM</th>
-              <th style="text-align:center;font-size:11px;color:#999;padding:8px 0;font-weight:600">QTY</th>
-              <th style="text-align:right;font-size:11px;color:#999;padding:8px 0;font-weight:600">PRICE</th>
-            </tr>
-          </thead>
-          <tbody style="border-top:1px solid #eee">${itemsHtml}</tbody>
-          <tfoot>
-            <tr style="border-top:1px solid #eee">
-              <td colspan="2" style="padding:12px 0;font-size:14px;font-weight:700;color:#1a1a1a">Total</td>
-              <td style="padding:12px 0;font-size:16px;font-weight:700;color:#1a1a1a;text-align:right">${order_total}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      <!-- CTA -->
-      <p style="font-size:14px;color:#555;line-height:1.7;margin:0 0 20px">
-        ${String(status).trim() === 'Fulfilled'
-          ? 'Thank you for choosing SugarLoomPh! We hope you enjoyed every bite. We\'d love to bake for you again — visit our store anytime! 🍪'
-          : 'Please check the website for further details on your order status and delivery updates.'}
-      </p>
-      <a href="${website_url || '#'}" style="display:inline-block;background:#1a1a1a;color:#fff;padding:13px 28px;border-radius:30px;font-size:14px;font-weight:600;text-decoration:none">
-        ${String(status).trim() === 'Fulfilled' ? 'Visit Store →' : 'View Order →'}
-      </a>
-    </div>
-
-    <!-- Footer -->
-    <div style="padding:20px 32px;border-top:1px solid #e8e8e0;text-align:center">
-      <p style="font-size:12px;color:#aaa;margin:0">SugarLoomPh &nbsp;·&nbsp; Freshly baked with love 🍪</p>
-    </div>
-
-  </div>`;
+  /* The message itself is built in js/order-email.js, shared with the
+     Vercel function, so the two cannot drift apart. */
+  const { subject, html } = buildOrderEmail(req.body);
 
   try {
-    await transporter.sendMail({
-      from:    MAIL_FROM,
-      to:      to_email,
-      subject: `Order ${order_id} — ${status}`,
-      html
-    });
+    await transporter.sendMail({ from: MAIL_FROM, to: to_email, subject, html });
     console.log(`✅ Order email sent to ${to_email} [${order_id} → ${status}]`);
     res.json({ success: true });
   } catch (err) {

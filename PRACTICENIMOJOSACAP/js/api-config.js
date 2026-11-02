@@ -26,6 +26,17 @@ function apiUrl(path) {
   return API_BASE ? API_BASE + path : null;
 }
 
+/* Order emails do NOT go to the server above. Render's free instances
+   block outbound traffic to the SMTP ports, so mail cannot leave that
+   host however it is configured; the send lives in a Vercel function
+   instead, on this same origin — see api/send-order-notification.js.
+   Same origin means a relative path, no CORS and nothing to configure.
+   Running locally there is no function, so fall back to the Express
+   server, which can reach Gmail from a developer machine. */
+function mailUrl() {
+  return IS_LOCAL ? apiUrl('/send-order-notification') : '/api/send-order-notification';
+}
+
 function apiAvailable() {
   return Boolean(API_BASE);
 }
