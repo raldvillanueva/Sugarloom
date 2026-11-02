@@ -684,6 +684,11 @@ function switchView(view){
   const nav = document.querySelector(`.nav-item[data-view="${view}"]`);
   if(nav) nav.classList.add('active');
 
+  /* Picking a destination is the end of using the menu. On a phone the
+     panel covers the page it just navigated to, so leaving it open
+     hides the thing the tap asked for. */
+  closeSidebar();
+
   if(view==='dashboard')  renderDashboard();
   if(view==='products')   renderProducts();
   if(view==='orders'){    syncStoreOrders().then(()=>renderOrders()); }
@@ -697,9 +702,28 @@ function switchView(view){
   if(view==='audit')      refreshAudit();
 }
 
-function toggleSidebar(){
-  document.getElementById('sidebar').classList.toggle('open');
+/* The sidebar slides over the page on a narrow screen, and the button
+   that opened it ends up underneath it — so without a way back out,
+   opening the menu on a phone trapped you behind it. Three ways out
+   now: the backdrop, the close button, and Escape. Choosing a
+   destination closes it too, which is what tapping a menu item is
+   asking for. */
+function setSidebar(open){
+  document.getElementById('sidebar')?.classList.toggle('open', open);
+  document.getElementById('sidebar-backdrop')?.classList.toggle('show', open);
+  /* Stops the page behind scrolling under the open panel. */
+  document.body.classList.toggle('sidebar-open', open);
 }
+
+function closeSidebar(){ setSidebar(false); }
+
+function toggleSidebar(){
+  setSidebar(!document.getElementById('sidebar')?.classList.contains('open'));
+}
+
+document.addEventListener('keydown', e => {
+  if(e.key === 'Escape') closeSidebar();
+});
 
 /* ---- TOAST ---- */
 let toastTimer;

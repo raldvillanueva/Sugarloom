@@ -89,11 +89,19 @@
 <!-- MAIN LAYOUT -->
 <div class="app-layout" id="app-layout">
 
+  <!-- Dims the page behind the sidebar on a small screen, and is the
+       main way back out of it: the menu button that opened it ends up
+       underneath the open panel and cannot be tapped again. -->
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="closeSidebar()" aria-hidden="true"></div>
+
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-logo">
       <i class='bx bxs-cookie'></i>
       <span>SugarLoomPh</span>
+      <button class="sidebar-close" onclick="closeSidebar()" aria-label="Close menu">
+        <i class='bx bx-x'></i>
+      </button>
     </div>
 
     <!-- Order and section headings are rebuilt per role by applyRoleNav();

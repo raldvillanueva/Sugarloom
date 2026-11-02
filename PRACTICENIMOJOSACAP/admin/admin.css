@@ -1263,16 +1263,39 @@ textarea { resize: vertical; }
   }
 }
 
-/* --- Sidebar overlay backdrop --- */
+/* --- Sidebar overlay backdrop ---
+   Hidden at every width; only ever shown while the sliding sidebar is
+   open, which is only possible below 900px. It used to live inside a
+   media query with no element and no JS to match, so the sidebar
+   opened over the page with nothing to close it. */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 199;
+}
+.sidebar-backdrop.show { display: block; }
+
+/* The desktop sidebar is always on screen, so it needs no close
+   button; it appears only where the panel slides over the page. */
+.sidebar-close {
+  display: none;
+  margin-left: auto;
+  background: none;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  color: inherit;
+  font-size: 24px;
+  line-height: 1;
+}
+
 @media (max-width: 900px) {
-  .sidebar-backdrop {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.4);
-    z-index: 199;
-  }
-  .sidebar-backdrop.show { display: block; }
+  .sidebar-close { display: flex; align-items: center; }
+  /* Holds the page still behind the open panel, so a scroll gesture
+     meant for the menu does not move the page underneath it. */
+  body.sidebar-open { overflow: hidden; }
 }
 
 /* --- Order modal wide layout: stack on mobile --- */
