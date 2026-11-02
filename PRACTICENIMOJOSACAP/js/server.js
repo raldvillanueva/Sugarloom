@@ -21,27 +21,42 @@ let otpStore = {};
 /* Credentials come from the environment only. They used to be hardcoded
    here as fallbacks, in a public repository — never put them back. Copy
    .env.example to .env and fill it in locally, or set the same variables
-   in your host's dashboard. */
+   in your host's dashboard.
+
+   We send through a relay on port 2525 rather than Gmail on 465.
+   Render's free instances block outbound traffic to the SMTP ports —
+   25, 465 and 587 — so talking to smtp.gmail.com from there fails at
+   the network layer however good the credentials are. 2525 carries the
+   same SMTP and is not on that list.
+
+   Nothing here is Brevo-specific: point SMTP_HOST and SMTP_PORT at any
+   relay and the rest still works. */
+const SMTP_HOST = process.env.SMTP_HOST || "smtp-relay.brevo.com";
+const SMTP_PORT = Number(process.env.SMTP_PORT) || 2525;
+
 const transporter = nodemailer.createTransport({
-  host:   "smtp.gmail.com",
-  port:   465,
-  secure: true,
-  family: 4,            // belt and braces with the DNS order above
+  host:   SMTP_HOST,
+  port:   SMTP_PORT,
+  secure: SMTP_PORT === 465,   // 2525 and 587 start plain, then STARTTLS
+  family: 4,                   // belt and braces with the DNS order above
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_KEY
   }
 });
 
-/* Gmail refuses to send as an address other than the one that signed
-   in, so the sender follows EMAIL_USER rather than being written here —
-   a hardcoded address silently breaks the moment the shop's account
-   changes. */
+/* A relay will only send as an address you have verified with it, so
+   the sender follows EMAIL_USER rather than being written here — a
+   hardcoded address silently breaks the moment the shop's account
+   changes. EMAIL_USER is now just the visible From; SMTP_USER and
+   SMTP_KEY are what actually sign in. */
 const MAIL_FROM  = `"SugarLoomPh" <${process.env.EMAIL_USER || ""}>`;
 
-const MAIL_READY = Boolean(process.env.EMAIL_USER && process.env.EMAIL_PASS);
+const MAIL_READY = Boolean(process.env.SMTP_USER && process.env.SMTP_KEY && process.env.EMAIL_USER);
 if (!MAIL_READY) {
-  console.warn("⚠️  EMAIL_USER / EMAIL_PASS are not set — email sending is disabled.");
+  console.warn("⚠️  SMTP_USER / SMTP_KEY / EMAIL_USER are not all set — email sending is disabled.");
+} else {
+  console.log(`✉️  Mail relay: ${SMTP_HOST}:${SMTP_PORT}, sending as ${process.env.EMAIL_USER}`);
 }
 
 /* ─────────────────────────────────────────
@@ -54,12 +69,14 @@ app.post("/send-otp", async (req, res) => {
   const { email } = req.body;
   if (!email) return res.json({ success: false });
 
+  if (!MAIL_READY) return res.json({ success: false, error: "Mail relay is not configured" });
+
   const otp = Math.floor(100000 + Math.random() * 900000);
   otpStore[email] = otp;
 
   try {
     await transporter.sendMail({
-      from:    "SugarLoomPh",
+      from:    MAIL_FROM,
       to:      email,
       subject: "OTP Code",
       text:    `Your OTP is: ${otp}`
@@ -190,6 +207,7 @@ RESPONSE GUIDELINES:
 app.post("/send-order-notification", async (req, res) => {
   const { to_email, to_name, order_id, status, status_message, items, order_total, product_img, website_url } = req.body;
   if (!to_email || !order_id) return res.json({ success: false, error: "Missing fields" });
+  if (!MAIL_READY) return res.json({ success: false, error: "Mail relay is not configured" });
 
   const itemsHtml = (items || []).map(i =>
     `<tr>
