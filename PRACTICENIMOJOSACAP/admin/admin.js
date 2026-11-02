@@ -33,6 +33,7 @@ function sendStatusEmail(order, status){
     'Finding Driver': 'Your order is packed and ready! We\'re finding a rider to deliver it to you.',
     'On the Way':     'Your rider has picked up your order and is heading your way! 🛵',
     'Fulfilled':      'Your order has been delivered! We hope you enjoy every bite. 🍪',
+    'Refunded':       'Good news — we have sent your refund back to your GCash. It usually lands within a few minutes, but can take up to 24 hours to show. If it has not arrived by then, reply to this email and we will chase it.',
     'Cancelled':      'Your order has been cancelled. If you have any questions, please reach out to us.',
     'Pending':        'Your cancellation request was not accepted. Your order is back to Pending.'
   };
@@ -3001,8 +3002,6 @@ function openRefundModal(id){
      validation the moment the modal opens. */
   const onFile = /^9\d{9}$/.test(String(o.phone || '')) ? '0' + o.phone : (o.phone || '');
   document.getElementById('refund-gcash-number').value = o.paymentAppeal?.gcashNumber || onFile;
-  document.getElementById('refund-ref-number').value = '';
-  document.getElementById('refund-note').value = '';
   document.getElementById('refund-modal-info').innerHTML = `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
       <div><span style="color:var(--text-2);font-size:11px;font-weight:700">ORDER</span><div class="fw-bold">${o.id}</div></div>
@@ -3023,9 +3022,8 @@ function confirmRefund(){
   o.refunded = true;
   o.refundDetails = {
     gcashNumber: gcash,
-    refNo: document.getElementById('refund-ref-number').value.trim() || null,
-    note: document.getElementById('refund-note').value.trim() || null,
-    date: new Date().toISOString()
+    date: new Date().toISOString(),
+    by: currentUser?.email || currentUser?.name || null
   };
 
   /* Paying the money back answers the dispute, so the notification
@@ -3033,7 +3031,18 @@ function confirmRefund(){
      the refund happened. */
   if(o.paymentAppeal) o.paymentAppeal.resolved = true;
 
+  /* The customer is waiting on this more than on anything else in the
+     order, so it goes to the bell and the inbox rather than only
+     being true in the database. refundedAt is what the bell watches —
+     the order is already Cancelled, so a status watcher would never
+     fire. */
+  o.refundedAt = o.refundDetails.date;
+
   saveDB();
+  sendStatusEmail(o, 'Refunded');
+  logAudit('Orders', 'Refund marked as processed', o.id,
+           `₱${Number(o.total||0).toLocaleString()} to ${gcash}`);
+
   closeModal('refund-modal');
   renderOrders();
   toast(`Refund of ₱${o.total.toLocaleString()} marked as processed`, 'success');

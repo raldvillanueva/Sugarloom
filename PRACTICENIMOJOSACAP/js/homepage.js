@@ -353,6 +353,26 @@ async function checkOrderNotifications(){
       changed = true;
     }
 
+    /* Money going back. Its own key for the same reason as the payment
+       line: the order is already Cancelled by the time a refund is
+       paid, so the status never moves again and a status watcher would
+       never fire. This is the one thing the customer is still waiting
+       on, so it is worth its own notification. */
+    const lastRefund = seen[o.id + '_refund'] || null;
+    if(o.refunded && o.refundedAt && o.refundedAt !== lastRefund){
+      const amount = Number(o.total || 0).toLocaleString();
+      const toNum  = o.refundDetails && o.refundDetails.gcashNumber;
+      notifs.unshift({
+        id: Date.now() + '_' + o.id + '_refund',
+        orderId: o.id,
+        message: `💸 Your ₱${amount} refund for order ${o.id} has been sent back to your GCash` +
+                 (toNum ? ` (${toNum})` : '') + '. It can take up to 24 hours to show.',
+        status: 'Refunded', seen: false, ts: Date.now()
+      });
+      updatedSeen[o.id + '_refund'] = o.refundedAt;
+      changed = true;
+    }
+
     // Lalamove tracking status change (on the way, picked up)
     const trackStatus = (o.tracking && o.tracking.status) || null;
     const lastTrack   = seen[o.id + '_track'] || null;

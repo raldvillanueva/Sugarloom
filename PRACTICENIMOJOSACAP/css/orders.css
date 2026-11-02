@@ -1235,3 +1235,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .appeal-btn, .appeal-input, .appeal-drop { transition: none; }
 }
+
+/* Refunded reads as resolved, not as another warning. */
+.appeal-refunded { border-color: #86EFAC; background: #F0FDF4; }
+.appeal-refunded .appeal-sent-title { color: #15803D; }
+.appeal-refunded .appeal-sent-sub   { color: #166534; }
+.appeal-refunded .appeal-link       { color: #15803D; }

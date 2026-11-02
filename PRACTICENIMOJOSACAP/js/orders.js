@@ -308,7 +308,7 @@ async function renderOrders() {
     (order.status || '') === 'Cancelled' &&
     typeof order.cancelReason === 'string' &&
     order.cancelReason.startsWith('Payment rejected') &&
-    order.paymentRejectedSeen !== true;
+    (order.paymentRejectedSeen !== true || awaitingRefundNotice(order));
 
   // Exclude delivered and cancelled orders
   const activeOrders = orders.filter(order => {
@@ -428,8 +428,42 @@ function normalisePhone(raw){
   return null;
 }
 
+/* A refund brings a hidden order back, once. Someone who waved the
+   rejection away is still owed the news that their money came back,
+   and an email they may not open is not where that should only live. */
+function awaitingRefundNotice(order){
+  return order.refunded === true && order.refundSeen !== true;
+}
+
+async function dismissRefundNotice(orderId){
+  const { data: row } = await _supa.from('orders').select('data').eq('id', orderId).single();
+  if (row) {
+    const updated = { ...row.data, refundSeen: true, paymentRejectedSeen: true };
+    await _supa.from('orders').update({ data: updated }).eq('id', orderId);
+  }
+  renderOrders();
+}
+
 function appealBlock(order){
   const a = order.paymentAppeal;
+
+  /* The money is back. That outranks anything else this panel could
+     say, including an appeal still marked as under review. */
+  if (order.refunded) {
+    const to = order.refundDetails && order.refundDetails.gcashNumber;
+    return `
+      <div class="appeal-sent appeal-refunded">
+        <span class="appeal-sent-tick" aria-hidden="true">✓</span>
+        <div>
+          <div class="appeal-sent-title">Refunded — ₱${Number(order.total || 0).toLocaleString()} sent back</div>
+          <div class="appeal-sent-sub">
+            Sent to <strong>${escOrderText(to || 'your GCash')}</strong>${order.refundedAt ? ' on ' + escOrderText(fmtWhen(order.refundedAt)) : ''}.
+            It can take up to 24 hours to show in your GCash.
+          </div>
+          <button class="appeal-link" onclick="dismissRefundNotice('${order.id}')">Got it</button>
+        </div>
+      </div>`;
+  }
 
   if (a) {
     return `
