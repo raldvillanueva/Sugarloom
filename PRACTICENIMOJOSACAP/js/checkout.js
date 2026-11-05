@@ -536,6 +536,35 @@ async function placeOrder(){
     return;
   }
 
+  /* Stock, read fresh rather than trusted from the basket. A cart can
+     sit for an hour while the last few sell to somebody else, and the
+     copy it holds was written when the product was opened. This is the
+     check that counts: everything before it is a courtesy.
+
+     A lookup that fails lets the order through. The shop losing its
+     connection should not stop people buying; the admin still sees the
+     order and can cancel it. */
+  try {
+    const { data: rows } = await _supa.from('products').select('data');
+    if(rows && rows.length){
+      const byName = {};
+      rows.map(r => r.data).forEach(p => { if(p && p.name) byName[p.name] = p; });
+
+      const short = unavailableLines(cart, byName);
+      if(short.length){
+        alert(
+          'Sorry — these sold out while they were in your basket:\n\n' +
+          short.map(s => `· ${s.name} — you wanted ${s.wanted}, ` +
+                         (s.left ? `only ${s.left} left` : 'none left')).join('\n') +
+          '\n\nPlease change your basket and try again.'
+        );
+        return;
+      }
+    }
+  } catch(e){
+    console.warn('could not re-check stock, letting the order through:', e);
+  }
+
   let subtotal = 0;
   cart.forEach(item => { subtotal += item.price * (item.qty || 1); });
   const deliveryFee = currentDeliveryFee();

@@ -57,6 +57,22 @@ function addToCart(){
 
   let existing = cart.find(i => i.name === data.name);
 
+  /* Only what is left for today, counting whatever is already in the
+     basket. This copy can be stale — it was written when the product
+     was opened — so checkout checks again against live stock before
+     the order is placed. */
+  const room = stockHeadroom(data, existing ? existing.qty : 0);
+  if(room <= 0){
+    alert(isSoldOut(data)
+      ? `${data.name} is sold out for today.`
+      : `You already have all the ${data.name} we have left today.`);
+    return;
+  }
+  if(qty > room){
+    alert(`Only ${room} more ${data.name} available today — adding ${room}.`);
+    qty = room;
+  }
+
   if(existing){
     existing.qty += qty;
   } else {

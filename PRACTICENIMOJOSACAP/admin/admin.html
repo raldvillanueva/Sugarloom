@@ -372,7 +372,7 @@
         </div>
 
         <div id="baker-alert" style="display:none;margin-bottom:12px;padding:14px 18px;background:#FEF3C7;border:1.5px solid #F59E0B;border-radius:12px;display:none;align-items:center;gap:12px">
-          <span style="font-size:22px">🔥</span>
+          <i class='bx bxs-flame' style="font-size:22px"></i>
           <div>
             <div style="font-weight:700;color:#92400E;font-size:14px">Orders Ready to Bake</div>
             <div id="baker-alert-msg" style="font-size:13px;color:#78350F"></div>
@@ -381,7 +381,7 @@
 
         <!-- Packer alert: shown when ready-for-packing orders are waiting -->
         <div id="packer-alert" style="display:none;margin-bottom:12px;padding:14px 18px;background:#EDE9FE;border:1.5px solid #8B5CF6;border-radius:12px;align-items:center;gap:12px">
-          <span style="font-size:22px">📦</span>
+          <i class='bx bx-package' style="font-size:22px"></i>
           <div>
             <div style="font-weight:700;color:#5B21B6;font-size:14px">Orders Ready to Pack</div>
             <div id="packer-alert-msg" style="font-size:13px;color:#4C1D95"></div>
@@ -1040,7 +1040,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('refund-modal')">Cancel</button>
-      <button class="btn-primary" id="refund-confirm-btn" onclick="confirmRefund()" style="background:#16A34A">✓ Mark as Refunded</button>
+      <button class="btn-primary" id="refund-confirm-btn" onclick="confirmRefund()" style="background:#16A34A"><i class='bx bx-check'></i> Mark as Refunded</button>
     </div>
   </div>
 </div>
@@ -1056,13 +1056,13 @@
     <div class="modal-footer">
       <button class="btn-ghost" onclick="closeModal('order-modal')">Close</button>
       <button class="btn-lalamove" id="order-lalamove-btn" onclick="bookLalamove()" style="display:none">
-        🛵 Book Lalamove
+        <i class='bx bxs-truck'></i> Book Lalamove
       </button>
       <button class="btn-prepare" id="order-prepare-btn" onclick="prepareOrderAction()" style="display:none">
-        🍳 Prepare Order
+        <i class='bx bxs-bowl-hot'></i> Prepare Order
       </button>
       <button class="btn-secondary" id="order-packing-btn" onclick="startPackingAction()" style="display:none;background:#16A34A;color:#fff;border:none">
-        ✅ Done Baking — Pass to Packer
+        <i class='bx bx-check-circle'></i> Done Baking — Pass to Packer
       </button>
       <button class="btn-secondary" id="order-reject-cancel-btn" onclick="rejectCancelRequest()" style="display:none">
         Reject Cancel

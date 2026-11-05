@@ -426,9 +426,70 @@ async function setUserPassword(user, plain){
   delete user.password;
 }
 
+/* ── Failed sign-in lockout ──
+   Five wrong passwords and the account stops accepting them for
+   fifteen minutes. Without this the panel would take guesses all day,
+   and the staff passwords are unsalted SHA-256 — see "Known gaps" in
+   CLAUDE.md — so the login is the only thing standing in the way.
+
+   Kept per browser in localStorage rather than in the database. That
+   is honest about what it is: a brake on someone sitting at the
+   keyboard, not a defence against an attacker with the anon key, who
+   can already read admin_users directly. Doing it properly means
+   moving staff onto Supabase Auth. It still has to survive a page
+   reload, which sessionStorage would not.
+
+   Counted per email so one person failing cannot lock out a
+   colleague's account on a shared machine. */
+const LOCKOUT_TRIES = 5;
+const LOCKOUT_MINS  = 15;
+
+function lockKey(email){ return 'sl_login_fails_' + (email || '').toLowerCase(); }
+
+function readLock(email){
+  try { return JSON.parse(localStorage.getItem(lockKey(email))) || { n: 0, until: 0 }; }
+  catch { return { n: 0, until: 0 }; }
+}
+
+/* Minutes left on the lock, or 0 when the account is free to try. */
+function lockRemaining(email){
+  const l = readLock(email);
+  if(!l.until || Date.now() >= l.until) return 0;
+  return Math.ceil((l.until - Date.now()) / 60000);
+}
+
+function noteFailure(email){
+  const l = readLock(email);
+  l.n = (l.n || 0) + 1;
+  if(l.n >= LOCKOUT_TRIES){
+    l.until = Date.now() + LOCKOUT_MINS * 60000;
+    l.n = 0;                       // the next lock needs a fresh five
+  }
+  try { localStorage.setItem(lockKey(email), JSON.stringify(l)); } catch {}
+  return l;
+}
+
+function clearFailures(email){
+  try { localStorage.removeItem(lockKey(email)); } catch {}
+}
+
 async function adminLogin(){
   const email = document.getElementById('login-email').value.trim();
   const pw    = document.getElementById('login-password').value;
+
+  if(!email){ showLoginError('Enter your email address'); return; }
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){
+    showLoginError('Enter a valid email address');
+    return;
+  }
+
+  /* Checked before the password, so a locked account cannot be used
+     to go on testing guesses. */
+  const wait = lockRemaining(email);
+  if(wait){
+    showLoginError(`Too many failed attempts. Try again in ${wait} minute${wait === 1 ? '' : 's'}.`);
+    return;
+  }
 
   const u = DB.users.find(u => u.email === email && u.active);
   if(!u || !(await passwordMatches(u, pw))){
@@ -436,13 +497,27 @@ async function adminLogin(){
        run of rejected attempts on one account is visible in the trail.
        The password typed is never written down. */
     const known = DB.users.find(x => x.email === email);
+    const lock  = noteFailure(email);
+    const left  = lock.until ? 0 : LOCKOUT_TRIES - lock.n;
+
     currentUser = known || null;
     logAudit('Access', 'Sign-in rejected', email,
-             !known ? 'No such account' : !known.active ? 'Account is deactivated' : 'Wrong password');
+             (!known ? 'No such account' : !known.active ? 'Account is deactivated' : 'Wrong password') +
+             (lock.until ? ` — locked for ${LOCKOUT_MINS} minutes after ${LOCKOUT_TRIES} failures` : ''));
     currentUser = null;
-    showLoginError('Invalid credentials');
+
+    /* The warning counts down only once it is close, so an ordinary
+       typo does not read like an accusation. The message still never
+       says which half was wrong. */
+    showLoginError(
+      lock.until ? `Too many failed attempts. Locked for ${LOCKOUT_MINS} minutes.`
+      : left <= 2 ? `Invalid credentials — ${left} attempt${left === 1 ? '' : 's'} left before lockout.`
+                  : 'Invalid credentials'
+    );
     return;
   }
+
+  clearFailures(email);   // a good password wipes the slate
 
   // Quietly move legacy plain-text accounts onto a hash
   if(!u.passwordHash){ await setUserPassword(u, pw); saveDB(); }
@@ -797,7 +872,7 @@ function renderDashboard(){
         }
         return `
         <tr style="cursor:pointer" onclick="switchView('orders');setTimeout(()=>openOrderModal('${o.id}',true),200)">
-          <td><span class="fw-bold">${o.id}</span><br><small class="text-muted">${fmtDate(o.date)}</small><br>${o.preparingSubStatus === 'readyForBook' ? '<span style="font-size:10px;font-weight:700;color:#d97706;background:#fef3c7;padding:2px 6px;border-radius:4px">📍 Ready for Book</span>' : '<span style="font-size:10px;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:4px">Pending</span>'}</td>
+          <td><span class="fw-bold">${o.id}</span><br><small class="text-muted">${fmtDate(o.date)}</small><br>${o.preparingSubStatus === 'readyForBook' ? '<span style="font-size:10px;font-weight:700;color:#d97706;background:#fef3c7;padding:2px 6px;border-radius:4px"><i class="bx bx-map-pin"></i> Ready for Book</span>' : '<span style="font-size:10px;font-weight:700;color:#6b7280;background:#f3f4f6;padding:2px 6px;border-radius:4px">Pending</span>'}</td>
           <td>${escHTML(o.customer || '—')}</td>
           <td>${escHTML(o.phone || o.customerEmail || '—')}</td>
           <td>${escHTML(o.address || '—')}</td>
@@ -1486,10 +1561,10 @@ function renderOrders(){
       if(t && t.lalamoveRef && lalamoveLabels[t.status]){
         return { label: lalamoveLabels[t.status], cls: lalamovePill[t.status] };
       }
-      if(o.preparingSubStatus === 'readyForBook') return { label: '📍 Ready for Book', cls: 'preparing' };
-      if(o.preparingSubStatus === 'packed')  return { label: '✅ Packed',    cls: 'preparing' };
-      if(o.preparingSubStatus === 'packing') return { label: '📦 Packing',  cls: 'preparing' };
-      if(o.preparingSubStatus === 'baking')  return { label: '🔥 Baking',   cls: 'preparing' };
+      if(o.preparingSubStatus === 'readyForBook') return { label: "<i class='bx bx-map-pin'></i> Ready for Book", cls: 'preparing' };
+      if(o.preparingSubStatus === 'packed')  return { label: "<i class='bx bx-check-circle'></i> Packed",    cls: 'preparing' };
+      if(o.preparingSubStatus === 'packing') return { label: "<i class='bx bx-package'></i> Packing",  cls: 'preparing' };
+      if(o.preparingSubStatus === 'baking')  return { label: "<i class='bx bxs-flame'></i> Baking",   cls: 'preparing' };
     }
     const cls = o.status === 'Cancel Requested' ? 'cancel-requested' : o.status.toLowerCase().replace(/ /g,'-');
     return { label: o.status, cls };
@@ -1896,7 +1971,7 @@ function openOrderModal(id, viewOnly=false){
            <strong>Plate:</strong> ${tracking.driver.plate}
          </div>` : '';
     const linkHTML = tracking.shareLink
-      ? `<a href="${tracking.shareLink}" target="_blank" style="display:inline-block;margin-top:8px;font-size:12px;color:var(--accent)">📍 Live tracking link</a>`
+      ? `<a href="${tracking.shareLink}" target="_blank" style="display:inline-block;margin-top:8px;font-size:12px;color:var(--accent)"><i class='bx bx-map-pin'></i> Live tracking link</a>`
       : '';
     lalamoveHTML = `
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
@@ -1940,9 +2015,9 @@ function openOrderModal(id, viewOnly=false){
     modalStatusLabel = modalStatusLabels[tracking.status];
     modalStatusCls   = modalStatusPillCls[tracking.status] || 'confirmed';
   } else if(o.status === 'Preparing'){
-    if(o.preparingSubStatus === 'readyForBook'){ modalStatusLabel = '📍 Ready for Book'; }
-    else if(o.preparingSubStatus === 'packing'){ modalStatusLabel = '📦 Packing'; }
-    else if(o.preparingSubStatus === 'baking'){ modalStatusLabel = '🔥 Baking'; }
+    if(o.preparingSubStatus === 'readyForBook'){ modalStatusLabel = "<i class='bx bx-map-pin'></i> Ready for Book"; }
+    else if(o.preparingSubStatus === 'packing'){ modalStatusLabel = "<i class='bx bx-package'></i> Packing"; }
+    else if(o.preparingSubStatus === 'baking'){ modalStatusLabel = "<i class='bx bxs-flame'></i> Baking"; }
     modalStatusCls = 'preparing';
   }
 
@@ -2043,7 +2118,7 @@ function openOrderModal(id, viewOnly=false){
     if(o.cancelReason){
       const body = document.getElementById('order-modal-body');
       body.innerHTML = `<div style="margin-bottom:16px;padding:12px 16px;background:#FFF7ED;border:1.5px solid #EA580C;border-radius:10px;display:flex;gap:10px;align-items:flex-start">
-        <span style="font-size:18px;flex-shrink:0">⚠️</span>
+        <i class='bx bx-error' style="font-size:18px;flex-shrink:0"></i>
         <div><div style="font-size:12px;font-weight:700;color:#EA580C;margin-bottom:2px">CANCELLATION REQUEST</div>
         <div style="font-size:13px;color:#374151">Reason: <strong>${escHTML(o.cancelReason)}</strong></div></div>
       </div>` + body.innerHTML;
@@ -2069,7 +2144,7 @@ function openOrderModal(id, viewOnly=false){
   } else if(o.status==='Confirmed'){
     prepareBtn.style.display='';
   } else if(o.status==='Ready for Packing'){
-    packingBtn.textContent = '📦 Start Packing';
+    packingBtn.innerHTML = "<i class='bx bx-package'></i> Start Packing";
     packingBtn.onclick = () => packerStartPacking(currentOrderId);
     packingBtn.style.display='';
   } else if(o.status==='Preparing'){
@@ -2077,15 +2152,15 @@ function openOrderModal(id, viewOnly=false){
       if(o.preparingSubStatus === 'baking'){
         packingBtn.style.display='';
       } else if(o.preparingSubStatus === 'packing'){
-        packingBtn.textContent = '✅ Done Packing';
+        packingBtn.innerHTML = "<i class='bx bx-check-circle'></i> Done Packing";
         packingBtn.onclick = () => { packerDonePacking(currentOrderId); closeModal('order-modal'); };
         packingBtn.style.display='';
       } else if(o.preparingSubStatus === 'packed'){
-        packingBtn.textContent = '📍 Ready for Book';
+        packingBtn.innerHTML = "<i class='bx bx-map-pin'></i> Ready for Book";
         packingBtn.onclick = () => { packerReadyForBook(currentOrderId); closeModal('order-modal'); };
         packingBtn.style.display='';
       } else {
-        lalamoveBtn.textContent='🛵 Book Lalamove';
+        lalamoveBtn.innerHTML = "<i class='bx bxs-truck'></i> Book Lalamove";
         lalamoveBtn.style.display='';
       }
       if(o.preparingSubStatus === 'readyForBook' && o.preferredDate){
@@ -2154,7 +2229,7 @@ function bookLalamove(){
 
   if(!data.success){
     btn.disabled    = false;
-    btn.textContent = '🛵 Book Lalamove';
+    btn.innerHTML = "<i class='bx bxs-truck'></i> Book Lalamove";
     toast('Lalamove error: ' + data.error, 'danger');
     return;
   }
@@ -3672,7 +3747,7 @@ function renderRestockDocument(f){
 
       <header class="rf-head">
         <div class="rf-brand">
-          <span class="rf-cookie">🍪</span>
+          <i class='bx bxs-cookie rf-cookie'></i>
           <div>
             <strong>SugarLoomPh</strong>
             <small>Pinagbuhatan, Pasig City · sugarloomph@gmail.com</small>

@@ -21,11 +21,31 @@ function render(list){
   const container = document.getElementById("product-list");
   container.innerHTML = "";
 
-  list.forEach((p, i)=>{
+  list.forEach((p)=>{
     const div = document.createElement("div");
-    div.className = "product-clean";
-    div.innerHTML = `<img src="${p.img}"><h3>${p.name}</h3><p class="price">₱${p.price}</p>`;
-    div.addEventListener("click", () => viewProduct(p.name, p.price, p.img));
+    const out = isSoldOut(p);
+    const left = remainingStock(p);
+
+    /* Sold out stays on the shelf rather than disappearing: a product
+       that vanishes looks like it was never offered, and the customer
+       goes looking for it. It is shown, marked, and not clickable. */
+    div.className = "product-clean" + (out ? " sold-out" : "");
+    div.innerHTML = `
+      <div class="product-thumb">
+        <img src="${p.img}" alt="${p.name}">
+        ${out ? '<span class="stock-badge out">Sold Out</span>' : ''}
+        ${!out && left !== Infinity && left <= 5
+            ? `<span class="stock-badge low">Only ${left} left</span>` : ''}
+      </div>
+      <h3>${p.name}</h3>
+      <p class="price">₱${p.price}</p>`;
+
+    if(out){
+      div.setAttribute('aria-disabled', 'true');
+      div.title = 'Sold out for today';
+    } else {
+      div.addEventListener("click", () => viewProduct(p.name, p.price, p.img));
+    }
     container.appendChild(div);
   });
 
@@ -144,6 +164,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           img:         p.img || '',
           category:    catMap[p.category] || (p.category || '').toLowerCase(),
           description: p.description || '',
+          /* Carried through so the shop can tell what is still
+             available. Dropping these was why nothing ever showed as
+             sold out: the storefront had no idea stock existed. */
+          dailyLimit:  p.dailyLimit,
+          soldToday:   p.soldToday,
           ingredients: []
         }));
     }
