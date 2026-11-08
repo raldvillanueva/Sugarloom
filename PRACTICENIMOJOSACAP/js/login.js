@@ -243,13 +243,31 @@ async function register() {
   const password = document.getElementById('password').value;
   const confirm  = document.getElementById('confirm').value;
 
-  if (!fname || !lname || !email || !phone || !password || !confirm) { showMsg('Fill all fields'); return; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showMsg('Invalid email format'); return; }
-  if (!/^9\d{9}$/.test(phone)) { showMsg('Invalid phone number (e.g. 9XXXXXXXXX)'); return; }
+  /* Every field is checked before anything is reported, and each bad
+     one is marked where it sits. Reporting only the first, as a toast
+     that fades, made a six-field form take six attempts to fill. */
+  clearInvalid();
+  let bad = false;
 
-  const unmet = unmetPasswordRules(password);
-  if (unmet.length) { showMsg(`Password needs: ${unmet[0].label.toLowerCase()}`); return; }
-  if (password !== confirm) { showMsg('Passwords do not match'); return; }
+  if (!fname)   { markInvalid('fname', 'Enter your first name'); bad = true; }
+  if (!lname)   { markInvalid('lname', 'Enter your last name');  bad = true; }
+
+  if (!email)                 { markInvalid('email', 'Enter your email address'); bad = true; }
+  else if (!isValidEmail(email)) { markInvalid('email', 'That does not look like an email address'); bad = true; }
+
+  if (!phone)                 { markInvalid('phone', 'Enter your mobile number'); bad = true; }
+  else if (!isValidPhone(phone)) { markInvalid('phone', 'Enter a mobile number like 0917 123 4567'); bad = true; }
+
+  if (!password) { markInvalid('password', 'Choose a password'); bad = true; }
+  else {
+    const unmet = unmetPasswordRules(password);
+    if (unmet.length) { markInvalid('password', `Password needs: ${unmet[0].label.toLowerCase()}`); bad = true; }
+  }
+
+  if (!confirm)                  { markInvalid('confirm', 'Type the password again'); bad = true; }
+  else if (password !== confirm) { markInvalid('confirm', 'The two passwords do not match'); bad = true; }
+
+  if (bad) { focusFirstInvalid(); return; }
 
   const { data, error } = await _supa.auth.signUp({ email, password });
 
@@ -260,7 +278,8 @@ async function register() {
     return;
   }
 
-  const profile = { fname, lname, phone, addresses: [] };
+  /* Stored as ten digits whatever spelling was typed. */
+  const profile = { fname, lname, phone: normalisePhoneDigits(phone) || phone, addresses: [] };
 
   /* The profiles table is owner-only: a row may only be written by the
      signed-in user it belongs to. Sign-up with email confirmation gives

@@ -5,6 +5,7 @@
   <title>Checkout — SugarLoomPh</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="../css/checkout.css">
+  <link rel="stylesheet" href="../css/form-validate.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="../js/supabase-config.js"></script>
   <script src="../js/service-area.js"></script>
@@ -12,6 +13,7 @@
   <script src="../js/delivery-fee.js"></script>
   <script src="../js/gcash-proof.js"></script>
   <script src="../js/stock.js"></script>
+  <script src="../js/form-validate.js"></script>
   <script src="../js/checkout.js" defer></script>
 </head>
 <body>
@@ -120,7 +122,7 @@
         <span class="shipping-price" id="shipping-fee">&#8369;50.00</span>
       </label>
       <a href="#" class="instructions-link" onclick="toggleInstructions(event)">Add delivery instructions</a>
-      <textarea id="deliveryInstructions" class="instructions-area hidden" placeholder="Delivery instructions (optional)"></textarea>
+      <textarea id="deliveryInstructions" class="instructions-area hidden" data-maxlen="300" placeholder="Delivery instructions (optional)"></textarea>
     </div>
 
     <!-- Payment -->

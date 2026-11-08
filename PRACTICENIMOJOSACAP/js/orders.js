@@ -417,20 +417,14 @@ async function renderOrders() {
    for exactly those and puts them on the order where the admin is
    already standing when they make the decision. */
 
-/* Stored as 09XXXXXXXXX because that is the shape the admin's refund
-   form validates. Accepts what people actually type: +63 917…,
-   0917…, 917…, with or without spaces and dashes. */
+/* The refund form validates 09XXXXXXXXX, so that is what is stored.
+   The parsing lives in js/form-validate.js — one place decides what
+   counts as a phone number, rather than each page carrying its own
+   idea of it. */
 function normalisePhone(raw){
-  const d = String(raw || '').replace(/[\s()+-]/g, '');
-  if (/^639\d{9}$/.test(d))  return '0' + d.slice(2);
-  if (/^9\d{9}$/.test(d))    return '0' + d;
-  if (/^09\d{9}$/.test(d))   return d;
-  return null;
+  return phoneWithZero(raw);
 }
 
-/* A refund brings a hidden order back, once. Someone who waved the
-   rejection away is still owed the news that their money came back,
-   and an email they may not open is not where that should only live. */
 function awaitingRefundNotice(order){
   return order.refunded === true && order.refundSeen !== true;
 }

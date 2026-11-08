@@ -1,0 +1,41 @@
+/* ── Shared form validation styling ──
+   Goes with js/form-validate.js. checkout.css already styles
+   .field-invalid on a WRAPPER (.field-invalid input); the helper
+   marks the control itself, so both spellings are covered and the
+   two cannot look different on the same page. */
+
+input.field-invalid,
+select.field-invalid,
+textarea.field-invalid {
+  border-color: #dc2626 !important;
+  background: #fef2f2;
+}
+
+input.field-invalid:focus,
+select.field-invalid:focus,
+textarea.field-invalid:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, .14);
+}
+
+/* Sits under the field it is about. A notice at the top of a long
+   form does not tell anyone which box to go back to. */
+.field-error {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: #dc2626;
+  font-weight: 500;
+}
+
+/* The character count. Quiet until it matters, then not. */
+.field-count {
+  display: block;
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.field-count.near { color: #b45309; }
+.field-count.full { color: #dc2626; font-weight: 600; }

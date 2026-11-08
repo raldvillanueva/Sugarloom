@@ -4,9 +4,11 @@
   <meta charset="UTF-8">
   <title>Product View</title>
   <link rel="stylesheet" href="../css/product-view.css">
+  <link rel="stylesheet" href="../css/form-validate.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="../js/supabase-config.js"></script>
   <script src="../js/stock.js"></script>
+  <script src="../js/form-validate.js"></script>
   <script src="../js/product-view.js" defer></script>
 </head>
 <body>
@@ -119,7 +121,7 @@
         <span data-v="5">★</span>
       </div>
       <input id="reviewer-name" placeholder="Your name">
-      <textarea id="review-text" rows="3" placeholder="Share your experience..."></textarea>
+      <textarea id="review-text" rows="3" data-maxlen="400" placeholder="Share your experience..."></textarea>
       <button class="submit-review-btn" onclick="submitReview()">Post Review</button>
     </div>
 

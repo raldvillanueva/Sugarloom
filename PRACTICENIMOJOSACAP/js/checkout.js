@@ -508,8 +508,11 @@ async function placeOrder(){
   if(!region)  { showFieldError("region", "Region cannot be empty"); hasError = true; }
   if(!phone){
     showFieldError("phone", "Phone cannot be empty"); hasError = true;
-  } else if(!/^9\d{9}$/.test(phone)){
-    showFieldError("phone", "Invalid phone number (e.g. 9XXXXXXXXX)"); hasError = true;
+  } else if(!isValidPhone(phone)){
+    /* Accepts 0917…, +63 917…, 9171234567 and the spaced and dashed
+       spellings of each. The old rule took only the bare ten digits
+       and refused a customer's own number written the ordinary way. */
+    showFieldError("phone", "Enter a mobile number like 0917 123 4567"); hasError = true;
   }
 
 
@@ -592,7 +595,9 @@ async function placeOrder(){
     id:            orderId,
     customer:      name,
     customerEmail: currentUser ? currentUser.email : 'guest',
-    phone,
+    /* Stored in the ten-digit form the rest of the system expects,
+       whatever spelling was typed into the box. */
+    phone: normalisePhoneDigits(phone) || phone,
     address:       address + ', ' + city,
     items:         cart.map(item => ({ id: item.id, name: item.name, qty: item.qty || 1, price: item.price, img: item.img || '' })),
     total,

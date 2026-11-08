@@ -4,9 +4,11 @@
   <meta charset="UTF-8">
   <title>SugarLoom Ph</title>
   <link rel="stylesheet" href="../css/homepage.css">
+  <link rel="stylesheet" href="../css/form-validate.css">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
   <script src="../js/supabase-config.js"></script>
   <script src="../js/api-config.js"></script>
+  <script src="../js/form-validate.js"></script>
   <script src="../js/homepage.js" defer></script>
   <script src="../js/inquiry.js" defer></script>
   <script src="../js/content.js" defer></script>
@@ -335,10 +337,10 @@
   <div class="inquiry-form">
     <h2 data-cms="inquiry_title">Send us a quick message</h2>
     <div class="inquiry-row">
-      <input class="inquiry-input" type="text" placeholder="Your name" id="inq-name">
-      <input class="inquiry-input" type="text" placeholder="Your email" id="inq-contact">
+      <input class="inquiry-input" type="text" maxlength="60" placeholder="Your name" id="inq-name">
+      <input class="inquiry-input" type="text" maxlength="120" placeholder="Your email" id="inq-contact">
     </div>
-    <textarea class="inquiry-textarea" placeholder="Tell us what you're looking for — custom order, question, feedback..." id="inq-msg" rows="4"></textarea>
+    <textarea class="inquiry-textarea" data-maxlen="600" placeholder="Tell us what you're looking for — custom order, question, feedback..." id="inq-msg" rows="4"></textarea>
     <button class="inquiry-btn" onclick="sendInquiry()">Send Message</button>
     <div class="inquiry-note" data-cms="inquiry_note">We reply within 24 hours on weekdays 🍪</div>
   </div>
