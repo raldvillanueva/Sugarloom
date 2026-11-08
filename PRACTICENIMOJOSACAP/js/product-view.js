@@ -57,27 +57,12 @@ function addToCart(){
 
   let existing = cart.find(i => i.name === data.name);
 
-  /* Only what is left for today, counting whatever is already in the
-     basket. This copy can be stale — it was written when the product
-     was opened — so checkout checks again against live stock before
-     the order is placed. */
-  const a = availability(data, null);
-  if(!a.orderable){
-    alert(a.state === 'out'
-      ? `${data.name} is sold out for today.`
-      : `We are low on ${data.name} today and cannot promise it — please check back tomorrow.`);
-    return;
-  }
-
-  const room = Math.max(0, a.left === Infinity ? Infinity : a.left - (existing ? existing.qty : 0));
-  if(room <= 0){
-    alert(`You already have all the ${data.name} we have left today.`);
-    return;
-  }
-  if(qty > room){
-    alert(`Only ${room} more ${data.name} available today — adding ${room}.`);
-    qty = room;
-  }
+  /* Deliberately no capacity check here. Nothing on this page knows
+     the delivery date, and without it there is no question to ask:
+     being full today says nothing about next Friday. Refusing the
+     add would stop exactly the bulk customer the two-day lead time
+     exists for. The cart says what is left and offers a later date,
+     and checkout decides against the date actually chosen. */
 
   if(existing){
     existing.qty += qty;

@@ -527,6 +527,29 @@ async function placeOrder(){
      A lookup that fails lets the order through. The shop losing its
      connection should not stop people buying; the admin still sees the
      order and can cancel it. */
+  /* Capacity for the day the customer picked.
+
+     This always runs. Two clear days' notice lifts the low-stock
+     threshold — that buffer exists for orders the shop cannot
+     prepare for, and with warning it can — but it does not lift the
+     daily limit, because the limit is a day's baking. Skipping the
+     check on notice would mean fifty people could each order a day's
+     worth for the same Friday, every one waved through on their own,
+     and nothing would ever add up Friday.
+
+     Measured against that date, not today: a Friday order uses
+     Friday's capacity, which is usually empty, so ordering ahead
+     still works the way the cart promises. */
+  const stockErrorEl = document.getElementById('stockError');
+  if(stockErrorEl) stockErrorEl.style.display = 'none';
+
+  const pickedRaw = localStorage.getItem('preferredDate');
+  const pickedDay = pickedRaw ? orderDeliveryDay({ preferredDate: pickedRaw }) : null;
+  const targetDay = pickedDay || todayISO();
+
+  const leadMs      = new Date(targetDay + 'T00:00:00') - new Date(todayISO() + 'T00:00:00');
+  const shortNotice = leadMs < 2 * 24 * 60 * 60 * 1000;
+
   try {
     const { data: rows } = await _supa.from('products').select('data');
     if(rows && rows.length){
@@ -535,26 +558,26 @@ async function placeOrder(){
 
       /* Counted from the orders themselves rather than soldToday,
          which only moves while an admin has the panel open. This is
-         the check that stops a COD order the shop cannot bake: there
-         is no payment to reject afterwards.
+         what stops a COD order the shop cannot bake: there is no
+         payment to reject afterwards. */
+      const committed = await loadCommitted(_supa, targetDay);
+      const short     = unavailableLines(cart, byName, committed, { shortNotice });
 
-         Against the day the customer picked, not today — a pre-order
-         for Friday uses up Friday's capacity. */
-      const picked    = localStorage.getItem('preferredDate');
-      const pickedDay = picked ? orderDeliveryDay({ preferredDate: picked }) : null;
-      const committed = await loadCommitted(_supa, pickedDay || todayISO());
+      if(short.length && stockErrorEl){
+        const dayLabel = new Date(targetDay + 'T00:00:00')
+          .toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
 
-      const short = unavailableLines(cart, byName, committed);
-      if(short.length){
-        alert(
-          'Sorry — we cannot take these today:\n\n' +
-          short.map(s => '· ' + s.name + ' — ' + (
-            s.state === 'low' ? 'we are too low on this one to promise it'
-            : s.left           ? `you wanted ${s.wanted}, only ${s.left} left`
-            :                    'none left'
-          )).join('\n') +
-          '\n\nPlease change your basket and try again.'
-        );
+        stockErrorEl.innerHTML =
+          `That date is full for some items:<br>` +
+          short.map(s =>
+            `<strong>${s.name}</strong>: ` + (
+              s.state === 'low' ? 'we are low on this one and cannot promise it at short notice.'
+              : s.left          ? `you ordered ${s.wanted} but only ${s.left} more can be made on ${dayLabel}.`
+              :                   `${dayLabel} is fully booked for this item.`
+            )).join('<br>') +
+          '<br><span style="font-weight:500">Please choose another delivery date, or reduce the quantity.</span>';
+        stockErrorEl.style.display = 'block';
+        stockErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
       }
     }

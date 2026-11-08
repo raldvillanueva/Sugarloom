@@ -567,10 +567,10 @@ a { text-decoration: none; color: inherit; }
 .stock-badge.out { background: #991B1B; }
 .stock-badge.low { background: #B45309; }
 
-/* Readable, visibly unavailable, and not clickable. Kept above the
-   greyed-out picture so the reason is legible. */
-.product-clean.sold-out { cursor: not-allowed; }
-.product-clean.sold-out .product-thumb img { filter: grayscale(1); opacity: .45; }
-.product-clean.sold-out h3,
-.product-clean.sold-out .price { opacity: .5; }
-.product-clean.sold-out:hover { transform: none; box-shadow: none; }
+/* Tight on today, but still orderable for a later date — so it is
+   dimmed to be noticed, not greyed out to look unavailable. It stays
+   clickable: being full today says nothing about next week, and
+   ordering ahead is the whole point of the two-day lead time. */
+.product-clean.stock-tight .product-thumb img { opacity: .72; }
+.product-clean.stock-tight h3,
+.product-clean.stock-tight .price { opacity: .8; }

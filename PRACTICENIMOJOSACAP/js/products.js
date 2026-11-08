@@ -28,19 +28,21 @@ function render(list){
 
   list.forEach((p)=>{
     const div = document.createElement("div");
-    const a   = availability(p, _committedToday);
 
-    /* Unavailable stays on the shelf rather than disappearing: a
-       product that vanishes looks like it was never offered, and the
-       customer goes looking for it. It is shown, marked, and not
-       clickable. */
-    div.className = "product-clean" + (a.orderable ? "" : " sold-out");
+    /* Today's position, which is all this page can know — no delivery
+       date has been chosen yet. So it tells rather than blocks: being
+       full today says nothing about next Friday, and a product locked
+       on the shelf could never be ordered ahead, which is exactly
+       what bulk customers come to do. Checkout knows the date and
+       decides there. */
+    const a = availability(p, _committedToday);
 
     const badge =
-      a.state === 'out'    ? '<span class="stock-badge out">Sold Out</span>' :
-      a.state === 'low'    ? '<span class="stock-badge out">Unavailable today</span>' :
-      a.state === 'nearly' ? `<span class="stock-badge low">Only ${a.left} left</span>` : '';
+      a.state === 'out'    ? '<span class="stock-badge out">Full for today</span>' :
+      a.state === 'low'    ? '<span class="stock-badge low">Low — order ahead</span>' :
+      a.state === 'nearly' ? `<span class="stock-badge low">Only ${a.left} left today</span>` : '';
 
+    div.className = "product-clean" + (a.orderable ? "" : " stock-tight");
     div.innerHTML = `
       <div class="product-thumb">
         <img src="${p.img}" alt="${p.name}">
@@ -50,13 +52,9 @@ function render(list){
       <p class="price">₱${p.price}</p>`;
 
     if(!a.orderable){
-      div.setAttribute('aria-disabled', 'true');
-      div.title = a.state === 'out'
-        ? 'Sold out for today'
-        : 'We are low on this one today — please check back tomorrow';
-    } else {
-      div.addEventListener("click", () => viewProduct(p.name, p.price, p.img));
+      div.title = 'Today is full — pick a delivery date two days out or later';
     }
+    div.addEventListener("click", () => viewProduct(p.name, p.price, p.img));
     container.appendChild(div);
   });
 

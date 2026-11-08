@@ -81,21 +81,6 @@ async function loadCommitted(supa, isoDay){
   }
 }
 
-/* A product with no dailyLimit is unlimited rather than sold out:
-   plenty of rows predate the field, and reading a missing limit as
-   zero would empty the shop. */
-function remainingStock(p){
-  if(!p) return 0;
-  const limit = Number(p.dailyLimit);
-  if(!Number.isFinite(limit) || limit <= 0) return Infinity;
-  const sold = Number(p.soldToday) || 0;
-  return Math.max(0, limit - sold);
-}
-
-function isSoldOut(p){
-  return remainingStock(p) === 0;
-}
-
 /* ── Low stock takes a product off the shelf ──────────────────────
    Not only sold out. A COD order cannot be refused at the door the
    way an unpaid GCash one can be rejected, so the shop needs slack
@@ -111,10 +96,22 @@ function hideThreshold(p){
   return Number.isFinite(t) && t > 0 ? t : 0;
 }
 
-/* The single question the storefront asks. `committed` is the live
-   count from loadCommitted(); without it this falls back to
-   soldToday, which is better than nothing but lags. */
-function availability(p, committed){
+/* The single question the storefront asks.
+
+   `committed` is the live count for the delivery day in question,
+   from loadCommitted(); without it this falls back to soldToday,
+   which is better than nothing but lags.
+
+   `shortNotice` is what two clear days' warning changes, and all it
+   changes. The threshold is a buffer for orders the shop has no time
+   to prepare for, so notice lifts it — but the daily limit still
+   applies, measured against that date. Notice buys a fresh day's
+   capacity, not unlimited capacity: without that, fifty people could
+   each order a day's worth for the same Friday, every one of them
+   waved through on their own, and nothing would ever add up Friday. */
+function availability(p, committed, opts){
+  const shortNotice = !opts || opts.shortNotice !== false;
+
   const limit = Number(p && p.dailyLimit);
   if(!Number.isFinite(limit) || limit <= 0){
     return { left: Infinity, orderable: true, state: 'ok' };
@@ -125,31 +122,23 @@ function availability(p, committed){
     : Number(p.soldToday) || 0;
 
   const left = Math.max(0, limit - used);
-  const bar  = hideThreshold(p);
+  const bar  = shortNotice ? hideThreshold(p) : 0;
 
   if(left === 0)   return { left, orderable: false, state: 'out' };
   if(left <= bar)  return { left, orderable: false, state: 'low' };
   return { left, orderable: true, state: left <= bar + 3 ? 'nearly' : 'ok' };
 }
 
-/* How many more of this product the customer may add, given what is
-   already in their basket. */
-function stockHeadroom(p, qtyInCart){
-  const left = remainingStock(p);
-  if(left === Infinity) return Infinity;
-  return Math.max(0, left - (Number(qtyInCart) || 0));
-}
-
 /* Checked again at checkout, because a basket can sit for an hour
    while the last few sell to somebody else. Returns the lines that no
    longer fit, so the customer is told which ones rather than simply
    being refused. */
-function unavailableLines(cart, byName, committed){
+function unavailableLines(cart, byName, committed, opts){
   return (cart || []).reduce((bad, line) => {
     const p = byName[line.name];
     if(!p) return bad;                      // not in the catalogue; leave it alone
 
-    const a = availability(p, committed);
+    const a = availability(p, committed, opts);
     if(a.left === Infinity) return bad;
 
     /* Below the threshold the product is off the shelf entirely, so
