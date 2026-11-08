@@ -277,6 +277,16 @@ textarea { resize: vertical; }
 .notif-item.unread:hover { background: #DBEAFE; }
 .notif-empty { padding: 24px; text-align: center; color: var(--text-3); font-size: 13px; }
 
+/* The age sits under its line rather than beside it: these messages
+   run long, and a time competing for the same row either wraps badly
+   or squeezes the text it is describing. */
+.notif-body { flex: 1; min-width: 0; }
+.notif-age {
+  display: block; margin-top: 3px;
+  font-size: 11px; color: var(--text-3);
+}
+.notif-item.unread .notif-age { color: #1D4ED8; opacity: .75; }
+
 /* ============================
    CONTENT AREA
    ============================ */

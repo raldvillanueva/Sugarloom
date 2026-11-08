@@ -5233,6 +5233,73 @@ function saveSeenNotifs(seen){ localStorage.setItem('sl_seen_notifs', JSON.strin
 function getReadNotifs(){ return new Set(JSON.parse(localStorage.getItem('sl_read_notifs')||'[]')); }
 function saveReadNotifs(read){ localStorage.setItem('sl_read_notifs', JSON.stringify([...read])); }
 
+/* ── When each notification happened ──────────────────────────────
+   The panel is built by walking each category in turn, so the order
+   on screen was the order of the code: every low-stock line, then
+   every restock form, then every appeal. Read top to bottom it looks
+   shuffled, because it is sorted by kind and not by time.
+
+   Most of these come from something with a real timestamp — an order
+   was placed, a receipt was sent, a form was raised — and that is
+   used. A low ingredient has none: it is a standing condition, not
+   an event, and nothing records when it became true. For those the
+   moment the notification first appeared is the honest answer, so it
+   is written down the first time it is built and reused after. */
+function getNotifSeenAt(){
+  try { return JSON.parse(localStorage.getItem('sl_notif_first_seen') || '{}'); }
+  catch { return {}; }
+}
+
+function saveNotifSeenAt(map){
+  try { localStorage.setItem('sl_notif_first_seen', JSON.stringify(map)); } catch {}
+}
+
+/* Milliseconds, or 0 when the value is missing or unparseable — an
+   unreadable date must not sort above a real one. */
+function notifTime(value){
+  if(!value) return 0;
+  const t = new Date(value).getTime();
+  return isNaN(t) ? 0 : t;
+}
+
+/* Stamps every entry, newest first. An entry carrying its own event
+   time keeps it; the rest fall back to when they first showed up. */
+function sortNotifsByTime(list){
+  const seenAt = getNotifSeenAt();
+  const now    = Date.now();
+  let changed  = false;
+
+  list.forEach(n => {
+    if(!seenAt[n.id]){ seenAt[n.id] = now; changed = true; }
+    n.ts = n.ts || seenAt[n.id];
+  });
+
+  /* Forget anything no longer on the list, so the map does not grow
+     for the life of the browser. */
+  const live = new Set(list.map(n => n.id));
+  Object.keys(seenAt).forEach(id => {
+    if(!live.has(id)){ delete seenAt[id]; changed = true; }
+  });
+
+  if(changed) saveNotifSeenAt(seenAt);
+
+  list.sort((a, b) => b.ts - a.ts);
+  return list;
+}
+
+/* "just now", "3h ago", "2d ago" — short enough to sit beside the
+   text without pushing it around. */
+function notifAge(ts){
+  const mins = Math.floor((Date.now() - ts) / 60000);
+  if(!ts || mins < 1)  return 'just now';
+  if(mins < 60)        return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if(hrs < 24)         return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  if(days < 7)         return days + 'd ago';
+  return Math.floor(days / 7) + 'w ago';
+}
+
 function buildNotifs(){
   const seen = getSeenNotifs();
   notifList = [];
@@ -5263,7 +5330,7 @@ function buildNotifs(){
     const id = `restock_${f.id}`;
     if(seen.has(id)) return;
     const names = formLines(f).map(l => l.name);
-    notifList.push({ id, view:'inventory', icon:'bx-cart-add', color:'#EA580C',
+    notifList.push({ id, view:'inventory', icon:'bx-cart-add', color:'#EA580C', ts: notifTime(f.date),
       text:`Restock form ${escHTML(f.reference || f.id)} is waiting for your review — ${escHTML(names.slice(0,3).join(', '))}${names.length > 3 ? ` +${names.length - 3} more` : ''}`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); setTimeout(()=>viewRestockForm(f.id), 200); }
     });
@@ -5275,7 +5342,7 @@ function buildNotifs(){
   DB.orders.filter(o => o.paymentAppeal && !o.paymentAppeal.resolved).forEach(o => {
     const id = `appeal_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'orders', icon:'bx-conversation', color:'#DC2626',
+    notifList.push({ id, view:'orders', icon:'bx-conversation', color:'#DC2626', ts: notifTime(o.paymentAppeal.sentAt),
       text:`${escHTML(o.customer || 'A customer')} sent a receipt disputing the refused payment on ${o.id} — refund to ${escHTML(o.paymentAppeal.gcashNumber || 'the number on the order')}`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id, true),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5306,7 +5373,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Cancel Requested'&&!o.archived).forEach(o=>{
     const id = `cancel_req_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'orders', icon:'bx-x-circle', color:'#DC2626',
+    notifList.push({ id, view:'orders', icon:'bx-x-circle', color:'#DC2626', ts: notifTime(o.cancelRequestedAt || o.date),
       text:`Cancel request for order ${o.id} from ${escHTML(o.customer)}${o.cancelReason ? ' — "'+o.cancelReason+'"' : ''}`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5316,7 +5383,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Pending'&&!o.archived).forEach(o=>{
     const id = `order_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'orders', icon:'bx-shopping-bag', color:'#2563EB',
+    notifList.push({ id, view:'orders', icon:'bx-shopping-bag', color:'#2563EB', ts: notifTime(o.date),
       text:`New order ${o.id} from ${escHTML(o.customer)}`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5326,7 +5393,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Confirmed'&&!o.archived).forEach(o=>{
     const id = `prepare_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'orders', icon:'bx-dish', color:'#D97706',
+    notifList.push({ id, view:'orders', icon:'bx-dish', color:'#D97706', ts: notifTime(o.date),
       text:`Order ${o.id} from ${escHTML(o.customer)} needs to be prepared`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5338,7 +5405,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Ready for Packing'&&!o.archived).forEach(o=>{
     const id = `ready_pack_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'orders', icon:'bx-package', color:'#7C3AED',
+    notifList.push({ id, view:'orders', icon:'bx-package', color:'#7C3AED', ts: notifTime(o.date),
       text:`Order ${o.id} from ${escHTML(o.customer)} is ready to be packed`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id, true),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5348,7 +5415,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Preparing'&&!o.archived&&o.preparingSubStatus==='packed'&&!allTracking[o.id]).forEach(o=>{
     const id = `packed_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'orders', icon:'bx-box', color:'#0891B2',
+    notifList.push({ id, view:'orders', icon:'bx-box', color:'#0891B2', ts: notifTime(o.date),
       text:`Order ${o.id} from ${escHTML(o.customer)} is packed — mark ready for Lalamove`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5358,7 +5425,7 @@ function buildNotifs(){
   DB.orders.filter(o=>o.status==='Preparing'&&!o.archived&&o.preparingSubStatus==='readyForBook'&&!allTracking[o.id]).forEach(o=>{
     const id = `ready_book_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'orders', icon:'bx-map', color:'#16A34A',
+    notifList.push({ id, view:'orders', icon:'bx-map', color:'#16A34A', ts: notifTime(o.date),
       text:`Order ${o.id} from ${escHTML(o.customer)} is ready to book Lalamove`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5370,7 +5437,7 @@ function buildNotifs(){
     if(!t || t.status!=='COMPLETED') return;
     const id = `delivered_${o.id}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'orders', icon:'bx-check-circle', color:'#6366F1',
+    notifList.push({ id, view:'orders', icon:'bx-check-circle', color:'#6366F1', ts: notifTime(o.date),
       text:`Delivery complete for order ${o.id} — mark as Fulfilled`,
       action(){ switchView('orders'); setTimeout(()=>openOrderModal(o.id),150); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5384,7 +5451,7 @@ function buildNotifs(){
     Object.entries(reviews).forEach(([orderId, r]) => {
       const id = `review_${u.email}_${orderId}`;
       if(seen.has(id)) return;
-      notifList.push({ id, view:'customers', icon:'bx-star', color:'#f59e0b',
+      notifList.push({ id, view:'customers', icon:'bx-star', color:'#f59e0b', ts: notifTime(r.date),
         text:`${name} left a ${r.rating}★ review — "${r.comment}"`,
         action(){ switchView('customers'); document.getElementById('notif-panel').classList.add('hidden'); setTimeout(()=>viewCustomerReviews(u.email), 150); }
       });
@@ -5397,6 +5464,10 @@ function buildNotifs(){
      because switchView sends them back to a view they are allowed. A
      notification you cannot act on is not information, it is noise. */
   notifList = notifList.filter(n => !n.view || canView(n.view));
+
+  /* Last, so it covers every category at once and a new one added
+     above is ordered without anybody remembering to sort it. */
+  notifList = sortNotifsByTime(notifList);
 }
 
 function updateBadges(){
@@ -5472,10 +5543,16 @@ function renderNotifPanel(){
   const list = document.getElementById('notif-list');
   if(notifList.length===0){ list.innerHTML='<div class="notif-empty">No new notifications</div>'; return; }
   const read = getReadNotifs();
+  /* The age is shown as well as sorted on. An ordered list with no
+     times still reads as arbitrary — the reader cannot tell it is in
+     order, which was the original complaint. */
   list.innerHTML = notifList.map((n,i)=>`
     <div class="notif-item notif-clickable${read.has(n.id) ? '' : ' unread'}" onclick="handleNotifClick(${i})">
       <i class='bx ${n.icon}' style="color:${n.color||'#6B7280'}"></i>
-      <span>${n.text}</span>
+      <span class="notif-body">
+        ${n.text}
+        <small class="notif-age">${notifAge(n.ts)}</small>
+      </span>
       <i class='bx bx-chevron-right' style="margin-left:auto;color:#9CA3AF;flex-shrink:0"></i>
     </div>`).join('');
 }
