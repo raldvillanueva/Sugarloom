@@ -795,7 +795,7 @@ function switchView(view){
 
   if(view==='dashboard')  renderDashboard();
   if(view==='products')   renderProducts();
-  if(view==='orders'){    syncStoreOrders().then(()=>renderOrders()); }
+  if(view==='orders'){    loadOrderCapSetting(); syncStoreOrders().then(()=>renderOrders()); }
   if(view==='inventory')  renderInventory();
   if(view==='reports')    renderReports();
   if(view==='customers')  renderCustomers();
@@ -4073,6 +4073,63 @@ function deleteIngredient(id){
 
 function openProductStockModal(){
   toast('Select a product row to adjust its stock','');
+}
+
+/* ── The daily order ceiling ──
+   How many orders the shop will accept for one delivery date,
+   whatever is in them. Separate from the per-product daily limits:
+   those are about what can be baked, this is about how many separate
+   orders can be packed, booked and delivered in a day.
+
+   Lives in app_settings so it can be changed without a deploy, and
+   is read by checkout with the same anon key the site already uses.
+   0 means no ceiling. */
+let _orderCap = 0;
+
+async function loadOrderCapSetting(){
+  try {
+    const { data, error } = await _supa.from('app_settings')
+      .select('data').eq('id', 'orders').maybeSingle();
+    if(error){ console.warn('order cap unavailable:', error.message); return; }
+    const n = Number(data?.data?.dailyOrderLimit);
+    _orderCap = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  } catch(e){ console.warn('order cap unavailable:', e); }
+
+  const card  = document.getElementById('order-cap-card');
+  const input = document.getElementById('order-cap-input');
+  if(input) input.value = _orderCap;
+  /* Only whoever runs the shop sets this; a baker has no business
+     deciding how many orders the shop takes. */
+  if(card) card.style.display = (currentUser?.role === 'Administrator') ? '' : 'none';
+}
+
+async function saveOrderCap(){
+  if(currentUser?.role !== 'Administrator'){
+    toast('Only an Administrator can change this', 'danger'); return;
+  }
+  const raw = Number(document.getElementById('order-cap-input')?.value);
+  if(!Number.isFinite(raw) || raw < 0 || raw > 999){
+    toast('Enter a number between 0 and 999', 'danger'); return;
+  }
+  const cap = Math.floor(raw);
+  const was = _orderCap;
+
+  const { error } = await _supa.from('app_settings').upsert({
+    id: 'orders',
+    data: { dailyOrderLimit: cap, updatedAt: new Date().toISOString(),
+            updatedBy: currentUser?.email || null }
+  }, { onConflict: 'id' });
+
+  if(error){
+    console.error('could not save the order cap:', error);
+    toast('Could not save: ' + error.message, 'danger');
+    return;
+  }
+
+  _orderCap = cap;
+  logAudit('Orders', 'Daily order limit changed', 'Shop settings',
+           `${was || 'no limit'} → ${cap || 'no limit'}`);
+  toast(cap ? `Limit set to ${cap} orders a day` : 'Daily limit removed', 'success');
 }
 
 function restoreIngredient(id){

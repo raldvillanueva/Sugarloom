@@ -313,6 +313,8 @@ input::placeholder { color: #BBBBBB; }
   pointer-events: none;
 }
 .msg.show { opacity: 1; }
+.msg.error   { background: #dc2626; }
+.msg.success { background: #16a34a; }
 
 /* ---- POLICY MODAL ---- */
 .policy-overlay {

@@ -544,6 +544,33 @@ async function placeOrder(){
   const targetDay = pickedDay || todayISO();
   const leadDays  = leadDaysUntil(targetDay);
 
+  /* The shop's own ceiling on how many orders it will take for one
+     day, whatever is in them. Checked before the per-product limits
+     because being full is a different answer from being short of one
+     item, and the customer should be told the right one. */
+  try {
+    const cap = await loadOrderCap(_supa);
+    if(cap){
+      const { data: oRows } = await _supa.from('orders').select('status,data');
+      const existing = (oRows || []).map(r => Object.assign({ status: r.status }, r.data || {}));
+      const booked   = ordersBookedFor(existing, targetDay);
+
+      if(booked >= cap && stockErrorEl){
+        const dayLabel = new Date(targetDay + 'T00:00:00')
+          .toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
+        stockErrorEl.innerHTML =
+          `<strong>${dayLabel} is fully booked.</strong><br>` +
+          `We only take ${cap} order${cap === 1 ? '' : 's'} a day so every one gets made properly. ` +
+          '<span style="font-weight:500">Please choose another delivery date.</span>';
+        stockErrorEl.style.display = 'block';
+        stockErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return;
+      }
+    }
+  } catch(e){
+    console.warn('could not check the daily order cap, letting the order through:', e);
+  }
+
   try {
     const { data: rows } = await _supa.from('products').select('data');
     if(rows && rows.length){

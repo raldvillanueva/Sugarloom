@@ -9,6 +9,37 @@
    rows — so a product with nothing left still went in the basket and
    straight through checkout, and the baker found out afterwards. */
 
+/* ── A ceiling on orders per day ──────────────────────────────────
+   Separate from the per-product limits. Those say how much of one
+   thing can be baked; this says how many orders the shop is willing
+   to take at all for one day, however small each one is. A kitchen
+   that can make the cakes can still only pack, book and deliver so
+   many separate orders.
+
+   Kept in app_settings so the shop can change it without a deploy,
+   and read by the customer side with the same anon key the rest of
+   the site uses. Absent or zero means no ceiling, which is what the
+   shop had before anybody asked for one. */
+async function loadOrderCap(supa){
+  try {
+    const { data, error } = await supa.from('app_settings')
+      .select('data').eq('id', 'orders').maybeSingle();
+    if(error || !data) return 0;
+    const n = Number(data.data && data.data.dailyOrderLimit);
+    return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  } catch(e){
+    /* A setting that cannot be read must not close the shop. */
+    console.warn('could not read the daily order cap:', e);
+    return 0;
+  }
+}
+
+/* How many orders already stand for one delivery day. Counts orders,
+   not items — one order of thirty brownies is one order. */
+function ordersBookedFor(orders, isoDay){
+  return (orders || []).filter(o => commitsStock(o) && orderDeliveryDay(o) === isoDay).length;
+}
+
 /* ── How much of today is already spoken for ──────────────────────
    soldToday cannot answer this. It is only ever incremented inside
    syncStoreOrders(), which runs in the ADMIN's browser and only for

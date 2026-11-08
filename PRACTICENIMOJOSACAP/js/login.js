@@ -1,10 +1,13 @@
 /* ── login.js — Supabase Auth ───────────────────────────────── */
 
 /* ── HELPERS ── */
-function showMsg(text) {
+function showMsg(text, type) {
   const msg = document.getElementById('msg');
   msg.innerText = text;
-  msg.classList.add('show');
+  /* Every message used to be the same dark box, so "Account created"
+     and "Email already registered" looked identical. */
+  msg.classList.remove('success', 'error');
+  msg.classList.add('show', type === 'success' ? 'success' : 'error');
   setTimeout(() => msg.classList.remove('show'), 2500);
 }
 
@@ -293,8 +296,21 @@ async function register() {
     stashProfile(email, profile);
   }
 
-  showMsg('Account created! Check your email to verify, then sign in.');
-  setTimeout(() => { window.location.href = 'login.html'; }, 2000);
+  /* Where they land depends on whether they are actually signed in.
+     Sending everyone to a sign-in form was the complaint: somebody
+     who just created an account and HAS a session is already signed
+     in, and being shown a login box reads as the account not having
+     worked. With email confirmation on there is no session yet, so
+     the sign-in page is the right place — but it is the customer
+     one, reached by an explicit path rather than a bare filename
+     that depends on which folder the page happens to sit in. */
+  if (data.session) {
+    showMsg('Account created — welcome!', 'success');
+    setTimeout(() => { window.location.href = '../pages/homepage.html'; }, 1200);
+  } else {
+    showMsg('Account created! Check your email to verify, then sign in.', 'success');
+    setTimeout(() => { window.location.href = '../pages/login.html'; }, 2000);
+  }
 }
 
 /* ── NAVIGATION ── */
