@@ -5493,15 +5493,10 @@ function updateBadges(){
   const lb = document.getElementById('low-stock-badge');
   if(lb) lb.style.display = (low && canView('inventory')) ? '' : 'none';
 
-  /* This counts pending orders, so it belongs to whoever works the
-     order queue. On the Super Admin's Customers tab it was a number
-     about something they cannot open. */
-  const custPending = DB.orders.filter(o => o.status === 'Pending' && !o.archived).length;
-  const cpb = document.getElementById('cust-pending-badge');
-  if(cpb){
-    cpb.textContent = custPending;
-    cpb.style.display = (custPending && canView('orders')) ? '' : 'none';
-  }
+  /* Customers carries no badge. The one that used to sit there
+     counted pending ORDERS — a number about a different tab, next to
+     a word that did not describe it, while Orders already has its
+     own dot for exactly that. */
 
   buildNotifs();
   const read = getReadNotifs();
