@@ -61,11 +61,17 @@ function addToCart(){
      basket. This copy can be stale — it was written when the product
      was opened — so checkout checks again against live stock before
      the order is placed. */
-  const room = stockHeadroom(data, existing ? existing.qty : 0);
-  if(room <= 0){
-    alert(isSoldOut(data)
+  const a = availability(data, null);
+  if(!a.orderable){
+    alert(a.state === 'out'
       ? `${data.name} is sold out for today.`
-      : `You already have all the ${data.name} we have left today.`);
+      : `We are low on ${data.name} today and cannot promise it — please check back tomorrow.`);
+    return;
+  }
+
+  const room = Math.max(0, a.left === Infinity ? Infinity : a.left - (existing ? existing.qty : 0));
+  if(room <= 0){
+    alert(`You already have all the ${data.name} we have left today.`);
     return;
   }
   if(qty > room){

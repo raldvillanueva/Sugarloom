@@ -17,32 +17,43 @@ const catMap = { Cookies:'cookie', Brownies:'brownie', Cupcakes:'cupcake', Boxes
 
 let products = fallbackProducts.slice(); // start with fallback until Supabase loads
 
+/* What today's orders have already claimed, read once on load. Null
+   until it arrives, and null if the read fails — availability() then
+   falls back to soldToday rather than emptying the shop. */
+let _committedToday = null;
+
 function render(list){
   const container = document.getElementById("product-list");
   container.innerHTML = "";
 
   list.forEach((p)=>{
     const div = document.createElement("div");
-    const out = isSoldOut(p);
-    const left = remainingStock(p);
+    const a   = availability(p, _committedToday);
 
-    /* Sold out stays on the shelf rather than disappearing: a product
-       that vanishes looks like it was never offered, and the customer
-       goes looking for it. It is shown, marked, and not clickable. */
-    div.className = "product-clean" + (out ? " sold-out" : "");
+    /* Unavailable stays on the shelf rather than disappearing: a
+       product that vanishes looks like it was never offered, and the
+       customer goes looking for it. It is shown, marked, and not
+       clickable. */
+    div.className = "product-clean" + (a.orderable ? "" : " sold-out");
+
+    const badge =
+      a.state === 'out'    ? '<span class="stock-badge out">Sold Out</span>' :
+      a.state === 'low'    ? '<span class="stock-badge out">Unavailable today</span>' :
+      a.state === 'nearly' ? `<span class="stock-badge low">Only ${a.left} left</span>` : '';
+
     div.innerHTML = `
       <div class="product-thumb">
         <img src="${p.img}" alt="${p.name}">
-        ${out ? '<span class="stock-badge out">Sold Out</span>' : ''}
-        ${!out && left !== Infinity && left <= 5
-            ? `<span class="stock-badge low">Only ${left} left</span>` : ''}
+        ${badge}
       </div>
       <h3>${p.name}</h3>
       <p class="price">₱${p.price}</p>`;
 
-    if(out){
+    if(!a.orderable){
       div.setAttribute('aria-disabled', 'true');
-      div.title = 'Sold out for today';
+      div.title = a.state === 'out'
+        ? 'Sold out for today'
+        : 'We are low on this one today — please check back tomorrow';
     } else {
       div.addEventListener("click", () => viewProduct(p.name, p.price, p.img));
     }
@@ -173,6 +184,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }));
     }
   } catch(e) {}
+
+  /* Read before the first render, so nothing is ever shown as
+     available and then quietly withdrawn a moment later. */
+  _committedToday = await loadCommitted(_supa);
 
   const isCustomize  = localStorage.getItem('customizeMode') === 'true';
   const isBoxesOnly  = sessionStorage.getItem("boxesOnlyMode") === "true";

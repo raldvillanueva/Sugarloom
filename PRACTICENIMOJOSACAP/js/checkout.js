@@ -487,29 +487,12 @@ async function placeOrder(){
     }
   }
 
-  // Daily limit check — skip if delivery date is not today
-  const todayStr        = new Date().toISOString().slice(0, 10);
-  const deliveryDateStr = localStorage.getItem('preferredDate') || '';
-  const deliveryDate    = deliveryDateStr ? new Date(deliveryDateStr) : null;
-  const deliveryIsToday = deliveryDate && deliveryDate.toISOString().slice(0, 10) === todayStr;
-  if (deliveryIsToday) {
-    const limitErrors = [];
-    cart.forEach(item => {
-      const p = adminProducts.find(pp => pp.name.toLowerCase() === item.name.toLowerCase());
-      if (p) {
-        const limit     = p.dailyLimit ?? p.stock ?? 0;
-        const sold      = (p.lastResetDate === todayStr) ? (p.soldToday || 0) : 0;
-        const available = Math.max(0, limit - sold);
-        if ((item.qty || 1) > available) {
-          limitErrors.push(`${item.name}: only ${available} left for today`);
-        }
-      }
-    });
-    if (limitErrors.length > 0) {
-      showMsg(`Daily limit reached: ${limitErrors.join(', ')}.`);
-      return;
-    }
-  }
+  /* The daily-limit check that used to sit here has moved below, past
+     the field validation, because it now has to await the live order
+     count. It was also skipping itself: it compared the delivery date
+     through toISOString(), which is a day behind in Manila, so a
+     same-day order never matched "today" and went through unchecked.
+     See js/stock.js. */
 
   const cookieNotice = document.getElementById("cookie-notice");
   if(cookieNotice) cookieNotice.style.display = "none";
@@ -550,12 +533,26 @@ async function placeOrder(){
       const byName = {};
       rows.map(r => r.data).forEach(p => { if(p && p.name) byName[p.name] = p; });
 
-      const short = unavailableLines(cart, byName);
+      /* Counted from the orders themselves rather than soldToday,
+         which only moves while an admin has the panel open. This is
+         the check that stops a COD order the shop cannot bake: there
+         is no payment to reject afterwards.
+
+         Against the day the customer picked, not today — a pre-order
+         for Friday uses up Friday's capacity. */
+      const picked    = localStorage.getItem('preferredDate');
+      const pickedDay = picked ? orderDeliveryDay({ preferredDate: picked }) : null;
+      const committed = await loadCommitted(_supa, pickedDay || todayISO());
+
+      const short = unavailableLines(cart, byName, committed);
       if(short.length){
         alert(
-          'Sorry — these sold out while they were in your basket:\n\n' +
-          short.map(s => `· ${s.name} — you wanted ${s.wanted}, ` +
-                         (s.left ? `only ${s.left} left` : 'none left')).join('\n') +
+          'Sorry — we cannot take these today:\n\n' +
+          short.map(s => '· ' + s.name + ' — ' + (
+            s.state === 'low' ? 'we are too low on this one to promise it'
+            : s.left           ? `you wanted ${s.wanted}, only ${s.left} left`
+            :                    'none left'
+          )).join('\n') +
           '\n\nPlease change your basket and try again.'
         );
         return;

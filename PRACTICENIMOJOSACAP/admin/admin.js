@@ -207,7 +207,17 @@ function daysAgo(n){
   return d.toISOString();
 }
 
-function todayDate(){ return new Date().toISOString().slice(0,10); }
+/* The shop's own calendar day, not UTC's. toISOString() is eight
+   hours behind in Manila, so between midnight and 8am it still
+   answered yesterday: the daily limits did not reset until the
+   morning was half gone, and an order taken at 1am was counted
+   against the day before. */
+function todayDate(){
+  const d = new Date();
+  return d.getFullYear() + '-' +
+         String(d.getMonth() + 1).padStart(2, '0') + '-' +
+         String(d.getDate()).padStart(2, '0');
+}
 
 function checkDailyReset(){
   const today = todayDate();
@@ -700,9 +710,17 @@ async function syncStoreOrders(){
 
     if (!existing) {
       DB.orders.push(order);
-      const deliveryDate = order.preferredDate
-        ? new Date(order.preferredDate).toISOString().slice(0, 10)
-        : today;
+      /* Local calendar date for the same reason as todayDate(): the
+         delivery day the customer picked is a day in Manila, and
+         converting it through UTC lands it on the one before. */
+      const deliveryDate = (() => {
+        if(!order.preferredDate) return today;
+        const d = new Date(order.preferredDate);
+        if(isNaN(d)) return today;
+        return d.getFullYear() + '-' +
+               String(d.getMonth() + 1).padStart(2, '0') + '-' +
+               String(d.getDate()).padStart(2, '0');
+      })();
       if (deliveryDate === today) {
         (order.items || []).forEach(item => {
           const p = DB.products.find(pp => pp.name === item.name || pp.id === item.id);
