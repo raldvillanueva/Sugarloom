@@ -282,7 +282,14 @@ async function initDB(){
       DB = {
         users:          toArr(uRes).length ? toArr(uRes) : SEED.users,
         products:       toArr(pRes),
-        ingredients:    toArr(iRes),
+        /* Deleted ingredients stay in the same table, flagged, and are
+           split out here into a list of their own. Everything else in
+           the panel reads DB.ingredients and would otherwise have to
+           learn to skip them — dozens of call sites, each one a place
+           to forget. Splitting at the door means a deleted ingredient
+           is simply not in the list anybody reads. */
+        ingredients:    toArr(iRes).filter(i => !i.deletedAt),
+        ingredientTrash: toArr(iRes).filter(i =>  i.deletedAt),
         orders:         toArr(oRes),
         transactions:   toArr(txRes).sort((a, b) => new Date(b.date) - new Date(a.date)),
         stockLog:       toArr(slRes),
@@ -370,7 +377,11 @@ function saveDB(){
 
   Promise.all([
     DB.products.length     && _supa.from('products').upsert(rows(DB.products), { onConflict: 'id' }),
-    DB.ingredients.length  && _supa.from('ingredients').upsert(rows(DB.ingredients), { onConflict: 'id' }),
+    /* Live and trashed go to the same table — the flag is what tells
+       them apart, and the split happens again on the next load. */
+    (DB.ingredients.length || (DB.ingredientTrash || []).length) &&
+      _supa.from('ingredients').upsert(
+        rows([...DB.ingredients, ...(DB.ingredientTrash || [])]), { onConflict: 'id' }),
     DB.users.length        && _supa.from('admin_users').upsert(rows(DB.users), { onConflict: 'id' }),
     DB.orders.length       && _supa.from('orders').upsert(
       DB.orders.map(o => ({
@@ -1703,8 +1714,19 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
   if(isAdmin && o.archived)
     menu.push({ label: 'Restore from archive', icon: 'bx-archive-out', fn: `unarchiveOrder('${o.id}')` });
 
-  if(isAdmin)
-    menu.push({ label: 'Delete order', icon: 'bx-trash', danger: true, fn: `deleteOrder('${o.id}')` });
+  /* Deleting an order is allowed only once it has been archived.
+
+     It used to sit in this menu beside Archive, one click from every
+     live order, and an order is the record of money and a promise to
+     a named customer — the one thing here the audit trail cannot
+     reconstruct afterwards. Archiving first makes it two deliberate
+     steps instead of a mis-click, and archiving is itself reversible,
+     so the slip that used to be final is now simply undone.
+
+     Archive is what this was mostly being used for anyway: it clears
+     the row out of every list and keeps the record. */
+  if(isAdmin && o.archived)
+    menu.push({ label: 'Delete permanently', icon: 'bx-trash', danger: true, fn: `deleteOrder('${o.id}')` });
 
   const refunded = isAdmin && o.status === 'Cancelled' && live && o.payment === 'GCash' && o.refunded
     ? `<span class="refund-done-badge" title="Refund processed">Refunded</span>` : '';
@@ -2826,8 +2848,8 @@ function deleteOrder(id){
   if(!o) return;
 
   showConfirm({
-    title: 'Delete order',
-    message: `Permanently delete ${o.id} (${o.customer}, ₱${Number(o.total||0).toLocaleString()})? This cannot be undone. To keep the record but clear it from the lists, use Archive instead.`,
+    title: 'Delete order permanently',
+    message: `Delete ${o.id} (${o.customer}, ₱${Number(o.total||0).toLocaleString()}) for good? This cannot be undone and the audit trail cannot rebuild it. It is already archived, which keeps the record and hides the row — leaving it there costs nothing.`,
     okText: 'Delete for good',
     okClass: 'btn-danger',
     icon: 'bx-trash',
@@ -3297,13 +3319,14 @@ function renderInventory(){
           <div class="td-actions">
             <button class="btn-icon warn" onclick="openAdjustStock('${ing.id}','ingredient')" title="Adjust"><i class='bx bx-slider'></i></button>
             <button class="btn-icon edit" onclick="openIngredientModal('${ing.id}')" title="Edit"><i class='bx bx-edit'></i></button>
-            <button class="btn-icon danger" onclick="deleteIngredient('${ing.id}')" title="Delete"><i class='bx bx-trash'></i></button>
+            <button class="btn-icon danger" onclick="deleteIngredient('${ing.id}')" title="Move to trash"><i class='bx bx-trash'></i></button>
           </div>
         </td>
       </tr>`;
     });
   });
   document.getElementById('ingredients-body').innerHTML = ingHTML;
+  renderIngredientTrash();
   syncRestockForm().then(renderSupplierOrders);
 }
 
@@ -4010,23 +4033,128 @@ function saveIngredient(){
   saveDB(); closeModal('ingredient-modal'); renderInventory(); updateBadges();
 }
 
+/* ── Deleting an ingredient ──
+   Goes to the trash rather than out of existence. Deleting one used
+   to be final, and an ingredient carries its stock figure and every
+   recipe that points at it — a mis-click cost a count nobody could
+   get back without going round the shelves again. */
 function deleteIngredient(id){
   const ing = DB.ingredients.find(i=>i.id===id);
+  if(!ing) return;
+
+  /* Named here rather than discovered later: a recipe pointing at a
+     missing ingredient is how a product quietly stops deducting. */
+  const usedBy = DB.products.filter(p => (p.recipe || []).some(r => r.ingredientId === id));
+
   showConfirm({
-    title: 'Delete Ingredient',
-    message: `Are you sure you want to delete "${ing?.name}"? This cannot be undone.`,
-    okText: 'Delete',
+    title: 'Move to trash',
+    message: `Move "${ing.name}" to the trash?` +
+      (usedBy.length
+        ? ` It is used by ${usedBy.length} product${usedBy.length === 1 ? '' : 's'} (${usedBy.slice(0,3).map(p=>p.name).join(', ')}${usedBy.length>3?'…':''}), which will stop deducting it until it is restored.`
+        : '') +
+      ' You can restore it from Inventory → Trash.',
+    okText: 'Move to trash',
     icon: 'bx-trash',
     onConfirm: () => {
+      DB.ingredientTrash = DB.ingredientTrash || [];
+      DB.ingredientTrash.push({
+        ...ing,
+        deletedAt: new Date().toISOString(),
+        deletedBy: currentUser?.email || currentUser?.name || null
+      });
       DB.ingredients = DB.ingredients.filter(i=>i.id!==id);
-      saveDB(); renderInventory();
-      toast('Ingredient deleted');
+      logAudit('Inventory', 'Ingredient moved to trash', ing.name,
+               `${ing.stock} ${ing.unit} in stock at the time`);
+      saveDB(); renderInventory(); updateBadges();
+      toast('Moved to trash — restore it from Inventory → Trash');
     }
   });
 }
 
 function openProductStockModal(){
   toast('Select a product row to adjust its stock','');
+}
+
+function restoreIngredient(id){
+  const ing = (DB.ingredientTrash || []).find(i => i.id === id);
+  if(!ing) return;
+
+  /* The flag goes, so the next load puts it back on the live side. */
+  const { deletedAt, deletedBy, ...revived } = ing;
+  DB.ingredients.push(revived);
+  DB.ingredientTrash = DB.ingredientTrash.filter(i => i.id !== id);
+
+  logAudit('Inventory', 'Ingredient restored', ing.name, '');
+  saveDB(); renderInventory(); updateBadges();
+  toast(`${ing.name} restored`, 'success');
+}
+
+/* The only way to lose an ingredient for good, and it says so. */
+function purgeIngredient(id){
+  const ing = (DB.ingredientTrash || []).find(i => i.id === id);
+  if(!ing) return;
+
+  showConfirm({
+    title: 'Delete permanently',
+    message: `Delete "${ing.name}" for good? This cannot be undone, and any recipe still pointing at it will have nothing to deduct.`,
+    okText: 'Delete for good',
+    okClass: 'btn-danger',
+    icon: 'bx-trash',
+    onConfirm: async () => {
+      DB.ingredientTrash = DB.ingredientTrash.filter(i => i.id !== id);
+      /* Removed from the table as well — leaving the row would let
+         the next load read it straight back into the trash. */
+      try { await _supa.from('ingredients').delete().eq('id', id); }
+      catch(e){ console.warn('could not remove the ingredient row:', e); }
+      logAudit('Inventory', 'Ingredient deleted permanently', ing.name, '');
+      saveDB(); renderInventory(); updateBadges();
+      toast('Deleted permanently');
+    }
+  });
+}
+
+/* The trash, shown under Inventory. Hidden entirely when empty so it
+   is not a permanent empty box on the page. */
+function renderIngredientTrash(){
+  const wrap = document.getElementById('ing-trash-wrap');
+  if(!wrap) return;
+
+  const trash = (DB.ingredientTrash || [])
+    .slice()
+    .sort((a, b) => new Date(b.deletedAt) - new Date(a.deletedAt));
+
+  if(!trash.length){ wrap.innerHTML = ''; wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  wrap.innerHTML = `
+    <div class="card" style="margin-top:18px">
+      <div class="card-head">
+        <h3><i class='bx bx-trash'></i> Trash <span class="pill pending">${trash.length}</span></h3>
+        <small style="color:var(--text-2)">Deleted ingredients, kept so a mis-click can be undone</small>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>INGREDIENT</th><th>STOCK AT DELETION</th><th>DELETED</th><th>BY</th><th></th></tr></thead>
+          <tbody>
+            ${trash.map(i => `
+              <tr>
+                <td class="fw-bold">${escHTML(i.name)}</td>
+                <td>${Number(i.stock || 0).toLocaleString()} ${escHTML(i.unit || '')}</td>
+                <td>${i.deletedAt ? fmtDateTime(i.deletedAt) : '—'}</td>
+                <td>${escHTML(i.deletedBy || '—')}</td>
+                <td style="text-align:right;white-space:nowrap">
+                  <button class="btn-primary sm" onclick="restoreIngredient('${i.id}')">
+                    <i class='bx bx-undo'></i> Restore
+                  </button>
+                  <button class="btn-ghost sm danger" onclick="purgeIngredient('${i.id}')">
+                    <i class='bx bx-x'></i> Delete for good
+                  </button>
+                </td>
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>`;
 }
 
 /* =============================================
