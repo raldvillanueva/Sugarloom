@@ -96,37 +96,68 @@ function hideThreshold(p){
   return Number.isFinite(t) && t > 0 ? t : 0;
 }
 
+/* ── What notice is worth ─────────────────────────────────────────
+   dailyLimit is how much of a product can be made in a day, so a
+   delivery date reached with days to spare is not worth one day's
+   baking — it is worth every day the shop has to bake into it. Three
+   days' warning on a 50-a-day product is 150, because fifty can be
+   made on each of them and brownies keep.
+
+   That is what lets a sixty-piece order through on a fifty-a-day
+   product, which is the ordinary bulk order this shop wants, while
+   still capping the date: the fifty-first person booking the same
+   Friday is refused rather than silently added to a pile nobody
+   sees until Thursday night.
+
+   Capped at a week so a booking made months out does not read as
+   unlimited capacity. Today and tomorrow are worth one day: nothing
+   can be baked in advance for them. */
+const MAX_LEAD_DAYS = 7;
+
+function capacityFor(limit, leadDays){
+  const d = Math.max(1, Math.min(MAX_LEAD_DAYS, Math.floor(Number(leadDays) || 0)));
+  return limit * d;
+}
+
+/* Whole days between today and a delivery date, local calendar. */
+function leadDaysUntil(isoDay){
+  if(!isoDay) return 0;
+  const target = new Date(isoDay + 'T00:00:00');
+  const today  = new Date(todayISO() + 'T00:00:00');
+  if(isNaN(target)) return 0;
+  return Math.max(0, Math.round((target - today) / 86400000));
+}
+
 /* The single question the storefront asks.
 
    `committed` is the live count for the delivery day in question,
    from loadCommitted(); without it this falls back to soldToday,
    which is better than nothing but lags.
 
-   `shortNotice` is what two clear days' warning changes, and all it
-   changes. The threshold is a buffer for orders the shop has no time
-   to prepare for, so notice lifts it — but the daily limit still
-   applies, measured against that date. Notice buys a fresh day's
-   capacity, not unlimited capacity: without that, fifty people could
-   each order a day's worth for the same Friday, every one of them
-   waved through on their own, and nothing would ever add up Friday. */
+   `leadDays` is how far off that date is, and decides both how much
+   can be made for it and whether the low-stock threshold applies.
+   The threshold is a buffer for orders there is no time to prepare
+   for, so it only bites at short notice. */
 function availability(p, committed, opts){
-  const shortNotice = !opts || opts.shortNotice !== false;
+  const leadDays    = opts && opts.leadDays != null ? opts.leadDays : 0;
+  const shortNotice = leadDays < 2;
 
   const limit = Number(p && p.dailyLimit);
   if(!Number.isFinite(limit) || limit <= 0){
-    return { left: Infinity, orderable: true, state: 'ok' };
+    return { left: Infinity, orderable: true, state: 'ok', capacity: Infinity };
   }
 
   const used = committed && Object.prototype.hasOwnProperty.call(committed, p.name)
     ? committed[p.name]
     : Number(p.soldToday) || 0;
 
-  const left = Math.max(0, limit - used);
-  const bar  = shortNotice ? hideThreshold(p) : 0;
+  const capacity = capacityFor(limit, leadDays);
+  const left     = Math.max(0, capacity - used);
+  const bar      = shortNotice ? hideThreshold(p) : 0;
 
-  if(left === 0)   return { left, orderable: false, state: 'out' };
-  if(left <= bar)  return { left, orderable: false, state: 'low' };
-  return { left, orderable: true, state: left <= bar + 3 ? 'nearly' : 'ok' };
+  if(left === 0)   return { left, capacity, orderable: false, state: 'out' };
+  if(left <= bar)  return { left, capacity, orderable: false, state: 'low' };
+  return { left, capacity, orderable: true, state: left <= bar + 3 ? 'nearly' : 'ok' };
 }
 
 /* Checked again at checkout, because a basket can sit for an hour

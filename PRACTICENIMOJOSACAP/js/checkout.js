@@ -527,28 +527,19 @@ async function placeOrder(){
      A lookup that fails lets the order through. The shop losing its
      connection should not stop people buying; the admin still sees the
      order and can cancel it. */
-  /* Capacity for the day the customer picked.
-
-     This always runs. Two clear days' notice lifts the low-stock
-     threshold — that buffer exists for orders the shop cannot
-     prepare for, and with warning it can — but it does not lift the
-     daily limit, because the limit is a day's baking. Skipping the
-     check on notice would mean fifty people could each order a day's
-     worth for the same Friday, every one waved through on their own,
-     and nothing would ever add up Friday.
-
-     Measured against that date, not today: a Friday order uses
-     Friday's capacity, which is usually empty, so ordering ahead
-     still works the way the cart promises. */
+  /* Capacity for the day the customer picked, sized by how long the
+     shop has to bake into it — see capacityFor() in js/stock.js. A
+     date days away is worth several days' baking, which is what lets
+     an ordinary bulk order through, while the date itself stays
+     capped so one Friday cannot be booked out from under the
+     kitchen. */
   const stockErrorEl = document.getElementById('stockError');
   if(stockErrorEl) stockErrorEl.style.display = 'none';
 
   const pickedRaw = localStorage.getItem('preferredDate');
   const pickedDay = pickedRaw ? orderDeliveryDay({ preferredDate: pickedRaw }) : null;
   const targetDay = pickedDay || todayISO();
-
-  const leadMs      = new Date(targetDay + 'T00:00:00') - new Date(todayISO() + 'T00:00:00');
-  const shortNotice = leadMs < 2 * 24 * 60 * 60 * 1000;
+  const leadDays  = leadDaysUntil(targetDay);
 
   try {
     const { data: rows } = await _supa.from('products').select('data');
@@ -561,21 +552,22 @@ async function placeOrder(){
          what stops a COD order the shop cannot bake: there is no
          payment to reject afterwards. */
       const committed = await loadCommitted(_supa, targetDay);
-      const short     = unavailableLines(cart, byName, committed, { shortNotice });
+      const short     = unavailableLines(cart, byName, committed, { leadDays });
 
       if(short.length && stockErrorEl){
         const dayLabel = new Date(targetDay + 'T00:00:00')
           .toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
 
         stockErrorEl.innerHTML =
-          `That date is full for some items:<br>` +
+          `We cannot fit all of this into ${dayLabel}:<br>` +
           short.map(s =>
             `<strong>${s.name}</strong>: ` + (
               s.state === 'low' ? 'we are low on this one and cannot promise it at short notice.'
-              : s.left          ? `you ordered ${s.wanted} but only ${s.left} more can be made on ${dayLabel}.`
-              :                   `${dayLabel} is fully booked for this item.`
+              : s.left          ? `you ordered ${s.wanted}, and we can still make ${s.left} for that date.`
+              :                   'that date is already fully booked for this item.'
             )).join('<br>') +
-          '<br><span style="font-weight:500">Please choose another delivery date, or reduce the quantity.</span>';
+          '<br><span style="font-weight:500">Choosing a later date gives us more time to bake, ' +
+          'or you can reduce the quantity.</span>';
         stockErrorEl.style.display = 'block';
         stockErrorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return;
