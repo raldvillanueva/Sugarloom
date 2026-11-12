@@ -556,7 +556,15 @@ function showLoginError(msg){
 function adminLogout(){
   /* Awaited so the entry reaches Supabase before the reload tears the
      page down — a fire-and-forget insert here is routinely lost. */
-  const done = () => { sessionStorage.removeItem('sl_admin_sess'); location.reload(); };
+  const done = () => {
+    sessionStorage.removeItem('sl_admin_sess');
+    /* Signing in again is arriving again, so the low-stock popup is due
+       again. Without this the marker outlived the session that set it
+       — sessionStorage belongs to the tab, not to the login — and
+       logging out and back in showed nothing. */
+    sessionStorage.removeItem(LOWSTOCK_SEEN_KEY);
+    location.reload();
+  };
   logAudit('Access', 'Signed out', currentUser?.email || '', '').then(done, done);
 }
 
@@ -672,7 +680,13 @@ function showApp(){
        not happen for hours. Raising it here means the popup reflects
        the stock as it is on arrival rather than as it was the last
        time somebody opened that page. */
-    await syncRestockForm({ quiet: true });
+    /* Caught rather than awaited bare: this runs inside a .then, so a
+       throw here would be swallowed as an unhandled rejection and take
+       the popup with it. A draft that already exists is still worth
+       showing even if raising a new one failed. */
+    try { await syncRestockForm({ quiet: true }); }
+    catch(e){ console.error('could not refresh the restock draft on sign-in:', e); }
+
     updateBadges();
     maybeShowLowStockPopup();
   });
@@ -3508,8 +3522,14 @@ function maybeShowLowStockPopup(){
 
   try {
     if(sessionStorage.getItem(LOWSTOCK_SEEN_KEY) === form.reference) return;
-    sessionStorage.setItem(LOWSTOCK_SEEN_KEY, form.reference);
   } catch { /* private mode — show it, which is the safer failure */ }
+
+  /* Nothing is marked as seen until it has actually been seen. Marking
+     first meant that anything going wrong below — a stale cached page
+     without this markup, say — spent the one showing on a popup that
+     never appeared, and nothing would appear again. */
+  const body = document.getElementById('lowstock-body');
+  if(!body) return;
 
   _lowStockFormId = form.id;
 
@@ -3519,7 +3539,7 @@ function maybeShowLowStockPopup(){
   });
   const out = lines.filter(l => l.priority === 'Out of stock').length;
 
-  document.getElementById('lowstock-body').innerHTML = `
+  body.innerHTML = `
     <p class="lowstock-lead">
       ${lines.length} ingredient${lines.length === 1 ? ' is' : 's are'} at or below the reorder point${
         out ? ` and <strong>${out}</strong> ${out === 1 ? 'is' : 'are'} out entirely` : ''
@@ -3542,6 +3562,7 @@ function maybeShowLowStockPopup(){
     </p>`;
 
   openModal('lowstock-modal');
+  try { sessionStorage.setItem(LOWSTOCK_SEEN_KEY, form.reference); } catch {}
 }
 
 function dismissLowStockPopup(){
