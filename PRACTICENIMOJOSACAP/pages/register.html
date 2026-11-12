@@ -38,7 +38,10 @@
       <span class="phone-code">🇵🇭 +63</span>
       <input id="phone" type="tel" placeholder="0917 123 4567" maxlength="16">
     </div>
-    <input id="password" type="password" placeholder="Password" style="margin-top:10px">
+    <div class="pw-field" style="margin-top:10px">
+      <input id="password" type="password" placeholder="Password">
+      <button type="button" class="pw-eye" onclick="togglePasswordEye(this)" aria-label="Show password"><i class='bx bx-hide'></i></button>
+    </div>
 
     <div class="pw-meter hidden" id="pw-meter">
       <div class="pw-bar">
@@ -48,7 +51,10 @@
       <ul class="pw-reqs" id="pw-reqs"></ul>
     </div>
 
-    <input id="confirm" type="password" placeholder="Confirm password" style="margin-top:10px">
+    <div class="pw-field" style="margin-top:10px">
+      <input id="confirm" type="password" placeholder="Confirm password">
+      <button type="button" class="pw-eye" onclick="togglePasswordEye(this)" aria-label="Show password"><i class='bx bx-hide'></i></button>
+    </div>
     <p class="pw-match hidden" id="pw-match"></p>
 
     <div id="reg-error" class="err-msg hidden" style="margin-top:6px"></div>

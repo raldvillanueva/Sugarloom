@@ -93,6 +93,31 @@ input[type="tel"] {
 input:focus { border-color: #1B5CE0; }
 input::placeholder { color: #BBBBBB; }
 
+/* ── SHOW PASSWORD ──
+   Sign-in, register and reset all share this stylesheet, so the eye is
+   defined once here instead of being pasted as inline styles into each
+   field that wants one. The input keeps room on its right for the
+   button rather than running underneath it. */
+.pw-field { position: relative; }
+.pw-field input { padding-right: 42px; }
+
+.pw-eye {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: #888;
+  display: flex;
+  align-items: center;
+  font-size: 18px;
+  transition: color 0.18s;
+}
+.pw-eye:hover { color: #555; }
+
 /* ── PHONE ROW ── */
 .phone-row {
   display: flex;

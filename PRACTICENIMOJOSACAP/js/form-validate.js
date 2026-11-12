@@ -29,8 +29,43 @@ function phoneWithZero(raw){
   return d ? '0' + d : null;
 }
 
+/* ── Obvious junk ──
+   9999999999 is a well-formed Philippine mobile number: 0999 is a real
+   Smart prefix and the shape is right, so the format rule above lets
+   it through. It is also what someone types when they do not want to
+   give a number.
+
+   The temptation is a list of assigned prefixes, and it is the wrong
+   answer here. The published lists disagree with each other, new
+   prefixes are issued, and number portability means a prefix no
+   longer says much anyway — this form has already been fixed once for
+   refusing people's real numbers, and a stale list would do it again.
+
+   So this only rejects what cannot be a real number rather than
+   guessing what is: fewer than three different digits in the whole
+   ten (9999999999, 9000000000, 9090909090), or the whole thing
+   counting up or down. 0917-111-1111 is a real sort of number, costs
+   a premium, and has three different digits — it still goes in.
+
+   None of this proves the number belongs to them. Only a code sent to
+   it does, and that is a separate job. */
+function looksLikeJunkNumber(digits){
+  if(new Set(digits).size < 3) return true;
+
+  const step = d => {
+    for(let i = 1; i < d.length; i++){
+      if(+d[i] - +d[i - 1] !== +d[1] - +d[0]) return false;
+    }
+    return true;
+  };
+  /* 1234567890 and 9876543210, but not a number that merely starts
+     with a run. */
+  return step(digits) && Math.abs(+digits[1] - +digits[0]) === 1;
+}
+
 function isValidPhone(raw){
-  return normalisePhoneDigits(raw) !== null;
+  const d = normalisePhoneDigits(raw);
+  return d !== null && !looksLikeJunkNumber(d);
 }
 
 function isValidEmail(raw){

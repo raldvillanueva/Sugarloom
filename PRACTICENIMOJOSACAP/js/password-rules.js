@@ -13,6 +13,38 @@
      </div>
      <p class="pw-match hidden" id="…"></p>                           */
 
+/* ── Show password ──
+   A typo in a box of dots is invisible, and the confirm field only
+   tells you the two disagree, never which one is wrong. Every password
+   field on the three auth pages carries the same button:
+
+     <div class="pw-field">
+       <input id="…" type="password">
+       <button type="button" class="pw-eye" onclick="togglePasswordEye(this)"
+               aria-label="Show password"><i class='bx bx-hide'></i></button>
+     </div>
+
+   The button finds its own field, so one function serves all of them. */
+function togglePasswordEye(btn){
+  const input = btn.parentNode.querySelector('input');
+  if(!input) return;
+
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+
+  const icon = btn.querySelector('i');
+  if(icon) icon.className = show ? 'bx bx-show' : 'bx bx-hide';
+  btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+
+  /* Changing the type drops the caret at the end, which is wrong if
+     they were fixing a character in the middle. */
+  try {
+    const at = input.selectionStart;
+    input.focus();
+    if(at != null) input.setSelectionRange(at, at);
+  } catch {}
+}
+
 const PW_RULES = [
   { id: 'len',   label: 'At least 8 characters',  test: v => v.length >= 8 },
   { id: 'upper', label: 'One uppercase letter',   test: v => /[A-Z]/.test(v) },

@@ -49,12 +49,9 @@
       <h2 class="auth-title">Enter your password</h2>
       <p class="auth-sub otp-sent-to">Signing in as <span id="password-email"></span></p>
 
-      <div style="position:relative">
-        <input id="password" type="password" placeholder="Password" style="padding-right:42px">
-        <button type="button" id="pw-eye" onclick="toggleLoginPassword()"
-                style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:#888;padding:0;display:flex;align-items:center">
-          <i class='bx bx-hide' id="pw-eye-icon" style="font-size:18px"></i>
-        </button>
+      <div class="pw-field">
+        <input id="password" type="password" placeholder="Password">
+        <button type="button" class="pw-eye" onclick="togglePasswordEye(this)" aria-label="Show password"><i class='bx bx-hide'></i></button>
       </div>
       <div id="password-error" class="err-msg hidden"></div>
 

@@ -115,13 +115,8 @@ function goToPassword() {
   document.getElementById('password').focus();
 }
 
-function toggleLoginPassword() {
-  const input = document.getElementById('password');
-  const icon  = document.getElementById('pw-eye-icon');
-  const show  = input.type === 'password';
-  input.type = show ? 'text' : 'password';
-  if (icon) icon.className = show ? 'bx bx-show' : 'bx bx-hide';
-}
+/* The eye lives in js/password-rules.js as togglePasswordEye(), shared
+   with the register and reset pages so all three behave the same. */
 
 /* Step 2 — check the password, then send the emailed code.
    Supabase verifies the password server-side and hands back a session.
@@ -354,16 +349,19 @@ document.addEventListener('DOMContentLoaded', () => {
   if (phoneInput) {
     /* #phone only lives on register.html now */
     phoneInput.addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
-    phoneInput.addEventListener('keypress', function(e) {
-      if (!/[0-9]/.test(e.key)) e.preventDefault();
-      if (this.value.length >= 10) e.preventDefault();
-    });
+
+    /* This used to strip everything but digits and cut the result to
+       ten characters, which is the truncation the field was supposed
+       to have stopped having: 09171234567 became 0917123456, a digit
+       short, and was then called invalid. Raising maxlength to 16 did
+       nothing while this was still running.
+
+       So it keeps the characters a phone number is written with —
+       the leading +, spaces, brackets, dashes — and normalisePhoneDigits
+       reduces them to the ten stored digits on save. One handler, so
+       pasting goes through the same path as typing. */
     phoneInput.addEventListener('input', function() {
-      this.value = this.value.replace(/[^0-9]/g, '').slice(0, 10);
-    });
-    phoneInput.addEventListener('paste', function(e) {
-      const paste = (e.clipboardData || window.clipboardData).getData('text');
-      if (!/^[0-9]+$/.test(paste)) e.preventDefault();
+      this.value = this.value.replace(/[^0-9+\s()-]/g, '').slice(0, 16);
     });
   }
 
