@@ -63,23 +63,44 @@ function toggleEditProfile(){
     document.getElementById("phoneInput").value = user.phone || "";
     viewEl.style.display = "none";
     editEl.style.display = "";
+    clearInvalid(editEl);
     document.getElementById("editProfileBtn").innerHTML = `Cancel`;
   }
 }
 
 async function saveProfile(){
-  const { data: { session } } = await _supa.auth.getSession();
-  if (!session) return;
-
   const fname = document.getElementById('fnameInput').value.trim();
   const lname = document.getElementById('lnameInput').value.trim();
   const phone = document.getElementById('phoneInput').value.trim();
+
+  /* Checked before the round trip, and each bad field marked where it
+     sits. This form saved whatever was typed — a name of emoji, a
+     phone number that was not one. */
+  clearInvalid(document.getElementById('profileEditForm'));
+  let bad = false;
+
+  if(!fname)                { markInvalid('fnameInput', 'Enter your first name'); bad = true; }
+  else if(!isValidName(fname)) { markInvalid('fnameInput', 'Letters only — no emoji or symbols'); bad = true; }
+
+  if(!lname)                { markInvalid('lnameInput', 'Enter your last name'); bad = true; }
+  else if(!isValidName(lname)) { markInvalid('lnameInput', 'Letters only — no emoji or symbols'); bad = true; }
+
+  /* Optional, because accounts made before the field existed have no
+     number — but if there is one it has to be a number. */
+  if(phone && !isValidPhone(phone)) { markInvalid('phoneInput', 'Enter a mobile number like 0917 123 4567'); bad = true; }
+
+  if(bad) { focusFirstInvalid(); return; }
+
+  const { data: { session } } = await _supa.auth.getSession();
+  if (!session) return;
 
   // Fetch current profile to preserve addresses
   const { data: row } = await _supa.from('profiles').select('data').eq('id', session.user.id).single();
   const current = row?.data || {};
 
-  const updated = { ...current, fname, lname, phone };
+  /* Stored as the ten digits whatever spelling was typed, the same as
+     registration — see CLAUDE.md. */
+  const updated = { ...current, fname, lname, phone: phone ? (normalisePhoneDigits(phone) || phone) : '' };
   await _supa.from('profiles').upsert({ id: session.user.id, data: updated });
 
   // Refresh localStorage cache
@@ -97,13 +118,30 @@ function toggleAddressForm(){
   if(form.style.display !== "none"){
     document.getElementById("addrInput").value = "";
     document.getElementById("cityInput").value = "";
+    /* Reopening the form should not reopen last time's complaints. */
+    clearInvalid(form);
   }
 }
 
 async function saveAddress(){
   const addr = document.getElementById('addrInput').value.trim();
   const city = document.getElementById('cityInput').value.trim();
-  if (!addr || !city) { alert('Please fill in both fields.'); return; }
+
+  /* An address is not free text. A courier reads it and it is typed
+     into a delivery booking, so what goes in has to be an address —
+     emoji and symbols are only the most obvious way it was not. The
+     alert() this replaces also named neither field. */
+  clearInvalid(document.getElementById('addressForm'));
+  let bad = false;
+
+  if(!addr)                    { markInvalid('addrInput', 'Enter your street address'); bad = true; }
+  else if(addr.length < 5)     { markInvalid('addrInput', 'That looks too short for an address'); bad = true; }
+  else if(!isValidAddress(addr)) { markInvalid('addrInput', 'Letters, numbers and , . - # / only — no emoji'); bad = true; }
+
+  if(!city)                    { markInvalid('cityInput', 'Enter your city'); bad = true; }
+  else if(!isValidName(city))  { markInvalid('cityInput', 'Letters only — no emoji or symbols'); bad = true; }
+
+  if(bad) { focusFirstInvalid(); return; }
 
   const { data: { session } } = await _supa.auth.getSession();
   if (!session) return;
@@ -134,9 +172,12 @@ function loadAddresses(){
 
   list.innerHTML = addresses.map((a, i) => `
     <div class="address-item">
+      <!-- Escaped like any other text from the database. The new rule
+           keeps < and > out of an address, but addresses saved before
+           it exists are still in there. -->
       <div class="address-item-text">
-        <p>${a.address}</p>
-        <p class="city-text">${a.city}</p>
+        <p>${escOrderText(a.address)}</p>
+        <p class="city-text">${escOrderText(a.city)}</p>
       </div>
       <span class="remove-addr" onclick="removeAddress(${i})">✕</span>
     </div>

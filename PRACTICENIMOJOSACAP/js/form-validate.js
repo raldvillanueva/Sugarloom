@@ -37,6 +37,29 @@ function isValidEmail(raw){
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(raw || '').trim());
 }
 
+/* ── Names and addresses ──
+   A whitelist rather than a list of things to ban. Emoji are only the
+   visible half of the problem: an address is read by a courier and
+   typed into a delivery booking, and anything that is not a letter, a
+   digit or ordinary punctuation does not survive that trip. Banning
+   emoji one block at a time means chasing every new release of
+   Unicode; saying what an address is made of does not.
+
+   \p{L} is any letter in any script, so Ñ, é and non-Latin names pass
+   — this is a Philippine address field, not an ASCII one. */
+const NAME_CHARS = /^[\p{L} .'\-]+$/u;
+const ADDRESS_CHARS = /^[\p{L}\p{N} .,'\-#/&()]+$/u;
+
+function isValidName(raw){
+  const s = String(raw == null ? '' : raw).trim();
+  return s.length > 0 && NAME_CHARS.test(s);
+}
+
+function isValidAddress(raw){
+  const s = String(raw == null ? '' : raw).trim();
+  return s.length > 0 && ADDRESS_CHARS.test(s);
+}
+
 /* ── Marking a field ──
    The message goes next to the box it is about and the box is
    outlined, because a notice at the top of a long form does not tell

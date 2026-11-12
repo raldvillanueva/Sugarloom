@@ -118,13 +118,17 @@
         <!-- EDIT MODE -->
         <div id="profileEditForm" style="display:none">
           <p class="label">First Name</p>
-          <input class="profile-input" id="fnameInput" placeholder="First name">
+          <input class="profile-input" id="fnameInput" placeholder="First name" data-maxlen="40">
           <p class="label">Last Name</p>
-          <input class="profile-input" id="lnameInput" placeholder="Last name">
+          <input class="profile-input" id="lnameInput" placeholder="Last name" data-maxlen="40">
           <p class="label">Email</p>
           <input class="profile-input" id="emailInput" placeholder="Email">
           <p class="label">Phone</p>
-          <input class="profile-input" id="phoneInput" placeholder="9XX XXX XXXX" maxlength="10" inputmode="numeric">
+          <!-- 16, not 10: 09171234567 and +63 917 123 4567 are the same
+               number and both are longer than the ten digits stored. A
+               10 here silently ate the last digit and then called the
+               result invalid — the same bug the register form had. -->
+          <input class="profile-input" id="phoneInput" placeholder="0917 123 4567" maxlength="16" inputmode="tel">
           <div class="profile-actions">
             <button class="save-btn" onclick="saveProfile()">Save</button>
             <button class="cancel-btn" onclick="toggleEditProfile()">Cancel</button>
@@ -145,8 +149,8 @@
 
         <!-- ADD FORM -->
         <div id="addressForm" style="display:none">
-          <input class="profile-input" id="addrInput" placeholder="Street address">
-          <input class="profile-input" id="cityInput" placeholder="City" style="margin-top:8px">
+          <input class="profile-input" id="addrInput" placeholder="House no., street, barangay" data-maxlen="120">
+          <input class="profile-input" id="cityInput" placeholder="City" style="margin-top:8px" data-maxlen="60">
           <div class="profile-actions">
             <button class="save-btn" onclick="saveAddress()">Save</button>
             <button class="cancel-btn" onclick="toggleAddressForm()">Cancel</button>
