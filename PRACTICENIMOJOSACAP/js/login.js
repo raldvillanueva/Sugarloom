@@ -350,19 +350,10 @@ document.addEventListener('DOMContentLoaded', () => {
     /* #phone only lives on register.html now */
     phoneInput.addEventListener('keydown', e => { if (e.key === 'Enter') register(); });
 
-    /* This used to strip everything but digits and cut the result to
-       ten characters, which is the truncation the field was supposed
-       to have stopped having: 09171234567 became 0917123456, a digit
-       short, and was then called invalid. Raising maxlength to 16 did
-       nothing while this was still running.
-
-       So it keeps the characters a phone number is written with —
-       the leading +, spaces, brackets, dashes — and normalisePhoneDigits
-       reduces them to the ten stored digits on save. One handler, so
-       pasting goes through the same path as typing. */
-    phoneInput.addEventListener('input', function() {
-      this.value = this.value.replace(/[^0-9+\s()-]/g, '').slice(0, 16);
-    });
+    /* The trimming is data-phone in the markup, handled by
+       form-validate.js. It used to be here, stripping everything but
+       digits and cutting to ten characters — the truncation this field
+       was supposed to have stopped having. */
   }
 
   setupOtpBoxes('otp-inputs', { onComplete: submitOTP });

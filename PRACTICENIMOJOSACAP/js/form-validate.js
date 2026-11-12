@@ -23,6 +23,37 @@ function normalisePhoneDigits(raw){
   return null;
 }
 
+/* ── While they type ──
+   The box has to hold the longest spelling of the number, which is
+   +63 (917) 123-4567. Counting that as characters and stopping at 18
+   let someone type eighteen bare digits — a cap that only bites when
+   the value is already nonsense is not a cap.
+
+   So the limit is on digits. Twelve is the longest a real number
+   reaches: 639171234567. Spaces and brackets cost nothing against it,
+   and the thirteenth digit simply does not appear. */
+const PHONE_MAX_DIGITS = 12;
+
+function trimPhoneInput(raw){
+  const s = String(raw == null ? '' : raw);
+  let digits = 0, out = '';
+
+  for(let i = 0; i < s.length; i++){
+    const ch = s[i];
+    /* A + is the country prefix, so it belongs at the front or not
+       at all. */
+    if(ch === '+'){ if(out === '') out = '+'; continue; }
+    if(!/[0-9\s()-]/.test(ch)) continue;
+
+    if(ch >= '0' && ch <= '9'){
+      if(digits >= PHONE_MAX_DIGITS) continue;
+      digits++;
+    }
+    out += ch;
+  }
+  return out;
+}
+
 /* The same number in the eleven-digit form GCash prints. */
 function phoneWithZero(raw){
   const d = normalisePhoneDigits(raw);
@@ -230,7 +261,32 @@ function applyCharFilters(scope){
   });
 }
 
+/* <input id="phone" data-phone> — the same trimming wherever a number
+   is typed, rather than each page carrying its own idea of it. The
+   profile page had none at all, so its box took whatever fitted in
+   maxlength. */
+function applyPhoneInputs(scope){
+  (scope || document).querySelectorAll('input[data-phone]').forEach(el => {
+    if(el.dataset.phoneOn) return;
+    el.dataset.phoneOn = '1';
+
+    const run = () => {
+      const before = el.value;
+      const after  = trimPhoneInput(before);
+      if(after === before) return;
+
+      const pos  = typeof el.selectionStart === 'number' ? el.selectionStart : before.length;
+      const kept = trimPhoneInput(before.slice(0, pos)).length;
+      el.value = after;
+      try { el.setSelectionRange(kept, kept); } catch {}
+    };
+    el.addEventListener('input', run);
+    el.addEventListener('change', run);
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   applyFieldLimits();
   applyCharFilters();
+  applyPhoneInputs();
 });

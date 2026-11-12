@@ -833,19 +833,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     radio.addEventListener("change", () => updatePlaceOrderBtn());
   });
 
-  /* Keeps the characters a phone number is written with and leaves the
-     reducing to normalisePhoneDigits on save.
-
-     The old version dropped a leading 0 and then cut to ten, which
-     handled 09171234567 and mangled +63 917 123 4567 into 6391711234 —
-     and the ten-character cap meant that spelling could not be typed
-     out in the first place. */
-  function applyPhoneRestrictions(input){
-    if(!input) return;
-    input.addEventListener("input", function(){
-      this.value = this.value.replace(/[^0-9+\s()-]/g, "").slice(0, 16);
-    });
-  }
-
-  applyPhoneRestrictions(document.getElementById("phone"));
+  /* The phone box is trimmed by data-phone in the markup, in
+     form-validate.js. This page used to do its own: drop a leading 0,
+     then cut to ten, which handled 09171234567 and turned
+     +63 917 123 4567 into 6391711234. */
 });
