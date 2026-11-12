@@ -24,20 +24,30 @@ function normalisePhoneDigits(raw){
 }
 
 /* ── While they type ──
-   The box has to hold the longest spelling of the number, which is
-   +63 (917) 123-4567. Counting that as characters and stopping at 18
-   let someone type eighteen bare digits — a cap that only bites when
-   the value is already nonsense is not a cap.
+   A Philippine mobile number is ten digits. How many a box should
+   take depends on how it is being written, and a single number for
+   all three spellings is wrong for two of them:
 
-   So the limit is on digits. Twelve is the longest a real number
-   reaches: 639171234567. Spaces and brackets cost nothing against it,
-   and the thirteenth digit simply does not appear. */
-const PHONE_MAX_DIGITS = 12;
+     9171234567     10 — the number itself
+     09171234567    11 — the national trunk 0
+     639171234567   12 — the country code instead of that 0
+
+   One flat limit of twelve let 094939978999 be typed into a field
+   that already shows +63 beside it. So the limit follows what is
+   there: the leading digits say which spelling this is. Nothing is
+   ambiguous — a local number starts 9, so one starting 0 or 63 can
+   only be the longer form. */
+function phoneDigitLimit(digits){
+  if(digits.startsWith('63')) return 12;
+  if(digits.startsWith('0'))  return 11;
+  return 10;
+}
 
 function trimPhoneInput(raw){
   const s = String(raw == null ? '' : raw);
-  let digits = 0, out = '';
+  const limit = phoneDigitLimit(s.replace(/[^0-9]/g, ''));
 
+  let digits = 0, out = '';
   for(let i = 0; i < s.length; i++){
     const ch = s[i];
     /* A + is the country prefix, so it belongs at the front or not
@@ -46,7 +56,7 @@ function trimPhoneInput(raw){
     if(!/[0-9\s()-]/.test(ch)) continue;
 
     if(ch >= '0' && ch <= '9'){
-      if(digits >= PHONE_MAX_DIGITS) continue;
+      if(digits >= limit) continue;
       digits++;
     }
     out += ch;
