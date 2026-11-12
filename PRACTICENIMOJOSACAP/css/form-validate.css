@@ -18,9 +18,24 @@ textarea.field-invalid:focus {
   box-shadow: 0 0 0 3px rgba(220, 38, 38, .14);
 }
 
-/* Sits under the field it is about. A notice at the top of a long
-   form does not tell anyone which box to go back to. */
+/* A field that is a box with something beside it — the +63 chip, the
+   show-password eye, a floating label — draws its border on the
+   wrapper, so the wrapper is what has to turn red. The helper marks
+   both, and the inner box picks up the tint from the rule above. */
+.phone-row.field-invalid,
+.phone-field.field-invalid,
+.pw-field.field-invalid,
+.field-wrap.field-invalid {
+  border-color: #dc2626;
+}
+
+/* Sits under the field it is about, never beside it. A notice at the
+   top of a long form does not tell anyone which box to go back to,
+   and one inside a row that lays its children out side by side ends
+   up next to the number rather than under it. */
 .field-error {
+  display: block;
+  width: 100%;
   margin: 4px 0 0;
   font-size: 11.5px;
   line-height: 1.45;

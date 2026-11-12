@@ -149,12 +149,29 @@ function isValidAddress(raw){
    The message goes next to the box it is about and the box is
    outlined, because a notice at the top of a long form does not tell
    anyone which field to go back to. */
+/* Some fields are a box with something beside them — the +63 chip on a
+   phone row, the eye on a password, a floating label. Those wrappers
+   lay their children out in a row, so a message inserted next to the
+   input became a column in that row and sat alongside the number
+   instead of under the field. The message goes after the whole
+   wrapper, which is also what the reader thinks of as "the field". */
+const FIELD_WRAPPERS = '.phone-row, .phone-field, .pw-field, .field-wrap';
+
+function fieldHost(el){
+  return (el.closest && el.closest(FIELD_WRAPPERS)) || el;
+}
+
 function markInvalid(input, msg){
   const el = typeof input === 'string' ? document.getElementById(input) : input;
   if(!el) return false;
 
   el.classList.add('field-invalid');
   el.setAttribute('aria-invalid', 'true');
+
+  /* The border of a wrapped field is drawn on the wrapper, not on the
+     box inside it, so marking only the input would outline nothing. */
+  const host = fieldHost(el);
+  if(host !== el) host.classList.add('field-invalid');
 
   const id = el.id || '';
   document.querySelectorAll(`.field-error[data-for="${id}"]`).forEach(e => e.remove());
@@ -163,12 +180,13 @@ function markInvalid(input, msg){
   err.className = 'field-error';
   err.dataset.for = id;
   err.textContent = msg;
-  (el.parentNode || el).insertBefore(err, el.nextSibling);
+  (host.parentNode || host).insertBefore(err, host.nextSibling);
 
   /* Clears as soon as they start fixing it, rather than sitting there
      contradicting what is now in the box. */
   const clear = () => {
     el.classList.remove('field-invalid');
+    host.classList.remove('field-invalid');
     el.removeAttribute('aria-invalid');
     document.querySelectorAll(`.field-error[data-for="${id}"]`).forEach(e => e.remove());
     el.removeEventListener('input', clear);
@@ -209,7 +227,9 @@ function attachCounter(el, max){
 
   const out = document.createElement('small');
   out.className = 'field-count';
-  (el.parentNode || el).insertBefore(out, el.nextSibling);
+  /* After the wrapper, for the same reason the error message is. */
+  const host = fieldHost(el);
+  (host.parentNode || host).insertBefore(out, host.nextSibling);
 
   const paint = () => {
     const n = el.value.length;
