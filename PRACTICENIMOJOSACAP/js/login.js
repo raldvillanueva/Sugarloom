@@ -230,7 +230,7 @@ async function submitOTP() {
   }
 
   await storeSession(data.user);
-  showMsg('Login successful');
+  showMsg('Login successful', 'success');
   setTimeout(() => { window.location.href = 'homepage.html'; }, 1200);
 }
 
@@ -321,7 +321,7 @@ function goToLogin()     { window.location.href = '../pages/login.html'; }
 function forgotPassword(){
   const email = document.getElementById('email')?.value.trim();
   if (email) sessionStorage.setItem('sl_reset_email', email);
-  showMsg('Redirecting...');
+  showMsg('Redirecting...', 'success');
   setTimeout(() => { window.location.href = '../pages/forgot.html'; }, 800);
 }
 function goBack()        { window.location.href = '../pages/homepage.html'; }
