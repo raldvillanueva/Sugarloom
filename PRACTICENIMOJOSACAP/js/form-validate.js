@@ -50,6 +50,15 @@ function isValidEmail(raw){
 const NAME_CHARS = /^[\p{L} .'\-]+$/u;
 const ADDRESS_CHARS = /^[\p{L}\p{N} .,'\-#/&()]+$/u;
 
+/* The same two sets, inverted, for stripping as someone types. One
+   definition would be neater than two, but a regex cannot be both
+   anchored and global, and the pair is checked against each other in
+   the tests. */
+const FIELD_CHARSETS = {
+  name:    /[^\p{L} .'\-]/gu,
+  address: /[^\p{L}\p{N} .,'\-#/&()]/gu,
+};
+
 function isValidName(raw){
   const s = String(raw == null ? '' : raw).trim();
   return s.length > 0 && NAME_CHARS.test(s);
@@ -146,4 +155,47 @@ function applyFieldLimits(scope){
   });
 }
 
-document.addEventListener('DOMContentLoaded', () => applyFieldLimits());
+/* ── Stopping it at the keyboard ──
+   Rejecting an emoji address after the fact is a worse experience
+   than not accepting the emoji: the whole point of a rule nobody
+   means to break is that it should be impossible to break by
+   accident. The character simply does not appear, the way maxlength
+   stops the eleventh digit without an argument about it.
+
+   The submit-time check stays. This handles typing and pasting; it
+   does not handle a value set by autofill, a browser extension or the
+   console, and a rule that only lives in the keyboard is not a rule. */
+function filterChars(el, strip){
+  const before = el.value;
+  const after  = before.replace(strip, '');
+  if(after === before) return;
+
+  /* Where the caret ends up is the length of the kept text before it,
+     otherwise pasting into the middle of an address throws the cursor
+     to the end. */
+  const pos = typeof el.selectionStart === 'number' ? el.selectionStart : before.length;
+  const kept = before.slice(0, pos).replace(strip, '').length;
+
+  el.value = after;
+  try { el.setSelectionRange(kept, kept); } catch {}
+}
+
+/* Applies the set named in the markup: <input data-chars="address">. */
+function applyCharFilters(scope){
+  (scope || document).querySelectorAll('[data-chars]').forEach(el => {
+    const strip = FIELD_CHARSETS[el.dataset.chars];
+    if(!strip || el.dataset.charsOn) return;
+    el.dataset.charsOn = '1';
+
+    const run = () => filterChars(el, strip);
+    el.addEventListener('input', run);
+    /* Autofill and drag-and-drop do not always raise input. */
+    el.addEventListener('change', run);
+    el.addEventListener('blur', run);
+  });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  applyFieldLimits();
+  applyCharFilters();
+});

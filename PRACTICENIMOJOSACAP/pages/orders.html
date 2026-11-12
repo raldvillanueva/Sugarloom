@@ -118,9 +118,9 @@
         <!-- EDIT MODE -->
         <div id="profileEditForm" style="display:none">
           <p class="label">First Name</p>
-          <input class="profile-input" id="fnameInput" placeholder="First name" data-maxlen="40">
+          <input class="profile-input" id="fnameInput" placeholder="First name" data-maxlen="40" data-chars="name">
           <p class="label">Last Name</p>
-          <input class="profile-input" id="lnameInput" placeholder="Last name" data-maxlen="40">
+          <input class="profile-input" id="lnameInput" placeholder="Last name" data-maxlen="40" data-chars="name">
           <p class="label">Email</p>
           <input class="profile-input" id="emailInput" placeholder="Email">
           <p class="label">Phone</p>
@@ -149,8 +149,8 @@
 
         <!-- ADD FORM -->
         <div id="addressForm" style="display:none">
-          <input class="profile-input" id="addrInput" placeholder="House no., street, barangay" data-maxlen="120">
-          <input class="profile-input" id="cityInput" placeholder="City" style="margin-top:8px" data-maxlen="60">
+          <input class="profile-input" id="addrInput" placeholder="House no., street, barangay" data-maxlen="120" data-chars="address">
+          <input class="profile-input" id="cityInput" placeholder="City" style="margin-top:8px" data-maxlen="60" data-chars="name">
           <div class="profile-actions">
             <button class="save-btn" onclick="saveAddress()">Save</button>
             <button class="cancel-btn" onclick="toggleAddressForm()">Cancel</button>
