@@ -386,6 +386,10 @@ button {
   padding: 24px 0;
 }
 
+/* Only the two review panels carry this, and exactly one of them is
+   shown at a time — the page has no other use for it. */
+.hidden { display: none !important; }
+
 /* WRITE REVIEW FORM */
 .write-review {
   background: var(--bg-2);
@@ -420,6 +424,50 @@ button {
 
 .write-review input:focus,
 .write-review textarea:focus { border-color: #aaa; }
+
+/* Whose name is about to be published, shown before they write rather
+   than after they post. */
+.posting-as {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: -2px 0 2px;
+}
+.posting-as strong { color: var(--text); font-weight: 600; }
+
+/* SIGNED OUT — the reviews below still read normally */
+.review-signin {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 22px 18px;
+  text-align: center;
+}
+
+.review-signin i {
+  font-size: 26px;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 6px;
+}
+
+.review-signin p {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 0 0 14px;
+}
+
+.review-signin-btn {
+  display: inline-block;
+  background: var(--text);
+  color: var(--bg-card);
+  padding: 10px 26px;
+  border-radius: 30px;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: opacity var(--transition);
+}
+.review-signin-btn:hover { opacity: 0.85; }
 
 .star-picker {
   display: flex;

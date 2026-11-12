@@ -112,8 +112,11 @@
       </div>
     </div>
 
-    <div class="write-review">
+    <!-- Signed in: the name comes from the account, so there is nothing
+         to type and nothing to get wrong. -->
+    <div class="write-review hidden" id="write-review">
       <h3>Write a Review</h3>
+      <p class="posting-as">Posting as <strong id="posting-as-name"></strong></p>
       <div id="star-picker" class="star-picker">
         <span data-v="1">★</span>
         <span data-v="2">★</span>
@@ -121,9 +124,15 @@
         <span data-v="4">★</span>
         <span data-v="5">★</span>
       </div>
-      <input id="reviewer-name" placeholder="Your name">
       <textarea id="review-text" rows="3" data-maxlen="400" placeholder="Share your experience..."></textarea>
       <button class="submit-review-btn" onclick="submitReview()">Post Review</button>
+    </div>
+
+    <!-- Signed out: the reviews below still read normally. -->
+    <div class="review-signin hidden" id="review-signin">
+      <i class='bx bx-user-circle'></i>
+      <p>Sign in to leave a review for this product.</p>
+      <a class="review-signin-btn" href="../pages/login.html">Sign in</a>
     </div>
 
     <div class="review-list" id="review-list"></div>

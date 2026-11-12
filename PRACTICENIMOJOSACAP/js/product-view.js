@@ -126,6 +126,49 @@ document.addEventListener("DOMContentLoaded", loadProduct);
 
 let selectedStars = 0;
 
+/* Who is writing. The form used to ask for a name, which meant a
+   signed-in customer typed one the account already knew, and anyone
+   at all could post under any name they liked. Both go away together:
+   the name comes from the account, and without an account there is no
+   form — only the reviews, which read the same signed in or out. */
+function reviewAuthor() {
+  if (localStorage.getItem("loggedIn") !== "true") return null;
+
+  let user;
+  try { user = JSON.parse(localStorage.getItem("loggedInUser")) || {}; }
+  catch { return null; }
+  if (!user.email) return null;
+
+  /* A surname initial rather than the whole name: a review is public
+     and permanent, and the shop should not publish more of a
+     customer's name than the review needs. Accounts made before the
+     profile was filled in have no name at all, so the address is the
+     last resort — the part before the @, never the domain. */
+  const fname = (user.fname || "").trim();
+  const lname = (user.lname || "").trim();
+  const name =
+    fname && lname ? `${fname} ${lname[0].toUpperCase()}.` :
+    fname          ? fname :
+                     user.email.split("@")[0];
+
+  return { name, email: user.email };
+}
+
+/* Shows the form or the sign-in prompt, never both. */
+function renderReviewForm() {
+  const form   = document.getElementById("write-review");
+  const signin = document.getElementById("review-signin");
+  if (!form || !signin) return;
+
+  const author = reviewAuthor();
+  form.classList.toggle("hidden", !author);
+  signin.classList.toggle("hidden", !!author);
+
+  if (author) {
+    document.getElementById("posting-as-name").textContent = author.name;
+  }
+}
+
 function reviewKey() {
   const data = JSON.parse(localStorage.getItem("selectedProduct"));
   return "reviews_" + (data ? data.name : "product");
@@ -183,16 +226,22 @@ function escapeHTML(str) {
 }
 
 function submitReview() {
-  const name = document.getElementById("reviewer-name").value.trim();
+  /* Checked here as well as in the markup: hiding the form is for the
+     customer's benefit, not a lock. */
+  const author = reviewAuthor();
+  if (!author) { showToast("Please sign in to leave a review"); renderReviewForm(); return; }
+
   const text = document.getElementById("review-text").value.trim();
 
-  if (!name) { showToast("Please enter your name"); return; }
   if (!selectedStars) { showToast("Please select a star rating"); return; }
   if (!text) { showToast("Please write a review"); return; }
 
   const reviews = getReviews();
   reviews.push({
-    name,
+    name: author.name,
+    /* Kept so the admin can tell two "Gerald V."s apart, and is never
+       rendered on the product page. */
+    email: author.email,
     stars: selectedStars,
     text,
     date: new Date().toLocaleDateString("en-PH", { year: "numeric", month: "short", day: "numeric" }),
@@ -200,7 +249,6 @@ function submitReview() {
   });
   saveReviews(reviews);
 
-  document.getElementById("reviewer-name").value = "";
   document.getElementById("review-text").value = "";
   setStars(0);
   renderReviews();
@@ -224,5 +272,6 @@ document.addEventListener("DOMContentLoaded", () => {
     s.addEventListener("mouseleave", () => setStars(selectedStars));
     s.addEventListener("click", () => setStars(parseInt(s.dataset.v)));
   });
+  renderReviewForm();
   renderReviews();
 });
