@@ -58,6 +58,7 @@
   <span id="reviewsTab" onclick="showView('reviewsView')">Reviews</span>
   <span id="buyAgainTab" onclick="showView('buyAgainView')">Buy Again</span>
   <span id="profileTab" onclick="showView('profileView')">Profile</span>
+  <span id="settingsTab" onclick="showView('settingsView')">Settings</span>
 </div>
 
 <!-- 🔥 ORDERS VIEW -->
@@ -181,15 +182,11 @@
         </div>
       </div>
 
-      <div class="summary settings-card">
-        <div class="settings-row">
-          <div class="settings-info">
-            <strong>Delete Account</strong>
-            <p>Permanently delete your account and all associated data. This action cannot be undone.</p>
-          </div>
-          <button class="settings-btn-outline-danger">Delete Account</button>
-        </div>
-      </div>
+      <!-- No Delete Account. A customer's account carries the order
+           history the shop is required to keep, so deleting it is not
+           something the customer can be given a button for. The button
+           that used to sit here had no handler at all, which promised
+           something the system could not do. -->
 
     </div>
   </div>

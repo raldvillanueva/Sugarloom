@@ -176,26 +176,35 @@ async function logoutAll(){
 }
 
 // 🔥 SHOW VIEW FUNCTION
+/* Which tab belongs to which view, and what to draw on arrival.
+   This was a chain of ifs ending in an else, so Settings — which
+   matched none of them — fell through and lit the Profile tab: the
+   page changed, the tab said otherwise. A table cannot drift like
+   that, because every view names its own tab. */
+const VIEW_TABS = {
+  ordersView:   { tab: 'ordersTab' },
+  reviewsView:  { tab: 'reviewsTab',  render: () => renderReviews() },
+  buyAgainView: { tab: 'buyAgainTab', render: () => renderBuyAgain() },
+  profileView:  { tab: 'profileTab' },
+  settingsView: { tab: 'settingsTab' },
+};
+
 function showView(view){
+  const entry = VIEW_TABS[view];
+  if(!entry) return;
+
   document.querySelectorAll(".view").forEach(v => v.classList.remove("active"));
   document.getElementById(view).classList.add("active");
 
-  document.getElementById("ordersTab").classList.remove("active");
-  document.getElementById("reviewsTab").classList.remove("active");
-  document.getElementById("buyAgainTab").classList.remove("active");
-  document.getElementById("profileTab").classList.remove("active");
+  Object.values(VIEW_TABS).forEach(v =>
+    document.getElementById(v.tab)?.classList.remove("active"));
+  document.getElementById(entry.tab)?.classList.add("active");
 
-  if(view === "ordersView"){
-    document.getElementById("ordersTab").classList.add("active");
-  } else if(view === "reviewsView"){
-    document.getElementById("reviewsTab").classList.add("active");
-    renderReviews();
-  } else if(view === "buyAgainView"){
-    document.getElementById("buyAgainTab").classList.add("active");
-    renderBuyAgain();
-  } else {
-    document.getElementById("profileTab").classList.add("active");
-  }
+  /* Profile and Settings are reachable from the account menu, and the
+     menu is what is covering the view they just opened. */
+  document.getElementById("dropdown")?.classList.remove("show");
+
+  entry.render?.();
 }
 
 /* ── ARRIVING FROM A NOTIFICATION ──
@@ -244,7 +253,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   const userIcon = document.getElementById('userIcon');
   const dropdown = document.getElementById('dropdown');
 
-  userIcon.onclick = () => { dropdown.classList.toggle('show'); };
+  userIcon.onclick = e => { e.stopPropagation(); dropdown.classList.toggle('show'); };
+
+  /* It only closed by clicking the icon again, so picking Profile or
+     Settings left the menu sitting over the view it had just opened. */
+  document.addEventListener('click', e => {
+    if(!dropdown.contains(e.target) && !userIcon.contains(e.target)) {
+      dropdown.classList.remove('show');
+    }
+  });
 
   showView('ordersView');
   await loadProfile();

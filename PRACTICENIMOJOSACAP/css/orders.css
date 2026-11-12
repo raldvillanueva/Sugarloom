@@ -89,6 +89,24 @@ body {
 
 .tabs span:hover { color: var(--pink); }
 
+/* Five pills do not fit a phone at this padding, and a tab that is off
+   the edge is a tab nobody finds. The row scrolls sideways instead of
+   wrapping, so the tabs stay one line and keep their order. */
+@media (max-width: 760px) {
+  .tabs {
+    padding: 14px 16px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs span {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
+
 /* VIEW SWITCH */
 .view { display: none; }
 .view.active { display: block; }
