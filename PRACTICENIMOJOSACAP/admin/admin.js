@@ -662,11 +662,19 @@ function showApp(){
   const notifBtn = document.querySelector('.notif-btn');
   if(notifBtn) notifBtn.style.display = isStaff ? 'none' : '';
 
-  syncStoreOrders().then(() => {
+  syncStoreOrders().then(async () => {
     switchView(homeView());
     updateBadges();
     buildNotifs();
     renderNotifPanel();
+
+    /* The draft is normally raised when Inventory renders, which may
+       not happen for hours. Raising it here means the popup reflects
+       the stock as it is on arrival rather than as it was the last
+       time somebody opened that page. */
+    await syncRestockForm({ quiet: true });
+    updateBadges();
+    maybeShowLowStockPopup();
   });
 
   // Poll every 3s for new customer orders + Lalamove tracking updates
@@ -3407,7 +3415,13 @@ const _restockAlerted = new Set();
    alerts the admin — it is never sent anywhere on its own. The draft
    is a proposal: the admin edits what is on it and how much, and
    nothing counts as ordered until they confirm it. */
-async function syncRestockForm(){
+async function syncRestockForm(opts){
+  /* Quiet at sign-in: the popup is about to say this louder, and being
+     told the same thing twice in two different ways reads as two
+     problems. The draft is still raised and still written to the
+     trail — only the toast is held back. */
+  const quiet = !!(opts && opts.quiet);
+
   const low = lowIngredients();
   let form  = draftRestockForm();
 
@@ -3463,12 +3477,86 @@ async function syncRestockForm(){
     const names = toAlert.map(i => i.name);
     const list  = names.length <= 2 ? names.join(' and ')
                 : `${names.slice(0,2).join(', ')} and ${names.length - 2} more`;
-    toast(`${list} running low — restock form ${form.reference} is waiting for your review`, 'warning');
+    if(!quiet) toast(`${list} running low — restock form ${form.reference} is waiting for your review`, 'warning');
     logAudit('Inventory', 'Restock draft raised', form.reference,
              `${toAlert.length} ingredient${toAlert.length === 1 ? '' : 's'}: ${names.join(', ')}`);
   }
 
   if(changed) updateBadges();
+}
+
+/* ── The sign-in popup ──
+   A toast fades, the bell has to be opened, and the Inventory badge is
+   a dot on a word. All three are easy to walk past, and an ingredient
+   at its reorder point is not a notice — it is orders that cannot be
+   baked. So the draft is put in front of the admin once, when they
+   arrive, with a button that takes them straight to it.
+
+   Once, not every render: the reference of the draft already shown is
+   kept in sessionStorage, so refreshing the page does not bring it
+   back. A new draft raised later has a new reference and does show. */
+const LOWSTOCK_SEEN_KEY = 'sl_admin_lowstock_seen';
+let _lowStockFormId = null;
+
+function maybeShowLowStockPopup(){
+  /* Only to someone who can act on it. A baker cannot open Inventory,
+     so telling them about a purchase order is noise. */
+  if(!canView('inventory')) return;
+
+  const form = draftRestockForm();
+  if(!form || !formLines(form).length) return;
+
+  try {
+    if(sessionStorage.getItem(LOWSTOCK_SEEN_KEY) === form.reference) return;
+    sessionStorage.setItem(LOWSTOCK_SEEN_KEY, form.reference);
+  } catch { /* private mode — show it, which is the safer failure */ }
+
+  _lowStockFormId = form.id;
+
+  const lines = formLines(form).slice().sort((a, b) => {
+    const rank = p => p === 'Out of stock' ? 0 : p === 'Urgent' ? 1 : 2;
+    return rank(a.priority) - rank(b.priority);
+  });
+  const out = lines.filter(l => l.priority === 'Out of stock').length;
+
+  document.getElementById('lowstock-body').innerHTML = `
+    <p class="lowstock-lead">
+      ${lines.length} ingredient${lines.length === 1 ? ' is' : 's are'} at or below the reorder point${
+        out ? ` and <strong>${out}</strong> ${out === 1 ? 'is' : 'are'} out entirely` : ''
+      }. A restock form is waiting for your review.
+    </p>
+    <table class="lowstock-table">
+      <thead><tr><th>Ingredient</th><th>In stock</th><th>Suggested</th><th></th></tr></thead>
+      <tbody>${lines.map(l => `
+        <tr>
+          <td>${escHTML(l.name)}</td>
+          <td>${l.currentStock} ${escHTML(l.unit || '')}</td>
+          <td>${rfOrderQty(l)} ${escHTML(l.unit || '')}</td>
+          <td><span class="rf-pri ${l.priority === 'Low' ? 'low' : 'urgent'}">${escHTML(l.priority || 'Low')}</span></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <p class="lowstock-note">
+      Nothing is ordered yet — the form is a proposal. You choose what to
+      buy and how much before it is sent.
+    </p>`;
+
+  openModal('lowstock-modal');
+}
+
+function dismissLowStockPopup(){
+  closeModal('lowstock-modal');
+}
+
+/* The "teleport": straight to Inventory with the form already open,
+   rather than closing the popup onto a dashboard and leaving them to
+   find it. */
+function openLowStockForm(){
+  closeModal('lowstock-modal');
+  switchView('inventory');
+  const id = _lowStockFormId;
+  /* After the view has rendered, or the editor opens behind it. */
+  setTimeout(() => { if(id) viewRestockForm(id); }, 120);
 }
 
 async function saveRestockForm(form){

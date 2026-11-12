@@ -918,6 +918,26 @@
 </div>
 
 <!-- Ingredient Modal -->
+<!-- Shown once on sign-in when a restock draft is waiting. The toast,
+     the bell and the Inventory badge all say the same thing quietly;
+     this is the one that cannot be walked past, because an ingredient
+     at its reorder point stops orders being baked. -->
+<div class="modal-overlay hidden" id="lowstock-modal">
+  <div class="modal lowstock-modal">
+    <div class="modal-header">
+      <h3><i class='bx bxs-error-circle'></i> Stock needs your attention</h3>
+      <button class="modal-close" onclick="dismissLowStockPopup()"><i class='bx bx-x'></i></button>
+    </div>
+    <div class="modal-body" id="lowstock-body"></div>
+    <div class="modal-footer">
+      <button class="btn-ghost" onclick="dismissLowStockPopup()">Later</button>
+      <button class="btn-primary" onclick="openLowStockForm()">
+        <i class='bx bx-clipboard'></i> Review restock form
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay hidden" id="ingredient-modal">
   <div class="modal">
     <div class="modal-header">

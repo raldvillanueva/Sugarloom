@@ -1728,6 +1728,53 @@ textarea { resize: vertical; }
 .rf-qty:disabled  { background: var(--bg-2, #f5f3ee); color: var(--text-3); }
 .rf-edit-table .u { color: var(--text-3); font-size: 11px; margin-left: 3px; }
 
+/* The priority pill. Written by the editor, the printed form and the
+   sign-in popup, and until now styled by none of them — it rendered as
+   bare text in all three. */
+.rf-pri {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
+.rf-pri.low    { background: #fef3c7; color: #92400e; }
+.rf-pri.urgent { background: #fee2e2; color: #b91c1c; }
+
+/* ── THE SIGN-IN POPUP ── */
+.lowstock-modal { max-width: 560px; }
+.lowstock-modal .modal-header h3 { display: flex; align-items: center; gap: 7px; }
+.lowstock-modal .modal-header h3 i { color: #dc2626; font-size: 19px; }
+
+.lowstock-lead {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-2);
+}
+.lowstock-lead strong { color: #b91c1c; }
+
+.lowstock-table { width: 100%; border-collapse: collapse; }
+.lowstock-table th {
+  text-align: left; font-size: 11px; font-weight: 600;
+  color: var(--text-3); text-transform: uppercase; letter-spacing: .4px;
+  padding: 0 0 6px; border-bottom: 1px solid var(--border);
+}
+.lowstock-table td {
+  padding: 9px 0; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.lowstock-table td:last-child { text-align: right; }
+
+.lowstock-note {
+  margin: 14px 0 0;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-3);
+}
+
 .rf-edit-add {
   display: flex; align-items: flex-end; gap: 10px;
   margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border);
