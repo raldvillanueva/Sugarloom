@@ -644,7 +644,12 @@
       <section id="view-customers" class="view">
         <div class="page-header">
           <div><h1>Customers</h1><p>All registered customers and their order info</p></div>
-          <div style="display:flex;gap:8px;align-items:center">
+          <div style="display:flex;gap:10px;align-items:center">
+            <span id="customers-removed-note" class="pill inactive" style="display:none"></span>
+            <label class="show-removed">
+              <input type="checkbox" id="customers-show-removed" onchange="toggleShowRemovedCustomers(this.checked)">
+              Show removed
+            </label>
             <input type="text" id="customer-search" class="search-box" placeholder="Search name or email..." oninput="renderCustomers()" style="width:220px">
           </div>
         </div>

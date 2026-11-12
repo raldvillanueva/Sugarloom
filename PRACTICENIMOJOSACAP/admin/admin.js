@@ -820,7 +820,10 @@ function switchView(view){
   if(view==='orders'){    loadOrderCapSetting(); syncStoreOrders().then(()=>renderOrders()); }
   if(view==='inventory')  renderInventory();
   if(view==='reports')    renderReports();
-  if(view==='customers')  renderCustomers();
+  /* Drawn straight away from what is already known, then redrawn once
+     the hidden list is back — opening the page should not wait on a
+     round trip. */
+  if(view==='customers'){ renderCustomers(); loadRemovedCustomers().then(renderCustomers); }
   if(view==='users')      renderUsers();
   if(view==='reviews')    renderAdminReviews();
   if(view==='content')    renderContent();
@@ -4754,6 +4757,106 @@ function exportCSV(){
 /* =============================================
    CUSTOMERS
    ============================================= */
+
+/* ── REMOVING A CUSTOMER ──
+   Read the warning before changing this. It does less than the button
+   says, and that is on purpose rather than by oversight.
+
+   The panel cannot delete a customer's account. `profiles` is the one
+   table with real row-level security — a row may only be touched by
+   the signed-in customer it belongs to — and the panel talks to
+   Supabase with the same public anon key a visitor has, so the
+   database sees an anonymous caller and refuses. The Supabase Auth
+   user behind it needs the service_role key, which is not in the
+   browser and must not be.
+
+   Nor should it delete their orders. This list is built FROM orders;
+   removing the customer by removing those would take the sales, the
+   transactions and the audit trail with it, to tidy up a list.
+
+   So removing hides them from this page and nothing else. They keep
+   their account, their orders stay in Orders and Reports, and they can
+   sign in and order again — at which point, deliberately, they come
+   back. It is for clearing test rows and junk sign-ups out of the way,
+   not for getting rid of a person. The confirmation says exactly that,
+   because a button called Delete that does less than it says is worse
+   than no button.
+
+   The list lives in app_settings, which the panel can write, rather
+   than a new table — nothing to migrate, and it is a preference about
+   a view, not a record about a person. */
+let _removedCustomers = new Set();
+let _showRemovedCustomers = false;
+
+async function loadRemovedCustomers(){
+  try {
+    const { data, error } = await _supa.from('app_settings')
+      .select('data').eq('id', 'removed_customers').maybeSingle();
+    if(error){ console.warn('removed customers unavailable:', error.message); return; }
+    const list = Array.isArray(data?.data?.emails) ? data.data.emails : [];
+    _removedCustomers = new Set(list.map(e => String(e).toLowerCase()));
+  } catch(e){ console.warn('removed customers unavailable:', e); }
+}
+
+async function saveRemovedCustomers(){
+  const { error } = await _supa.from('app_settings').upsert({
+    id: 'removed_customers',
+    data: {
+      emails:    [..._removedCustomers],
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentUser?.email || null
+    }
+  }, { onConflict: 'id' });
+
+  if(error){
+    console.error('could not save the removed customers list:', error);
+    toast('Could not save: ' + error.message, 'danger');
+    return false;
+  }
+  return true;
+}
+
+function toggleShowRemovedCustomers(on){
+  _showRemovedCustomers = !!on;
+  renderCustomers();
+}
+
+function removeCustomer(email){
+  const key = String(email || '').toLowerCase();
+  if(!key) return;
+
+  const orders = DB.orders.filter(o => (o.customerEmail || '').toLowerCase() === key);
+  const live   = orders.filter(o => !ORDER_SETTLED.includes(o.status) && !o.archived).length;
+
+  showConfirm({
+    title: 'Remove from customer list',
+    icon:  'bx-user-x',
+    okText: 'Remove',
+    message:
+      `${email} will be hidden from this list. Their ${orders.length} order${orders.length === 1 ? '' : 's'} ` +
+      `stay in Orders and Reports, their account still works, and ordering again brings them back. ` +
+      (live ? `They have ${live} order${live === 1 ? '' : 's'} still in progress. ` : '') +
+      `To delete the account itself, use Authentication → Users in the Supabase dashboard.`,
+    onConfirm: async () => {
+      _removedCustomers.add(key);
+      if(!(await saveRemovedCustomers())){ _removedCustomers.delete(key); return; }
+      logAudit('Customers', 'Customer hidden from list', email,
+               `${orders.length} order${orders.length === 1 ? '' : 's'} kept` + (live ? `, ${live} in progress` : ''));
+      renderCustomers();
+      toast('Removed from the customer list', 'success');
+    }
+  });
+}
+
+async function restoreCustomer(email){
+  const key = String(email || '').toLowerCase();
+  if(!_removedCustomers.delete(key)) return;
+  if(!(await saveRemovedCustomers())){ _removedCustomers.add(key); return; }
+  logAudit('Customers', 'Customer restored to list', email, '');
+  renderCustomers();
+  toast('Back on the customer list', 'success');
+}
+
 function renderCustomers(){
   const q = (document.getElementById('customer-search')?.value||'').toLowerCase();
 
@@ -4816,6 +4919,20 @@ function renderCustomers(){
     }
   });
 
+  /* Removed ones are gone from the list unless the switch is on, and
+     then they are shown struck through with a way back. Hiding with no
+     way to undo it is a trap, not a feature. */
+  customers.forEach(c => { c.removed = _removedCustomers.has(c.email.toLowerCase()); });
+  if(!_showRemovedCustomers) customers = customers.filter(c => !c.removed);
+
+  const hiddenCount = _removedCustomers.size;
+  const note = document.getElementById('customers-removed-note');
+  if(note){
+    note.textContent = hiddenCount
+      ? `${hiddenCount} hidden` : '';
+    note.style.display = hiddenCount ? '' : 'none';
+  }
+
   // Apply search filter
   if(q) customers = customers.filter(c =>
     c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
@@ -4824,7 +4941,7 @@ function renderCustomers(){
   // Table
   document.getElementById('customers-body').innerHTML = customers.length
     ? customers.sort((a,b) => (b.lastDate||'') > (a.lastDate||'') ? 1 : -1).map(c => `
-      <tr>
+      <tr class="${c.removed ? 'customer-removed' : ''}">
         <td>
           <div class="product-cell">
             <div class="avatar-wrap">
@@ -4846,6 +4963,9 @@ function renderCustomers(){
           <div style="display:flex;gap:6px;align-items:center">
             <button class="btn-icon edit" onclick="viewCustomer('${c.email}')" title="View"><i class='bx bx-show'></i></button>
             ${c.reviews > 0 ? `<button class="btn-icon" onclick="viewCustomerReviews('${c.email}')" title="View Reviews" style="color:#f59e0b;border-color:#f59e0b22;background:#fffbeb"><i class='bx bx-star'></i></button>` : ''}
+            ${c.removed
+              ? `<button class="btn-icon" onclick="restoreCustomer('${c.email}')" title="Put back on the list"><i class='bx bx-undo'></i></button>`
+              : `<button class="btn-icon danger" onclick="removeCustomer('${c.email}')" title="Remove from this list"><i class='bx bx-user-x'></i></button>`}
           </div>
         </td>
       </tr>`).join('')
