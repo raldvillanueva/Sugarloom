@@ -86,7 +86,8 @@ function addToCart(){
 //UPDATING THE CART
 function updateCart(){
   let cart = JSON.parse(localStorage.getItem("cart")) || [];
-  document.getElementById("cart").innerText = cart.length;
+  const badge = document.getElementById("cart");
+  if (badge) badge.innerText = cart.length;
 }
 
 //GO BACK 
@@ -121,6 +122,14 @@ function showToast(text){
   }, 2000);
 }
 document.addEventListener("DOMContentLoaded", loadProduct);
+
+/* Coming back with the browser's Back button does not reload the page:
+   it is restored from the back/forward cache exactly as it was left,
+   and DOMContentLoaded never fires again. So the badge kept the count
+   from before the visit to the cart — usually 0 — while the cart held
+   the items. pageshow fires on a restore as well as a normal load,
+   which is the one event that covers both. */
+window.addEventListener("pageshow", updateCart);
 
 // ── REVIEWS ──────────────────────────────────────────────
 

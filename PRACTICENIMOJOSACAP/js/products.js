@@ -112,8 +112,14 @@ function addProduct(name, price, img){
 
 function updateCart(){
   let cart = JSON.parse(localStorage.getItem("cart")) || [];
-  document.getElementById("cart").innerText = cart.length;
+  const badge = document.getElementById("cart");
+  if (badge) badge.innerText = cart.length;
 }
+
+/* Back-button returns are served from the back/forward cache with the
+   page untouched, so the badge would still show the count from before
+   the trip to the cart. pageshow fires on a restore too. */
+window.addEventListener("pageshow", updateCart);
 
 /* NAV */
 function goHome(){

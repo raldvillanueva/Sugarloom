@@ -346,6 +346,14 @@ function showMsg(text){
   setTimeout(() => msg.classList.remove("show"), 2500);
 }
 
+/* A restore from the back/forward cache skips DOMContentLoaded, so the
+   list would still show whatever was here before — including items from
+   an order that has since been placed and cleared. Only the list is
+   redrawn: re-running the whole init would build a second flatpickr on
+   the same field. `persisted` is what separates a restore from a normal
+   load, where init renders anyway. */
+window.addEventListener('pageshow', e => { if (e.persisted) renderCart(); });
+
 // INIT
 document.addEventListener('DOMContentLoaded', async () => {
   // Load products and ingredients from Supabase for price sync and stock checks
