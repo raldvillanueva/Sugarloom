@@ -4295,34 +4295,47 @@ function renderIngredientTrash(){
   if(!trash.length){ wrap.innerHTML = ''; wrap.style.display = 'none'; return; }
   wrap.style.display = '';
 
+  /* card-header and data-table, spelled the way the rest of the panel
+     spells them. This was written with card-head, table-wrap and a bare
+     <table>, none of which exist in admin.css — so the heading, the
+     subtitle and every cell fell back to browser defaults and the
+     section looked like a different product. */
   wrap.innerHTML = `
-    <div class="card" style="margin-top:18px">
-      <div class="card-head">
+    <div class="card trash-card">
+      <div class="card-header">
         <h3><i class='bx bx-trash'></i> Trash <span class="pill pending">${trash.length}</span></h3>
-        <small style="color:var(--text-2)">Deleted ingredients, kept so a mis-click can be undone</small>
+        <small class="trash-sub">Deleted ingredients, kept so a mis-click can be undone</small>
       </div>
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>INGREDIENT</th><th>STOCK AT DELETION</th><th>DELETED</th><th>BY</th><th></th></tr></thead>
-          <tbody>
-            ${trash.map(i => `
-              <tr>
-                <td class="fw-bold">${escHTML(i.name)}</td>
-                <td>${Number(i.stock || 0).toLocaleString()} ${escHTML(i.unit || '')}</td>
-                <td>${i.deletedAt ? fmtDateTime(i.deletedAt) : '—'}</td>
-                <td>${escHTML(i.deletedBy || '—')}</td>
-                <td style="text-align:right;white-space:nowrap">
-                  <button class="btn-primary sm" onclick="restoreIngredient('${i.id}')">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Ingredient</th>
+            <th>Stock at deletion</th>
+            <th>Deleted</th>
+            <th>By</th>
+            <th class="trash-actions-col">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${trash.map(i => `
+            <tr>
+              <td class="fw-bold">${escHTML(i.name)}</td>
+              <td>${Number(i.stock || 0).toLocaleString()} ${escHTML(i.unit || '')}</td>
+              <td class="trash-when">${i.deletedAt ? fmtDateTime(i.deletedAt) : '—'}</td>
+              <td class="trash-who" title="${escHTML(i.deletedBy || '')}">${escHTML(i.deletedBy || '—')}</td>
+              <td class="trash-actions-col">
+                <div class="trash-actions">
+                  <button class="btn-secondary sm" onclick="restoreIngredient('${i.id}')">
                     <i class='bx bx-undo'></i> Restore
                   </button>
                   <button class="btn-ghost sm danger" onclick="purgeIngredient('${i.id}')">
-                    <i class='bx bx-x'></i> Delete for good
+                    <i class='bx bx-trash'></i> Delete for good
                   </button>
-                </td>
-              </tr>`).join('')}
-          </tbody>
-        </table>
-      </div>
+                </div>
+              </td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
     </div>`;
 }
 

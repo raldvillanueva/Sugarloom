@@ -1743,6 +1743,56 @@ textarea { resize: vertical; }
 .rf-pri.low    { background: #fef3c7; color: #92400e; }
 .rf-pri.urgent { background: #fee2e2; color: #b91c1c; }
 
+/* ── INGREDIENT TRASH ──
+   Set apart from the live inventory above it: this is where deleted
+   things sit, and it should not read as another list of stock. */
+.trash-card {
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  background: var(--bg-2, #f8f7f4);
+}
+.trash-card .card-header {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 14px;
+}
+.trash-card .card-header h3 {
+  display: flex; align-items: center; gap: 7px;
+}
+.trash-card .card-header h3 i { color: var(--text-2); font-size: 17px; }
+
+.trash-sub { font-size: 12px; color: var(--text-2); }
+
+.trash-card .data-table td { background: transparent; }
+.trash-card .data-table tr:hover td { background: rgba(0,0,0,.025); }
+
+/* The two buttons are one group, kept on one line and pushed to the
+   right edge. They used to be loose inline elements that wrapped into
+   the column beside them. */
+.trash-actions-col { text-align: right; width: 1%; white-space: nowrap; }
+.trash-actions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+.trash-actions .bx { font-size: 14px; vertical-align: -2px; margin-right: 2px; }
+
+/* An email is the longest thing in the row and the least worth the
+   space, so it gives way first. */
+.trash-who {
+  max-width: 190px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-2);
+}
+.trash-when { white-space: nowrap; color: var(--text-2); }
+
+@media (max-width: 880px) {
+  .trash-who { max-width: 110px; }
+  .trash-actions { gap: 6px; }
+}
+
 /* ── REMOVED CUSTOMERS ──
    Visible only when the switch is on, and visibly not a normal row. */
 .customer-removed td { opacity: .5; }
