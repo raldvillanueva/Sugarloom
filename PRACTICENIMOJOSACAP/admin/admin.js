@@ -290,10 +290,14 @@ async function initDB(){
            is simply not in the list anybody reads. */
         ingredients:    toArr(iRes).filter(i => !i.deletedAt),
         ingredientTrash: toArr(iRes).filter(i =>  i.deletedAt),
-        orders:         toArr(oRes),
-        transactions:   toArr(txRes).sort((a, b) => new Date(b.date) - new Date(a.date)),
-        stockLog:       toArr(slRes),
-        supplierOrders: toArr(poRes),
+        orders:         uniqueById(toArr(oRes)),
+        transactions:   uniqueById(toArr(txRes)).sort((a, b) => new Date(b.date) - new Date(a.date)),
+        /* Two rows here once carried the same id inside their jsonb,
+           which made every later save of this table fail whole. The
+           clash is dropped on the way in as well as on the way out,
+           so it cannot come back round with the next load. */
+        stockLog:       uniqueById(toArr(slRes)),
+        supplierOrders: uniqueById(toArr(poRes)),
         auditLog:       []    // loaded on demand by refreshAudit(), Super Admin only
       };
       // Patch recipes for products that are missing them
@@ -369,31 +373,69 @@ async function ensureSuperAdmin(){
   }
 }
 
+/* One row per id, last one wins.
+
+   An upsert that proposes the same id twice in one statement is
+   rejected whole by Postgres — 21000, "ON CONFLICT DO UPDATE command
+   cannot affect row a second time". Not the duplicate: everything in
+   the payload. So one historic clash in stock_log meant that table
+   stopped accepting saves entirely, and kept refusing them on every
+   later save because the clash was reloaded from the database each
+   time. Six weeks of ingredient movements were deducted from stock,
+   written into the order, and never recorded anywhere.
+
+   Deduplicating here is not tidying. It is what keeps one bad row
+   from taking a whole table offline. */
+function uniqueById(arr){
+  const byId = new Map();
+  (arr || []).forEach(d => { if(d && d.id != null) byId.set(d.id, d); });
+  return [...byId.values()];
+}
+
 function saveDB(){
   if (!DB.stockLog) DB.stockLog = [];
 
   // Persist all tables to Supabase (fire-and-forget so callers stay synchronous)
-  const rows = (arr, extraFn) => arr.map(d => ({ id: d.id, data: d, ...(extraFn ? extraFn(d) : {}) }));
+  const rows = (arr, extraFn) =>
+    uniqueById(arr).map(d => ({ id: d.id, data: d, ...(extraFn ? extraFn(d) : {}) }));
 
-  Promise.all([
-    DB.products.length     && _supa.from('products').upsert(rows(DB.products), { onConflict: 'id' }),
+  const tasks = [
+    ['products', DB.products.length && _supa.from('products').upsert(rows(DB.products), { onConflict: 'id' })],
     /* Live and trashed go to the same table — the flag is what tells
        them apart, and the split happens again on the next load. */
-    (DB.ingredients.length || (DB.ingredientTrash || []).length) &&
+    ['ingredients', (DB.ingredients.length || (DB.ingredientTrash || []).length) &&
       _supa.from('ingredients').upsert(
-        rows([...DB.ingredients, ...(DB.ingredientTrash || [])]), { onConflict: 'id' }),
-    DB.users.length        && _supa.from('admin_users').upsert(rows(DB.users), { onConflict: 'id' }),
-    DB.orders.length       && _supa.from('orders').upsert(
-      DB.orders.map(o => ({
+        rows([...DB.ingredients, ...(DB.ingredientTrash || [])]), { onConflict: 'id' })],
+    ['admin_users', DB.users.length && _supa.from('admin_users').upsert(rows(DB.users), { onConflict: 'id' })],
+    ['orders', DB.orders.length && _supa.from('orders').upsert(
+      uniqueById(DB.orders).map(o => ({
         id:             o.id,
         customer_email: o.customerEmail || '',
         status:         o.status || 'Pending',
         date:           o.date   || new Date().toISOString(),
         data:           o
-      })), { onConflict: 'id' }),
-    DB.transactions.length && _supa.from('transactions').upsert(rows(DB.transactions), { onConflict: 'id' }),
-    DB.stockLog.length     && _supa.from('stock_log').upsert(rows(DB.stockLog), { onConflict: 'id' })
-  ].filter(Boolean)).catch(err => console.error('saveDB error:', err));
+      })), { onConflict: 'id' })],
+    ['transactions', DB.transactions.length && _supa.from('transactions').upsert(rows(DB.transactions), { onConflict: 'id' })],
+    ['stock_log', DB.stockLog.length && _supa.from('stock_log').upsert(rows(DB.stockLog), { onConflict: 'id' })]
+  ].filter(([, p]) => p);
+
+  /* supabase-js resolves with { error } rather than rejecting, so the
+     old .catch() never ran and a refused write looked like a saved
+     one. Each result is read, and a failure is said out loud — a save
+     that silently does nothing is the worst kind. */
+  Promise.all(tasks.map(([, p]) => p))
+    .then(results => {
+      const failed = results
+        .map((r, i) => (r && r.error) ? { table: tasks[i][0], error: r.error } : null)
+        .filter(Boolean);
+      if(!failed.length) return;
+      failed.forEach(f => console.error(`saveDB: ${f.table} refused the write —`, f.error));
+      toast(`Could not save ${failed.map(f => f.table).join(', ')} — your change is only on this screen`, 'danger');
+    })
+    .catch(err => {
+      console.error('saveDB error:', err);
+      toast('Could not save — your change is only on this screen', 'danger');
+    });
 }
 
 function logStock({ type, itemId, itemName, unit, op, before, after, note, ref }){
