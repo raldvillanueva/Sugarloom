@@ -1682,6 +1682,21 @@ function renderOrders(){
    everything else behind a ⋮ menu with words on it. The row used to show
    up to six unlabelled icons side by side, which nobody could tell
    apart at a glance. */
+/* What the courier says about this order, from the tracking cache.
+   The status pill already reads this; the row's buttons did not, which
+   is how "Completed" ended up sitting beside "Book delivery". */
+function deliveryStatusOf(o){
+  const t = _trackingCache && _trackingCache[o.id];
+  return t && t.lalamoveRef ? (t.status || null) : null;
+}
+
+/* Booked and not finished with — cancelled, rejected and expired
+   bookings are dead, so the order needs a new one. */
+function hasLiveDelivery(o){
+  const s = deliveryStatusOf(o);
+  return !!s && !['CANCELED', 'REJECTED', 'EXPIRED'].includes(s);
+}
+
 function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
   const live = !o.archived;
   const sub  = o.preparingSubStatus;
@@ -1713,8 +1728,18 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
       primary = { label: 'Done packing',  icon: 'bx-check-double', cls: 'btn-primary',   fn: `packerDonePacking('${o.id}')` };
     else if(o.status === 'Preparing' && sub === 'packed' && (isAdmin || isPacker))
       primary = { label: 'Ready to book', icon: 'bx-map-pin',      cls: 'btn-primary',   fn: `packerReadyForBook('${o.id}')` };
-    else if(o.status === 'Preparing' && sub === 'readyForBook' && isAdmin)
+    /* Only when there is no delivery yet. A booked one leaves a
+       tracking row, and offering to book again beside a pill that
+       already reads "On the Way" is how an order gets two riders. */
+    else if(o.status === 'Preparing' && sub === 'readyForBook' && isAdmin && !hasLiveDelivery(o))
       primary = { label: 'Book delivery', icon: 'bx-map',          cls: 'btn-primary',   fn: `openOrderModal('${o.id}')` };
+    /* Booked and arrived, but the order has not caught up — the poll
+       does this by itself, so this is for the gap and for a poll that
+       never ran. */
+    else if(o.status === 'Preparing' && isAdmin && deliveryStatusOf(o) === 'COMPLETED')
+      primary = { label: 'Mark fulfilled', icon: 'bx-check-circle', cls: 'btn-primary',  fn: `openOrderModal('${o.id}')` };
+    else if(o.status === 'Preparing' && isAdmin && hasLiveDelivery(o))
+      primary = { label: 'Track delivery', icon: 'bx-map',          cls: 'btn-secondary', fn: `openOrderModal('${o.id}')` };
     else if(o.status === 'Cancel Requested' && isAdmin)
       primary = { label: 'Review',        icon: 'bx-x-circle',     cls: 'btn-danger',    fn: `openOrderModal('${o.id}')` };
     else if(o.status === 'Cancelled' && isAdmin && o.payment === 'GCash' && !o.refunded)
@@ -2532,6 +2557,27 @@ async function pollLalamoveStatuses(){
 
       await _supa.from('order_tracking')
         .upsert({ order_id: orderId, data: updatedTracking }, { onConflict: 'order_id' });
+
+      /* The delivery arriving is the order being delivered. Without
+         this the tracking row said COMPLETED while the order sat on
+         Preparing/readyForBook for good — the row showed a Completed
+         pill, read from tracking, beside a Book delivery button, read
+         from the order, and the two never agreed. The customer was
+         never told it arrived and no transaction was recorded. */
+      if (data.status === 'COMPLETED' && adminOrder && adminOrder.status === 'Preparing') {
+        updateOrderStatus(adminOrder.id, 'Fulfilled');
+        if (!DB.transactions.find(t => t.id === 'TX-' + adminOrder.id)) {
+          DB.transactions.push({
+            id: 'TX-' + adminOrder.id, customer: adminOrder.customer, items: adminOrder.items,
+            total: adminOrder.total, date: new Date().toISOString(), payment: adminOrder.payment || 'GCash'
+          });
+        }
+        syncStatusToCustomer(adminOrder, 'Fulfilled');
+        logAudit('Orders', 'Order fulfilled', adminOrder.id, 'Delivery reported complete');
+        saveDB();
+        if (document.getElementById('view-orders').classList.contains('active')) renderOrders();
+        updateBadges();
+      }
     } catch(e) {
       // silently skip on network error
     }
