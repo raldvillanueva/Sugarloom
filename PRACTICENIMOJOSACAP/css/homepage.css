@@ -1289,3 +1289,157 @@ a { text-decoration: none; color: inherit; }
   from { opacity: 0; transform: scale(1.06); }
   to   { opacity: 1; transform: scale(1); }
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SMALL SCREENS
+
+   The homepage was written for a desktop and had no breakpoint at
+   all — a 100px side padding, a 560px hero image and a four-column
+   footer, on a phone 390px wide. The page ended up wider than the
+   screen, so every section was squeezed into the left of it with the
+   overflow hanging off the side: "handcraft" cut in half, the
+   features bar three squashed columns, white space where the hero
+   image should be.
+
+   The rules below do not redesign anything. They let the rows that
+   were side by side stack, bring the padding down to something a
+   phone can spare, and stop the fixed widths being wider than the
+   screen they are on.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Nothing may be wider than the page. One oversized element makes the
+   whole document scroll sideways, which is what put every section in
+   a narrow left-hand column. */
+@media (max-width: 900px) {
+  html, body { max-width: 100%; overflow-x: hidden; }
+  img, video, iframe { max-width: 100%; }
+}
+
+/* ── TABLET ── */
+@media (max-width: 900px) {
+  .hero            { padding: 110px 40px 60px; gap: 48px; }
+  .hero-left h1    { font-size: 52px; letter-spacing: -1.4px; }
+  .feature-section { padding: 80px 40px; gap: 48px; }
+  .products,
+  .premium-section,
+  .about           { padding: 72px 40px; }
+  .footer          { padding: 56px 40px 0; }
+  .footer-inner    { grid-template-columns: 1fr 1fr; gap: 32px; }
+  .nav             { padding: 14px 24px; }
+  .features        { padding: 20px 24px; }
+  .feature-item    { padding: 0 20px; }
+  .hp-info-section { padding: 72px 40px 80px; }
+  .contact-grid    { max-width: 100%; }
+}
+
+/* ── PHONE ── */
+@media (max-width: 640px) {
+
+  /* The nav is a three-column grid built for a wide screen. On a phone
+     it becomes two rows: the brand and the buttons, then the links
+     underneath on a line of their own, scrolling sideways rather than
+     wrapping into a stack that pushes the page down. */
+  .nav {
+    /* minmax(0, 1fr), not 1fr: a grid track's automatic minimum is the
+       widest thing in it, so the row of links below would otherwise
+       stretch the columns past the screen and push the Sign In button
+       off the right edge. */
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 10px;
+    padding: 12px 16px;
+  }
+  .nav-links {
+    grid-column: 1 / -1;
+    order: 3;
+    gap: 18px;
+    min-width: 0;          /* same reason: it may scroll, not stretch */
+    overflow-x: auto;
+    scrollbar-width: none;
+    justify-content: flex-start;
+    white-space: nowrap;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+  .nav-right { gap: 8px; }
+  .btn-outline { padding: 7px 14px; font-size: 13px; }
+
+  /* The hero was two columns with an eighty-pixel gap. Stacked, the
+     words come first and the picture follows. */
+  /* The nav is fixed, so the hero has to start below it. The desktop
+     rule cleared a one-row nav with 130px of top padding; here the nav
+     is two rows, and cutting that padding to nothing put the headline
+     underneath it. */
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 0;
+    padding: 112px 16px 48px;
+    gap: 28px;
+  }
+  .hero-left,
+  .hero-left p   { max-width: 100%; }
+  .hero-left h1  { font-size: 38px; letter-spacing: -1px; }
+  .hero-right    { width: 100%; }
+  /* Was a flat 560 × 480. */
+  .hero-right img { width: 100%; height: auto; aspect-ratio: 7 / 6; }
+  .hero-actions   { width: 100%; }
+  .hero-actions .btn-primary,
+  .hero-actions .btn-ghost { flex: 1 1 auto; text-align: center; }
+
+  /* Three columns with 48px of padding each, on a 390px screen, is
+     what produced "Fast / Delivery / Metro / Manila / same- / day". */
+  .features {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
+    padding: 18px 16px;
+  }
+  .feature-item { padding: 0; justify-content: flex-start; }
+  .feature-sep  { display: none; }
+
+  .products,
+  .premium-section,
+  .about          { padding: 56px 16px; }
+  .feature-section {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 56px 16px;
+    gap: 32px;
+  }
+  .feature-left,
+  .feature-left h1 { max-width: 100%; }
+  .feature-left h1 { font-size: 34px; }
+  .feature-right   { width: 100%; }
+  .feature-right img { width: 100%; height: auto; }
+
+  /* Two cards to a row rather than one 220px card and a lot of air. */
+  .product-row  { gap: 16px; }
+  .product-item { width: calc(50% - 8px); }
+  .product-item img { height: 140px; }
+
+  .about-content,
+  .about-pillars > * { max-width: 100%; }
+  .about-pillars { flex-direction: column; gap: 16px; margin-top: 32px; }
+  .pillar        { min-width: 0; }
+
+  /* FAQ and Contact share this wrapper. Three contact cards in a
+     fixed three-column grid ran straight off the right edge. */
+  .hp-info-section { padding: 56px 16px 64px; }
+  .contact-grid    { grid-template-columns: 1fr; gap: 14px; margin: 24px auto 40px; }
+  .contact-card    { padding: 20px 18px; }
+  .inquiry-form    { padding: 24px 18px 20px; }
+  .inquiry-row     { grid-template-columns: 1fr; }
+  .faq-q           { padding: 14px 16px; }
+  .faq-item.open .faq-a { padding: 0 16px 16px; }
+
+  .footer       { padding: 44px 16px 0; }
+  .footer-inner { grid-template-columns: 1fr; gap: 28px; }
+  .footer-brand p { max-width: 100%; }
+
+  /* The chat bubble sat where a thumb reaches for the home bar. */
+  #chat-toggle { right: 14px; bottom: 18px; }
+  #chatbox {
+    right: 10px; left: 10px;
+    width: auto;
+    max-height: 70vh;
+  }
+}
