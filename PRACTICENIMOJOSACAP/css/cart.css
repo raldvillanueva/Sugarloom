@@ -565,3 +565,62 @@ body {
 }
 
 .toast button:hover { background: #333; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SMALL SCREENS
+
+   The cart was two columns — the items beside the order summary —
+   with 60px of side padding, and no breakpoint. On a phone the
+   summary became a strip barely wide enough for one word, so
+   "Delivery Reminder: Orders may arrive anytime during the day"
+   came out as a column of single words.
+
+   Stacked, the items come first and the summary follows, which is
+   also the order someone reads them in.
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 900px) {
+  .nav                 { padding: 14px 24px; }
+  .checkout-container  { padding: 4px 24px 24px; gap: 20px; }
+}
+
+@media (max-width: 760px) {
+  html, body { max-width: 100%; overflow-x: hidden; }
+  img { max-width: 100%; }
+
+  .nav       { padding: 12px 16px; }
+  /* Absolutely centred, so on a narrow nav it sits on top of the
+     brand. There is a Back arrow for the same job. */
+  .nav-center { display: none; }
+
+  .checkout-container,
+  .cart-container {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 4px 16px 32px;
+    gap: 18px;
+  }
+  /* This stylesheet has no global border-box, so width:100% plus
+     padding overflows by exactly the padding. These stretch to the
+     column instead of being told a width, and count their padding
+     inside it. */
+  .items, .cart-left, .summary, .form {
+    flex: none;
+    width: auto;
+    align-self: stretch;
+    box-sizing: border-box;
+  }
+  .summary    { padding: 20px; }
+  .cart-title { font-size: 24px; }
+
+  /* A 120px picture beside the text leaves little for the name on a
+     390px screen; the row keeps its shape with a smaller one. */
+  .item img   { width: 92px; }
+  .item-info  { padding: 14px; }
+
+  .controls   { flex-wrap: wrap; gap: 8px; }
+  .remove-btn { padding: 10px 18px; }
+
+  .form       { padding: 20px; }
+  .dropdown   { width: min(260px, calc(100vw - 32px)); }
+}

@@ -381,3 +381,36 @@ input::placeholder { color: #BBBBBB; }
   border-top: 1px solid #F3F4F6;
 }
 .policy-footer .btn-continue { margin-top: 0; }
+
+/* ═══════════════════════════════════════════════════════════════
+   SMALL SCREENS
+
+   Sign in, register and the password reset all use this stylesheet
+   and are a single centred card, so they survived a phone better
+   than the rest of the site. What they did not have was any room to
+   give: 36px of card padding inside 16px of page padding leaves a
+   360px screen 232px for the fields.
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 560px) {
+  html, body { max-width: 100%; overflow-x: hidden; }
+
+  .page-wrap { padding: 20px 12px; justify-content: flex-start; gap: 14px; }
+  .auth-card { padding: 28px 20px 24px; border-radius: 14px; }
+
+  .auth-title { font-size: 20px; }
+  .auth-sub   { font-size: 13px; }
+
+  /* The code boxes are the one row here that cannot wrap — six of
+     them plus the gaps have to fit the card. They already share the
+     width with flex: 1 and min-width: 0, so only the gaps are
+     tightened; giving them a fixed width would undo that. */
+  .otp-inputs { gap: 6px; }
+  .otp-inputs .otp-box { font-size: 18px; padding: 12px 0; }
+
+  .phone-code { padding: 0 10px; font-size: 13px; }
+
+  /* A policy card that cannot be scrolled to the bottom cannot be
+     agreed to. */
+  .policy-card { width: calc(100vw - 24px); max-height: 82vh; }
+}

@@ -180,3 +180,18 @@ body {
   padding: 13.5px 0;   /* keeps the box from growing when the border thickens */
   outline: none;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   SMALL SCREENS
+   The page sits on css/login.css for its card and its code boxes,
+   which carry their own phone rules. These are the pieces this file
+   adds on top of it.
+   ═══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 560px) {
+  /* The address the code went to, which on a narrow card is the one
+     string long enough to push the page sideways. */
+  .otp-sent-to  { font-size: 12px; overflow-wrap: anywhere; }
+  .resend-link  { font-size: 12px; }
+  #msg, .msg    { font-size: 12px; }
+}
