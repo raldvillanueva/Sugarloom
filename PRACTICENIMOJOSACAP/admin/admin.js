@@ -1695,6 +1695,12 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
        reads as a bug rather than a rule. */
     if(o.status === 'Pending' && isAdmin && o.payment === 'GCash' && o.paymentStatus === 'Rejected')
       primary = { label: 'Review',        icon: 'bx-x-circle',     cls: 'btn-secondary', fn: `openOrderModal('${o.id}')` };
+    /* Confirming is a promise to deliver on the date the order carries.
+       When that date has gone, the promise is already broken and
+       confirming only takes the ingredients out of stock for it. The
+       date comes first; Confirm returns on its own once it is set. */
+    else if(o.status === 'Pending' && isAdmin && isOrderLate(o))
+      primary = { label: 'Reschedule',    icon: 'bx-calendar-edit', cls: 'btn-secondary', fn: `rescheduleOrder('${o.id}')` };
     else if(o.status === 'Pending' && isAdmin)
       primary = { label: 'Confirm',       icon: 'bx-check',        cls: 'btn-primary',   fn: `openOrderModal('${o.id}')` };
     else if(o.status === 'Confirmed' && (isAdmin || isBaker))
@@ -1733,6 +1739,11 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
     if(canReorder) menu.push({ label: 'Not yet — pack later', icon: 'bx-down-arrow-circle', fn: `packerDeferOrder('${o.id}')` });
     menu.push({ label: "Can't pack — send to baker", icon: 'bx-undo', danger: true, fn: `packerSendBackToBaker('${o.id}')` });
   }
+
+  /* Also in the menu, because an order can run late at any stage —
+     one already with the baker still needs a date somebody can keep. */
+  if(isAdmin && live && !isOrderSettled(o) && isOrderLate(o))
+    menu.push({ label: 'Reschedule delivery date', icon: 'bx-calendar-edit', fn: `rescheduleOrder('${o.id}')` });
 
   if(isAdmin && live && (o.status === 'Fulfilled' || o.status === 'Cancelled'))
     menu.push({ label: 'Archive', icon: 'bx-archive-in', fn: `archiveOrder('${o.id}')` });
@@ -1832,22 +1843,33 @@ function archiveOrder(id){
   });
 }
 
-function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', inputLabel=null, inputPlaceholder='', inputRequired=false, inputMin=0, onConfirm }){
+function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', inputLabel=null, inputPlaceholder='', inputRequired=false, inputMin=0, inputType='text', inputMinValue=null, onConfirm }){
   document.getElementById('confirm-modal-title').textContent = title;
   document.getElementById('confirm-modal-message').textContent = message;
   document.getElementById('confirm-modal-icon').innerHTML = `<i class='bx ${icon}'></i>`;
 
-  // Optional free-text box, used for things like a decline reason
+  /* Optional box: the textarea for a reason, the date control for a
+     new delivery date. Whichever is not in use is hidden and emptied,
+     so a reason typed earlier cannot be read back as a date. */
   const wrap  = document.getElementById('confirm-modal-input-wrap');
-  const input = document.getElementById('confirm-modal-input');
+  const text  = document.getElementById('confirm-modal-input');
+  const date  = document.getElementById('confirm-modal-date');
   const error = document.getElementById('confirm-modal-input-error');
-  input.value = '';
+  const isDate = inputType === 'date';
+  const input  = isDate ? date : text;
+
+  text.value = ''; date.value = '';
+  text.classList.toggle('hidden', isDate);
+  date.classList.toggle('hidden', !isDate);
+  if(isDate && inputMinValue) date.min = inputMinValue; else date.removeAttribute('min');
+
   error.classList.add('hidden');
-  input.classList.remove('invalid');
+  text.classList.remove('invalid');
+  date.classList.remove('invalid');
   if(inputLabel){
     document.getElementById('confirm-modal-input-label').textContent =
-      inputLabel + (inputRequired ? ' *' : '');
-    input.placeholder = inputPlaceholder;
+      inputLabel + (inputRequired || isDate ? ' *' : '');
+    text.placeholder = inputPlaceholder;
     wrap.classList.remove('hidden');
   } else {
     wrap.classList.add('hidden');
@@ -1864,7 +1886,18 @@ function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='b
        picks the problem up later, and sometimes by the customer — a
        placeholder the system invented would read as if a person had
        looked when nobody had. */
-    if(inputRequired && v.length < Math.max(1, inputMin)){
+    if(isDate){
+      /* A date that is not there, or is the date we are moving away
+         from, is not a reschedule. */
+      if(!v || (inputMinValue && v < inputMinValue)){
+        error.textContent = !v ? 'Please choose a new delivery date.'
+                               : 'Pick a date from today onwards.';
+        error.classList.remove('hidden');
+        input.classList.add('invalid');
+        input.focus();
+        return;
+      }
+    } else if(inputRequired && v.length < Math.max(1, inputMin)){
       error.textContent = inputMin > 1
         ? `Please give a reason — at least ${inputMin} characters.`
         : 'Please give a reason.';
@@ -1933,6 +1966,64 @@ function deliveryUrgency(o){
   if(days === 0) return { key:'today',    days, label:'DUE TODAY',    tone:'high' };
   if(days === 1) return { key:'tomorrow', days, label:'DUE TOMORROW', tone:'warn' };
   return null;
+}
+
+function isOrderLate(o){
+  const u = deliveryUrgency(o);
+  return !!(u && u.key === 'late');
+}
+
+/* ── RESCHEDULING ──
+   The overdue banner has always told the admin to reschedule the
+   delivery date from the order. There was no way to do it: nothing in
+   the panel ever wrote preferredDate. What it offered instead was
+   Confirm — which hands the order to the baker and takes the
+   ingredients out of stock, for a day that has already gone.
+
+   So a late order is rescheduled first. Confirm comes back by itself
+   once the date is in the future, because the row and the modal both
+   read the date rather than a flag.
+
+   The customer is not emailed from here. The banner's instruction is
+   to contact them and then move the date, and a date that changed by
+   itself in their order list would arrive without the conversation
+   that justified it. */
+function todayInputValue(){
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+function rescheduleOrder(id){
+  const o = DB.orders.find(oo => oo.id === id);
+  if(!o || currentUser?.role !== 'Administrator') return;
+
+  const was = o.preferredDate ? fmtDate(o.preferredDate) : 'no date';
+
+  showConfirm({
+    title: 'Reschedule delivery',
+    icon:  'bx-calendar-edit',
+    okText: 'Reschedule',
+    okClass: 'btn-primary',
+    message: `${o.id} was due ${was}. Agree a new date with ${o.customer || 'the customer'} first — this changes what the shop has promised, not what they were told.`,
+    inputLabel: 'New delivery date',
+    inputType: 'date',
+    inputMinValue: todayInputValue(),
+    onConfirm: (value) => {
+      /* Stored the way every other delivery date is stored, so the
+         date parsing on both sides keeps working. */
+      const picked = new Date(value + 'T00:00:00');
+      o.preferredDate = picked.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      o.rescheduledAt = new Date().toISOString();
+      o.rescheduledBy = currentUser?.email || null;
+
+      saveDB();
+      renderOrders();
+      updateBadges();
+      buildNotifs();
+      logAudit('Orders', 'Delivery date changed', o.id, `${was} → ${o.preferredDate}`);
+      toast(`Now due ${o.preferredDate}`, 'success');
+    }
+  });
 }
 
 function overdueUnsettledOrders(){
@@ -2205,6 +2296,13 @@ function openOrderModal(id, viewOnly=false){
       btn.title = o.paymentStatus === 'Rejected'
         ? 'The payment was rejected — contact the customer before confirming'
         : 'Check the payment first, then mark it received';
+    }
+    /* The same rule as the row: a date that has gone cannot be
+       confirmed, only moved or cancelled. Checked here too, because
+       the modal opens from places the row's reasoning never ran. */
+    else if(isOrderLate(o)){
+      btn.disabled = true;
+      btn.title = 'This delivery date has passed — reschedule it or cancel the order';
     }
   } else if(o.status==='Confirmed'){
     prepareBtn.style.display='';

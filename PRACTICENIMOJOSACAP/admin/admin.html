@@ -1161,9 +1161,13 @@
         </div>
         <p id="confirm-modal-message" style="margin:0;font-size:14px;color:var(--text-1);line-height:1.5;"></p>
       </div>
+      <!-- Two fields, one shown at a time: a reason is free text, a new
+           delivery date needs a real date control. The textarea cannot
+           be both — setting type="date" on it does nothing. -->
       <div id="confirm-modal-input-wrap" class="form-group hidden" style="margin-top:16px">
         <label id="confirm-modal-input-label">Reason</label>
         <textarea id="confirm-modal-input" rows="2"></textarea>
+        <input type="date" id="confirm-modal-date" class="hidden">
         <p id="confirm-modal-input-error" class="confirm-input-error hidden"></p>
       </div>
     </div>
