@@ -1745,8 +1745,17 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
   if(isAdmin && live && !isOrderSettled(o) && isOrderLate(o))
     menu.push({ label: 'Reschedule delivery date', icon: 'bx-calendar-edit', fn: `rescheduleOrder('${o.id}')` });
 
-  if(isAdmin && live && (o.status === 'Fulfilled' || o.status === 'Cancelled'))
-    menu.push({ label: 'Archive', icon: 'bx-archive-in', fn: `archiveOrder('${o.id}')` });
+  /* Offered on any live order, not only the settled ones. The sweep
+     stays narrow because it runs unattended; a person clicking this
+     has looked at the row. An unfinished one is marked as the heavier
+     decision it is, and says so again in the dialog. */
+  if(isAdmin && live)
+    menu.push({
+      label: isOrderSettled(o) ? 'Archive' : 'Archive without finishing',
+      icon: 'bx-archive-in',
+      danger: !isOrderSettled(o),
+      fn: `archiveOrder('${o.id}')`
+    });
   if(isAdmin && o.archived)
     menu.push({ label: 'Restore from archive', icon: 'bx-archive-out', fn: `unarchiveOrder('${o.id}')` });
 
@@ -1831,14 +1840,39 @@ function codRiskFor(order){
   return null;
 }
 
+/* Any order can be archived by hand. The automatic sweep still takes
+   only Fulfilled and Cancelled ones — a machine cannot tell a finished
+   order from a forgotten one — but a person looking at the row can,
+   and refusing them the button only means the forgotten order sits in
+   the queue forever.
+
+   An unfinished one says so before it goes, because archiving it ends
+   nothing: it keeps its status, leaves the baker's and packer's
+   queues, and drops out of the overdue warnings while the customer is
+   still owed either a cake or a word. Restorable either way. */
 function archiveOrder(id){
+  const o = DB.orders.find(oo => oo.id === id);
+  if(!o) return;
+
+  const unfinished = !isOrderSettled(o);
+
   showConfirm({
-    title: 'Archive Order',
-    message: 'Are you sure you want to archive this order? It will be moved to the Archived tab.',
+    title: unfinished ? 'Archive an unfinished order' : 'Archive Order',
+    icon:  'bx-archive-in',
     okText: 'Archive',
+    okClass: unfinished ? 'btn-danger' : 'btn-primary',
+    message: unfinished
+      ? `${o.id} is still ${o.status} and will stay that way. It leaves the order tabs, the baker's and packer's queues and the overdue warnings — so nothing will remind anyone about it again. Cancel it instead if ${o.customer || 'the customer'} is not getting this order, so the ingredients go back to stock.`
+      : 'Are you sure you want to archive this order? It will be moved to the Archived tab.',
     onConfirm: () => {
-      const o = DB.orders.find(oo=>oo.id===id);
-      if(o){ o.archived=true; saveDB(); renderOrders(); updateBadges(); toast('Order archived','success'); }
+      if(o){
+        o.archived = true;
+        o.archivedAt = new Date().toISOString();
+        saveDB(); renderOrders(); updateBadges(); buildNotifs();
+        logAudit('Orders', 'Order archived', o.id,
+                 unfinished ? `Archived while still ${o.status}` : `Archived as ${o.status}`);
+        toast('Order archived','success');
+      }
     }
   });
 }
