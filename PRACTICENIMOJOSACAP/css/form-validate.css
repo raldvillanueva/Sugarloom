@@ -24,6 +24,7 @@ textarea.field-invalid:focus {
    both, and the inner box picks up the tint from the rule above. */
 .phone-row.field-invalid,
 .phone-field.field-invalid,
+.profile-phone.field-invalid,
 .pw-field.field-invalid,
 .field-wrap.field-invalid {
   border-color: #dc2626;

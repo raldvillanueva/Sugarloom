@@ -24,44 +24,35 @@ function normalisePhoneDigits(raw){
 }
 
 /* ── While they type ──
-   A Philippine mobile number is ten digits. How many a box should
-   take depends on how it is being written, and a single number for
-   all three spellings is wrong for two of them:
+   Every phone box on the site shows +63 beside it, so the box itself
+   holds the local number and nothing else: ten digits, no spaces, no
+   brackets, no second country code. That is also exactly what gets
+   stored, so what is typed and what is kept are the same thing.
 
-     9171234567     10 — the number itself
-     09171234567    11 — the national trunk 0
-     639171234567   12 — the country code instead of that 0
+   It still has to accept the other two spellings, because people type
+   their own number the way they know it — and the way to accept them
+   is to take the prefix off as it arrives rather than to refuse it or,
+   worse, to cut the tail off:
 
-   One flat limit of twelve let 094939978999 be typed into a field
-   that already shows +63 beside it. So the limit follows what is
-   there: the leading digits say which spelling this is. Nothing is
-   ambiguous — a local number starts 9, so one starting 0 or 63 can
-   only be the longer form. */
-function phoneDigitLimit(digits){
-  if(digits.startsWith('63')) return 12;
-  if(digits.startsWith('0'))  return 11;
-  return 10;
-}
+     9171234567     stays
+     09171234567    the trunk 0 goes
+     +63 917 1234   the country code goes
+
+   Taking the front off keeps every digit of the number. The earlier
+   version of this cut at a character count instead, which dropped the
+   LAST digit and then called the result invalid.
+
+   A local mobile number always starts 9, so a leading 0 or 63 can only
+   be a prefix — nothing real is lost. They are only stripped when a 9
+   follows, so a half-typed "0" or "63" does not make the box empty
+   itself while someone is still typing. */
+const PHONE_LOCAL_DIGITS = 10;
 
 function trimPhoneInput(raw){
-  const s = String(raw == null ? '' : raw);
-  const limit = phoneDigitLimit(s.replace(/[^0-9]/g, ''));
-
-  let digits = 0, out = '';
-  for(let i = 0; i < s.length; i++){
-    const ch = s[i];
-    /* A + is the country prefix, so it belongs at the front or not
-       at all. */
-    if(ch === '+'){ if(out === '') out = '+'; continue; }
-    if(!/[0-9\s()-]/.test(ch)) continue;
-
-    if(ch >= '0' && ch <= '9'){
-      if(digits >= limit) continue;
-      digits++;
-    }
-    out += ch;
-  }
-  return out;
+  let d = String(raw == null ? '' : raw).replace(/[^0-9]/g, '');
+  if(d.startsWith('639')) d = d.slice(2);
+  if(d.startsWith('09'))  d = d.slice(1);
+  return d.slice(0, PHONE_LOCAL_DIGITS);
 }
 
 /* The same number in the eleven-digit form GCash prints. */
@@ -155,7 +146,7 @@ function isValidAddress(raw){
    input became a column in that row and sat alongside the number
    instead of under the field. The message goes after the whole
    wrapper, which is also what the reader thinks of as "the field". */
-const FIELD_WRAPPERS = '.phone-row, .phone-field, .pw-field, .field-wrap';
+const FIELD_WRAPPERS = '.phone-row, .phone-field, .profile-phone, .pw-field, .field-wrap';
 
 function fieldHost(el){
   return (el.closest && el.closest(FIELD_WRAPPERS)) || el;

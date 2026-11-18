@@ -110,10 +110,10 @@
 
       <div class="field-wrap phone-field">
         <span class="phone-prefix">&#127477;&#127469; +63</span>
-        <!-- No digits-only pattern: +63 917 123 4567 is the same number
-             and is not ten bare digits. normalisePhoneDigits reduces
-             whatever spelling is typed on save. -->
-        <input id="phone" placeholder=" " inputmode="tel" autocomplete="tel" maxlength="18" data-phone>
+        <!-- Ten digits, because the +63 is already shown beside it.
+             data-phone takes a pasted 0 or 63 off the front rather
+             than refusing it, so every spelling still goes in. -->
+        <input id="phone" placeholder=" " inputmode="numeric" autocomplete="tel" maxlength="10" data-phone>
         <label>Phone</label>
       </div>
     </div>

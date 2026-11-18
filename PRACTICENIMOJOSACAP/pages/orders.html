@@ -124,13 +124,15 @@
           <p class="label">Email</p>
           <input class="profile-input" id="emailInput" placeholder="Email">
           <p class="label">Phone</p>
-          <!-- Not 10: 09171234567 and +63 917 123 4567 are the same
-               number and both are longer than the ten digits stored. A
-               10 here silently ate the last digit and then called the
-               result invalid — the same bug the register form had.
-               data-phone caps it at twelve digits however it is
-               spelled; maxlength is only a backstop. -->
-          <input class="profile-input" id="phoneInput" placeholder="0917 123 4567" maxlength="18" inputmode="tel" data-phone>
+          <!-- The +63 is shown rather than typed, so the box is the ten
+               digits that are actually stored. Registration and
+               checkout read the same way; this one used to be a bare
+               input, which left the 0 that data-phone strips looking
+               like the box had eaten a digit. -->
+          <div class="profile-phone">
+            <span class="profile-phone-code">&#127477;&#127469; +63</span>
+            <input class="profile-input" id="phoneInput" placeholder="917 123 4567" maxlength="10" inputmode="numeric" data-phone>
+          </div>
           <div class="profile-actions">
             <button class="save-btn" onclick="saveProfile()">Save</button>
             <button class="cancel-btn" onclick="toggleEditProfile()">Cancel</button>
