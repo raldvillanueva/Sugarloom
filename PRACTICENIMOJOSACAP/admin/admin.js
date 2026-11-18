@@ -5775,8 +5775,21 @@ function notifTime(value){
   return isNaN(t) ? 0 : t;
 }
 
-/* Stamps every entry, newest first. An entry carrying its own event
-   time keeps it; the rest fall back to when they first showed up. */
+/* Stamps every entry, then orders them: things that happened above
+   things that are true, and newest first inside each.
+
+   Time alone could not do this. A standing condition — stock is low,
+   an order is due today — has no moment attached to it, so it gets
+   stamped the first time it is seen. On a fresh sign-in that is now,
+   which put "low stock" above an order that had genuinely just come
+   in, and put it there again every morning.
+
+   Events go first because this bell is all they have. A low
+   ingredient also has a badge on Inventory, a toast and a popup at
+   sign-in; an overdue order has a red banner on Orders that cannot be
+   dismissed. A new order has this list and nothing else, so it is the
+   one that must not be pushed down by something the panel is already
+   shouting about elsewhere. */
 function sortNotifsByTime(list){
   const seenAt = getNotifSeenAt();
   const now    = Date.now();
@@ -5784,7 +5797,8 @@ function sortNotifsByTime(list){
 
   list.forEach(n => {
     if(!seenAt[n.id]){ seenAt[n.id] = now; changed = true; }
-    n.ts = n.ts || seenAt[n.id];
+    n.ts   = n.ts || seenAt[n.id];
+    n.rank = n.standing ? 1 : 0;
   });
 
   /* Forget anything no longer on the list, so the map does not grow
@@ -5796,7 +5810,7 @@ function sortNotifsByTime(list){
 
   if(changed) saveNotifSeenAt(seenAt);
 
-  list.sort((a, b) => b.ts - a.ts);
+  list.sort((a, b) => a.rank - b.rank || b.ts - a.ts);
   return list;
 }
 
@@ -5822,7 +5836,7 @@ function buildNotifs(){
     const remaining = Math.max(0,(p.dailyLimit||0)-(p.soldToday||0));
     const id = `product_${p.id||p.name}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'inventory', icon:'bx-error-circle', color:'#DC2626',
+    notifList.push({ id, view:'inventory', icon:'bx-error-circle', color:'#DC2626', standing: true,
       text:`Near daily limit: ${p.name} (${remaining} left today)`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5832,7 +5846,11 @@ function buildNotifs(){
   DB.ingredients.filter(isIngLow).forEach(ing=>{
     const id = `ingredient_${ing.id||ing.name}`;
     if(seen.has(id)) return;
-    notifList.push({ id, view:'inventory', icon:'bx-error-circle', color:'#EA580C',
+    /* Standing: it is true until somebody restocks, and nothing
+       records the moment it became true. Inventory carries a badge
+       for it and the sign-in popup puts the draft in front of the
+       admin, so it does not also need the top of this list. */
+    notifList.push({ id, view:'inventory', icon:'bx-error-circle', color:'#EA580C', standing: true,
       text:`Low stock ingredient: ${ing.name} (${ing.stock} left)`,
       action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); }
     });
@@ -5872,7 +5890,10 @@ function buildNotifs(){
     const id = `due_${due.key}_${o.id}`;
     if(seen.has(id)) return;
     const late = due.key === 'late';
-    notifList.push({ id, view:'orders',
+    /* Standing too: being due today is a fact about the date, not
+       something that happened. The red banner on Orders is the loud
+       channel for this one, and it cannot be dismissed. */
+    notifList.push({ id, view:'orders', standing: true,
       icon: late ? 'bx-error' : 'bx-time-five',
       color: late ? '#DC2626' : due.key === 'today' ? '#EA580C' : '#D97706',
       text: late
