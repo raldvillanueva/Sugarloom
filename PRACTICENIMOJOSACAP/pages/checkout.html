@@ -88,20 +88,24 @@
         <label>Apartment, suite, etc. (optional)</label>
       </div>
 
+      <!-- Region, then city, then postal code: widest first, and in the
+           order they are actually filled. City is disabled until a
+           region is chosen, so having it above the region asked for a
+           field that depended on one not yet reached. -->
+      <div class="field-wrap">
+        <select id="region"><option value="">Select region</option></select>
+        <label>Region</label>
+      </div>
+
       <div class="field-row">
-        <div class="field-wrap">
-          <input id="postal" placeholder=" " autocomplete="postal-code" inputmode="numeric" maxlength="4" pattern="[0-9]{4}">
-          <label>Postal code</label>
-        </div>
         <div class="field-wrap">
           <select id="city" disabled><option value="">Choose a region first</option></select>
           <label>City</label>
         </div>
-      </div>
-
-      <div class="field-wrap">
-        <select id="region"><option value="">Select region</option></select>
-        <label>Region</label>
+        <div class="field-wrap">
+          <input id="postal" placeholder=" " autocomplete="postal-code" inputmode="numeric" maxlength="4" pattern="[0-9]{4}">
+          <label>Postal code</label>
+        </div>
       </div>
 
       <div class="field-wrap phone-field">

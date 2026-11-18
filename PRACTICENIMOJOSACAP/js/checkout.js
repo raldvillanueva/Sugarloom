@@ -503,9 +503,12 @@ async function placeOrder(){
   if(!fname)   { showFieldError("fname", "First name cannot be empty"); hasError = true; }
   if(!lname)   { showFieldError("lname", "Last name cannot be empty"); hasError = true; }
   if(!address) { showFieldError("address", "Address cannot be empty"); hasError = true; }
-  if(!postal)  { showFieldError("postal", "Postal code cannot be empty"); hasError = true; }
-  if(!city)    { showFieldError("city", "City cannot be empty"); hasError = true; }
+  /* Checked in the order the fields are now in, so the scroll to the
+     first complaint lands on the first empty box rather than the last
+     one above it. */
   if(!region)  { showFieldError("region", "Region cannot be empty"); hasError = true; }
+  if(!city)    { showFieldError("city", "City cannot be empty"); hasError = true; }
+  if(!postal)  { showFieldError("postal", "Postal code cannot be empty"); hasError = true; }
   if(!phone){
     showFieldError("phone", "Phone cannot be empty"); hasError = true;
   } else if(!isValidPhone(phone)){
