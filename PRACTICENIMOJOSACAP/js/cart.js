@@ -217,7 +217,12 @@ function checkout(){
       const soldToday = (match.lastResetDate === todayStr) ? (match.soldToday || 0) : 0;
       const available = Math.max(0, limit - soldToday);
       if((item.qty || 1) > available){
-        stockErrors.push(`<strong>${item.name}</strong>: you ordered ${item.qty || 1} but only ${available} left for today.`);
+        /* The quantity, not what is left. This is not a refusal —
+           the order is accepted, it just needs the lead time — and a
+           "only 50 left" reads as one. It also quotes a number from
+           soldToday, which barely moves; the quantity the customer
+           typed is a fact the page already knows is true. */
+        stockErrors.push(`<strong>${item.name}</strong> &times; ${item.qty || 1}`);
       }
     }
   });
@@ -243,8 +248,21 @@ function checkout(){
         }
       }
       const minLabel = minRestockDate.toLocaleDateString('en-PH', { month:'long', day:'numeric', year:'numeric' });
-      stockError.innerHTML = `Some items have reached their daily order limit:<br>${stockErrors.join('<br>')}
-        <br><span style="font-weight:500">Please choose a delivery date from <u>${minLabel}</u> or later, or reduce the quantity.</span>`;
+
+      /* Written as a bulk order rather than a shortage, because that
+         is what it is: the quantity is above what the shop bakes in
+         one day, so it is scheduled as a batch and needs two days'
+         notice. The old wording — "reached their daily order limit",
+         "only 50 left for today" — read as a refusal, and a customer
+         placing the largest order of the week was the one being told
+         no. */
+      stockError.innerHTML =
+        `<strong>This is a bulk order.</strong><br>` +
+        `<span style="font-weight:500">${stockErrors.join(' &nbsp;·&nbsp; ')}</span><br>` +
+        `Quantities above what we bake in a day are prepared as a scheduled batch, ` +
+        `which we need at least two days to arrange.<br>` +
+        `<span style="font-weight:500">Please choose a delivery date on or after <u>${minLabel}</u>` +
+        `, or lower the quantity for a sooner date.</span>`;
       stockError.style.display = "block";
       return;
     }
