@@ -574,3 +574,40 @@ a { text-decoration: none; color: inherit; }
 .product-clean.stock-tight .product-thumb img { opacity: .72; }
 .product-clean.stock-tight h3,
 .product-clean.stock-tight .price { opacity: .8; }
+
+/* ── WHILE THE SHOP LOADS ──
+   Card-shaped placeholders, the same size as the real cards, so the
+   page has its full height from the first paint and nothing jumps
+   when the products arrive. They shimmer rather than sit still,
+   because a grey card that never moves reads as a card that failed
+   to load. */
+.product-skeleton {
+  background: var(--bg-card);
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.product-skeleton .sk-img,
+.product-skeleton .sk-line {
+  border-radius: 8px;
+  background: linear-gradient(90deg, #eceae5 25%, #f5f3ee 50%, #eceae5 75%);
+  background-size: 400% 100%;
+  animation: sk-shimmer 1.4s ease-in-out infinite;
+}
+
+.product-skeleton .sk-img  { height: 220px; border-radius: 12px; }
+.product-skeleton .sk-line { height: 14px; margin-top: 14px; }
+.product-skeleton .sk-line.short { width: 40%; margin-top: 10px; }
+
+@keyframes sk-shimmer {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0 0; }
+}
+
+/* A still placeholder for anyone who does not want the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .product-skeleton .sk-img,
+  .product-skeleton .sk-line { animation: none; background: #eceae5; }
+}

@@ -61,6 +61,47 @@ function render(list){
   setTimeout(revealOnScroll, 50);
 }
 
+const SHOP_TITLES = { all: "All", cookie: "Cookies", brownie: "Brownies", cupcake: "Cupcakes", box: "Boxes" };
+
+/* ── WHILE THE SHOP IS LOADING ──
+   The page used to arrive with "Shop Cookies" written into the markup
+   and an empty grid, then sit there through two round trips — the
+   product list and the day's committed stock — before anything
+   replaced either. For that second or two the shop appeared to be
+   showing a category with nothing in it, which is what a sold-out
+   shop looks like.
+
+   So the heading and the pills are set from what is already known,
+   before the first await, and the grid holds card-shaped placeholders
+   so the page has its real height from the start and nothing jumps
+   when the products land. */
+function shopTitleNow(){
+  if(sessionStorage.getItem("boxesOnlyMode") === "true") return "Shop Boxes";
+  if(localStorage.getItem("customizeMode")   === "true") return "Choose your orders";
+  const sel = localStorage.getItem("selectedCategory") || "all";
+  return "Shop " + (SHOP_TITLES[sel] || "All");
+}
+
+function showShopLoading(){
+  const titleEl = document.querySelector(".shop-title");
+  if(titleEl) titleEl.textContent = shopTitleNow();
+
+  /* The pill that will be active, active now — otherwise All is
+     highlighted under a heading that says Brownies. */
+  const boxesOnly = sessionStorage.getItem("boxesOnlyMode") === "true";
+  const pill = boxesOnly ? "box" : (localStorage.getItem("selectedCategory") || "all");
+  document.querySelectorAll(".filter-pill").forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.filter === pill));
+
+  const grid = document.getElementById("product-list");
+  if(grid){
+    grid.innerHTML = Array.from({ length: 6 }, () =>
+      `<div class="product-skeleton" aria-hidden="true">
+         <div class="sk-img"></div><div class="sk-line"></div><div class="sk-line short"></div>
+       </div>`).join("");
+  }
+}
+
 /* FILTER */
 function filterProducts(type){
 
@@ -78,9 +119,8 @@ function filterProducts(type){
   });
 
   // UPDATE SHOP TITLE
-  const titles = { all: "All", cookie: "Cookies", brownie: "Brownies", cupcake: "Cupcakes", box: "Boxes" };
   const titleEl = document.querySelector(".shop-title");
-  if(titleEl) titleEl.textContent = "Shop " + (titles[type] || "All");
+  if(titleEl) titleEl.textContent = "Shop " + (SHOP_TITLES[type] || "All");
 
   let filtered = type === "all"
     ? products
@@ -167,6 +207,10 @@ function revealOnScroll(){
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+  /* Before the first await, so the page never shows a heading it is
+     about to change above a grid that is empty for another second. */
+  showShopLoading();
+
   // Load products from Supabase, fall back to hardcoded list if unavailable
   try {
     const { data } = await _supa.from('products').select('data');
