@@ -3622,9 +3622,11 @@ function renderInventory(){
     items.forEach(ing => {
       const low = isIngLow(ing);
       const pct = Math.min(100, Math.round((ing.stock / ingCapacity(ing)) * 100));
-      ingHTML += `<tr>
-        <td class="fw-bold">${ing.name}</td>
-        <td>${ing.unit}</td>
+      /* Addressable, so a notification about this ingredient can land
+         on this row rather than on the page that contains it. */
+      ingHTML += `<tr id="ing-row-${ing.id}">
+        <td class="fw-bold">${escHTML(ing.name)}</td>
+        <td>${escHTML(ing.unit)}</td>
         <td>
           <div class="stock-bar-wrap">
             <div class="stock-bar"><div class="stock-bar-fill ${low?'low':'ok'}" style="width:${pct}%"></div></div>
@@ -3644,8 +3646,53 @@ function renderInventory(){
     });
   });
   document.getElementById('ingredients-body').innerHTML = ingHTML;
+  flashPendingIngredient();
   renderIngredientTrash();
   syncRestockForm().then(renderSupplierOrders);
+}
+
+/* ── GOING TO ONE INGREDIENT ──
+   A notification that says "Cocoa Powder is low" used to open
+   Inventory and stop there, leaving the admin to find the row among
+   twenty-one of them, under whichever category tab happened to be
+   showing. The point of the notification is the ingredient, so it
+   goes to the ingredient.
+
+   The row is asked for after the render rather than during it: the
+   table is rebuilt from scratch on every render and the element the
+   notification clicked no longer exists by the time the view has
+   switched. So the id is remembered and the row is picked up on the
+   way out of the next render. */
+let _pendingIngredientFocus = null;
+
+function focusIngredient(id){
+  _pendingIngredientFocus = id;
+
+  /* Category tabs and a search box can both hide the row. Neither is
+     worth keeping when the admin has just asked to see one thing. */
+  const search = document.getElementById('ing-search');
+  if(search && search.value) search.value = '';
+
+  switchView('inventory');
+
+  /* Through filterIngCat so the tab that looks active is the one that
+     is active — it owns both halves of that. */
+  const allTab = document.querySelector('#ing-cat-tabs .status-tab');
+  if(ingCatFilter !== 'All' && allTab) filterIngCat('All', allTab);
+  else renderInventory();
+}
+
+function flashPendingIngredient(){
+  const id = _pendingIngredientFocus;
+  if(!id) return;
+  _pendingIngredientFocus = null;
+
+  const row = document.getElementById('ing-row-' + id);
+  if(!row) return;
+
+  row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  row.classList.add('row-flash');
+  setTimeout(() => row.classList.remove('row-flash'), 2600);
 }
 
 /* ═══════════════════════════════════════════
@@ -6018,7 +6065,8 @@ function buildNotifs(){
        admin, so it does not also need the top of this list. */
     notifList.push({ id, view:'inventory', icon:'bx-error-circle', color:'#EA580C', standing: true,
       text:`Low stock ingredient: ${ing.name} (${ing.stock} left)`,
-      action(){ switchView('inventory'); document.getElementById('notif-panel').classList.add('hidden'); }
+      /* Straight to the row, not to the page it is on. */
+      action(){ document.getElementById('notif-panel').classList.add('hidden'); focusIngredient(ing.id); }
     });
   });
 

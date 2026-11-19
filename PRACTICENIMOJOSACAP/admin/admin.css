@@ -1743,6 +1743,22 @@ textarea { resize: vertical; }
 .rf-pri.low    { background: #fef3c7; color: #92400e; }
 .rf-pri.urgent { background: #fee2e2; color: #b91c1c; }
 
+/* ── ARRIVING AT ONE ROW ──
+   A notification scrolls its row into view, and a row in the middle of
+   a table looks like every other row. The highlight fades rather than
+   staying, because it answers "which one" and nothing after that. */
+@keyframes row-flash {
+  0%   { background: #fde68a; }
+  60%  { background: #fef3c7; }
+  100% { background: transparent; }
+}
+.row-flash > td {
+  animation: row-flash 2.6s ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .row-flash > td { animation: none; background: #fef3c7; }
+}
+
 /* ── INGREDIENT TRASH ──
    Set apart from the live inventory above it: this is where deleted
    things sit, and it should not read as another list of stock. */
