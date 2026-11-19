@@ -548,11 +548,27 @@ async function sendMessage(){
     });
     const data = await res.json();
     removeTypingIndicator(typingId);
+
+    /* A reply the AI did not write is not an answer. The server used
+       to send "Sorry, AI is unavailable right now 😔" as the reply
+       itself, so the request succeeded, this line printed it, and the
+       customer got an apology from an assistant that had never been
+       asked. The keyword replies below know the prices, the delivery
+       area and the opening hours — they are a better answer than an
+       error, and the customer need not know which of the two spoke.
+
+       The old sentence is still matched because the hosted server
+       keeps running the previous build until it is redeployed. */
+    const failed = !res.ok || data.ok === false || !data.reply ||
+                   /AI is unavailable/i.test(data.reply);
+    if(failed){
+      if(data.reason) console.warn('chat backend:', data.reason);
+      addBotMessage(offlineReply(text));
+      return;
+    }
     addBotMessage(data.reply);
   } catch(err) {
-    /* The AI backend only answers on localhost, and an https page can't
-       call it at all, so on the deployed site this always fails. Answer
-       from the built-in replies instead of showing an error. */
+    /* Unreachable backend — no API_BASE, asleep, or offline. */
     removeTypingIndicator(typingId);
     addBotMessage(offlineReply(text));
   }

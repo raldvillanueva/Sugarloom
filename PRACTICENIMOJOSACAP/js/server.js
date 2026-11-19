@@ -102,7 +102,8 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
 if (!process.env.GEMINI_API_KEY) {
   console.warn("⚠️  GEMINI_API_KEY is not set — /chat will fail and the site falls back to its built-in replies.");
 }
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+const MODEL_NAME = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const model = genAI.getGenerativeModel({ model: MODEL_NAME });
 
 app.post("/chat", async (req, res) => {
   const { message } = req.body;
@@ -197,10 +198,48 @@ RESPONSE GUIDELINES:
     const result = await chat.sendMessage(message);
     const reply  = result.response.text();
     console.log("✅ Gemini reply:", reply);
-    res.json({ reply });
+    res.json({ ok: true, reply });
   } catch (err) {
+    /* ok:false rather than a sentence dressed as an answer. The old
+       reply — "Sorry, AI is unavailable right now" — was handed
+       straight to the customer as though the assistant had said it,
+       and the page's own keyword answers never got a turn because
+       from the browser's side the request had succeeded.
+
+       The reason is named so the cause is visible from outside. A
+       provider error message carries no key material; the key itself
+       is never in the response. */
     console.log("❌ Gemini error:", err.message);
-    res.json({ reply: "Sorry, AI is unavailable right now 😔" });
+    res.json({ ok: false, reason: geminiReason(err) });
+  }
+});
+
+/* Which of the handful of things that go wrong actually went wrong. */
+function geminiReason(err){
+  /* message when there is one, even an empty one: `|| err` on an Error
+     with no message stringifies the object to "Error", which reads as
+     a cause and is not one. */
+  const msg = String(err && typeof err.message === "string" ? err.message : (err || ""));
+  if (!process.env.GEMINI_API_KEY)                       return "GEMINI_API_KEY is not set on the host";
+  if (/API[_ ]?key|API_KEY_INVALID|PERMISSION_DENIED/i.test(msg)) return "the API key was refused: " + msg.slice(0, 200);
+  if (/quota|RESOURCE_EXHAUSTED|\b429\b/i.test(msg))     return "the account is out of quota: " + msg.slice(0, 200);
+  if (/not found|\b404\b/i.test(msg))                    return `the model "${MODEL_NAME}" was not found: ` + msg.slice(0, 200);
+  return msg.slice(0, 240) || "unknown error";
+}
+
+/* Says whether the assistant can answer, and why not when it cannot.
+   Without this the only way to find out was to read the host's logs,
+   which is exactly what nobody has to hand when the chat is broken. */
+app.get("/chat/status", async (_req, res) => {
+  if (!process.env.GEMINI_API_KEY) {
+    return res.json({ ok: false, keySet: false, model: MODEL_NAME,
+                      reason: "GEMINI_API_KEY is not set on the host" });
+  }
+  try {
+    const r = await model.generateContent("Reply with the single word: ready");
+    res.json({ ok: true, keySet: true, model: MODEL_NAME, sample: r.response.text().trim().slice(0, 40) });
+  } catch (err) {
+    res.json({ ok: false, keySet: true, model: MODEL_NAME, reason: geminiReason(err) });
   }
 });
 
