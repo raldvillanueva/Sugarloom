@@ -983,7 +983,7 @@ function renderDashboard(){
   const showcaseProds = DB.products.filter(p=>p.active).slice(0,8);
   document.getElementById('dash-product-grid').innerHTML = showcaseProds.map(p=>`
     <div class="dash-prod-card" onclick="switchView('products')">
-      <img src="${p.img||''}" onerror="this.style.background='var(--bg-2)'" alt="${p.name}">
+      <img src="${productImgSrc(p)}" onerror="productImgFallback(this)" alt="${escHTML(p.name)}">
       <div class="dash-prod-info">
         <span class="dash-prod-name">${p.name}</span>
         <span class="dash-prod-cat">${p.category||''}</span>
@@ -1247,7 +1247,7 @@ function renderProducts(){
     <tr>
       <td>
         <div class="product-cell">
-          <div class="product-thumb"><img src="${p.img||''}" alt="${p.name}" onerror="this.style.display='none'"></div>
+          <div class="product-thumb"><img src="${productImgSrc(p)}" alt="${escHTML(p.name)}" onerror="productImgFallback(this)"></div>
           <div>
             <div class="product-name">${p.name}</div>
             <div class="product-desc">${p.description||''}</div>
@@ -1410,12 +1410,32 @@ function shrinkImage(file){
   });
 }
 
+/* Resizing a photo takes a moment — read the file, decode it, draw it
+   to a canvas — and until it finishes the hidden field still holds the
+   old value. saveProduct() is synchronous and reads that field, so an
+   admin who picked a picture and clicked Save straight after saved the
+   product with no image at all and no hint that anything was wrong.
+   That is how a product ends up with img: '' after a successful
+   upload.
+
+   So while a picture is being prepared, Save is not available. */
+let _productImgBusy = false;
+
+function setProductImgBusy(busy){
+  _productImgBusy = busy;
+  const btn = document.getElementById('pm-save-btn');
+  if(!btn) return;
+  btn.disabled = busy;
+  btn.title = busy ? 'Waiting for the picture to finish' : '';
+}
+
 async function handleProductImgUpload(e){
   const file = e.target.files[0];
   if(!file) return;
 
   const nameEl = document.getElementById('pm-img-filename');
   nameEl.textContent = 'Resizing…';
+  setProductImgBusy(true);
 
   try {
     const dataUrl = await shrinkImage(file);
@@ -1429,11 +1449,20 @@ async function handleProductImgUpload(e){
     nameEl.textContent = '';
     toast('Could not read that picture — try a JPG or PNG', 'danger');
   } finally {
+    setProductImgBusy(false);
     e.target.value = '';   // let the same file be picked again
   }
 }
 
 function saveProduct(){
+  /* Belt as well as braces: the Save button is disabled while a
+     picture is being prepared, but the function is also reachable
+     from the keyboard and the console. */
+  if(_productImgBusy){
+    toast('Still preparing the picture — one moment', '');
+    return;
+  }
+
   const id    = document.getElementById('pm-id').value;
   const p     = DB.products.find(pp=>pp.id===id);
   const price = parseFloat(document.getElementById('pm-price').value);
@@ -3509,7 +3538,7 @@ function renderInventory(){
   document.getElementById('product-stock-body').innerHTML = DB.products.map(p=>{
     const sc = stockClass(p);
     return `<tr>
-      <td><div class="product-cell"><div class="product-thumb"><img src="${p.img||''}" alt="${p.name}" onerror="this.style.display='none'"></div><div class="product-name">${p.name}</div></div></td>
+      <td><div class="product-cell"><div class="product-thumb"><img src="${productImgSrc(p)}" alt="${escHTML(p.name)}" onerror="productImgFallback(this)"></div><div class="product-name">${escHTML(p.name)}</div></div></td>
       <td>${p.category}</td>
       <td>
         <div class="stock-bar-wrap">

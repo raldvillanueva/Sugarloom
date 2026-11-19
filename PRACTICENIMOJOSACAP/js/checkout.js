@@ -19,7 +19,7 @@ function loadCheckout(){
 
     container.innerHTML += `
       <div class="order-item">
-        <img src="${item.img}" class="order-img" alt="${item.name}">
+        <img src="${productImgSrc(item)}" class="order-img" alt="${item.name}" onerror="productImgFallback(this)">
         <div class="order-info">
           <p class="name">${item.name}</p>
           <p class="qty">x${item.qty}</p>

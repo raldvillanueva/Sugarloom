@@ -21,7 +21,18 @@ function loadProduct(){
 
   document.getElementById("product-name").innerText = data.name;
   document.getElementById("product-price").innerText = "₱" + data.price;
-  document.getElementById("product-img").src = data.img;
+
+  /* The list page strips an uploaded picture out of the hand-off,
+     because a data URL is a six-figure string and localStorage is
+     small. Its comment said this page reads the picture from the
+     database instead — and this page never did, so every product
+     with an uploaded photo arrived here with an empty src and drew
+     the broken-image icon. The placeholder goes up straight away and
+     the real picture replaces it once it is fetched. */
+  const imgEl = document.getElementById("product-img");
+  imgEl.src = productImgSrc(data);
+  imgEl.onerror = () => productImgFallback(imgEl);
+  if(!data.img) loadProductImage(data.name, imgEl);
 
   const descEl = document.getElementById("product-desc");
   if(descEl) descEl.innerText = data.description || "Freshly baked premium treat made with love 🍪";
@@ -41,6 +52,20 @@ function loadProduct(){
   }
 
   updateCart();
+}
+
+/* Fetches the picture the hand-off could not carry. A failure leaves
+   the placeholder up rather than the broken icon it replaced — the
+   page is about the product, not the photograph. */
+async function loadProductImage(name, imgEl){
+  try {
+    const { data: rows, error } = await _supa.from('products').select('data');
+    if(error) throw error;
+    const match = (rows || []).map(r => r.data).find(p => p && p.name === name);
+    if(match && match.img) imgEl.src = match.img;
+  } catch(e){
+    console.warn('could not load the product picture:', e);
+  }
 }
 
 function changeQty(num){

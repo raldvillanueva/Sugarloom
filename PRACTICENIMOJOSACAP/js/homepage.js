@@ -96,7 +96,7 @@ function render(){
        would break out of the quotes. */
     container.innerHTML += `
       <div class="product-item" onclick="viewProductAt(${i})">
-        <img src="${p.img}">
+        <img src="${productImgSrc(p)}" alt="${p.name}" onerror="productImgFallback(this)">
         <h3>${p.name}</h3>
         <p class="desc">${p.description}</p>
       </div>

@@ -45,7 +45,7 @@ function render(list){
     div.className = "product-clean" + (a.orderable ? "" : " stock-tight");
     div.innerHTML = `
       <div class="product-thumb">
-        <img src="${p.img}" alt="${p.name}">
+        <img src="${productImgSrc(p)}" alt="${p.name}" onerror="productImgFallback(this)">
         ${badge}
       </div>
       <h3>${p.name}</h3>
