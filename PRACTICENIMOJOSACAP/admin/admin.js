@@ -1503,6 +1503,8 @@ function saveProduct(){
 
 function toggleProduct(id){
   const p = DB.products.find(pp=>pp.id===id);
+  if(!p) return;
+
   if(p.active){
     showConfirm({
       title: 'Deactivate Product',
@@ -1512,14 +1514,45 @@ function toggleProduct(id){
       onConfirm: () => {
         p.active = false;
         saveDB(); renderProducts(); updateBadges();
+        logAudit('Products', 'Product deactivated', p.name, 'Hidden from the store');
         toast('Product deactivated', '');
       }
     });
-  } else {
-    p.active = true;
-    saveDB(); renderProducts(); updateBadges();
-    toast('Product activated', 'success');
+    return;
   }
+
+  /* Activating asks too. It used to go straight through, and it is
+     the direction that can go wrong in public: deactivating takes
+     something off the shop, activating puts it in front of customers
+     who can then order it.
+
+     The two things worth knowing before that happens are both easy
+     to miss on a product added in a hurry. Without a recipe nothing
+     is taken out of stock when it is baked, so the inventory quietly
+     stops matching the storeroom. Without a picture the shop shows a
+     placeholder where the cake should be. Neither stops the
+     activation — they are facts about what is about to go live. */
+  const missing = [];
+  if(!p.recipe || !p.recipe.length) missing.push('no recipe, so baking it will not deduct any ingredients');
+  if(!String(p.img || '').trim())   missing.push('no picture, so the shop will show a placeholder');
+
+  showConfirm({
+    title: 'Put this product on sale',
+    icon:  'bx-show',
+    okText: 'Activate',
+    okClass: 'btn-primary',
+    message:
+      `"${p.name}" will appear in the store and customers will be able to order it` +
+      (p.dailyLimit ? `, up to ${p.dailyLimit} a day` : '') + '.' +
+      (missing.length ? ` It has ${missing.join(', and ')}.` : ''),
+    onConfirm: () => {
+      p.active = true;
+      saveDB(); renderProducts(); updateBadges();
+      logAudit('Products', 'Product activated', p.name,
+               missing.length ? `Live with ${missing.length} thing${missing.length === 1 ? '' : 's'} missing` : 'Live in the store');
+      toast('Product activated', 'success');
+    }
+  });
 }
 
 
@@ -1976,7 +2009,17 @@ function archiveOrder(id){
 function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', inputLabel=null, inputPlaceholder='', inputRequired=false, inputMin=0, inputType='text', inputMinValue=null, onConfirm }){
   document.getElementById('confirm-modal-title').textContent = title;
   document.getElementById('confirm-modal-message').textContent = message;
-  document.getElementById('confirm-modal-icon').innerHTML = `<i class='bx ${icon}'></i>`;
+  /* The circle was hardcoded red in the markup, so every dialog looked
+     like a warning — including the ones that are not. It follows the
+     action now: red for a destructive confirm, the panel's own grey
+     for an ordinary one, green for something going live. */
+  const iconEl = document.getElementById('confirm-modal-icon');
+  iconEl.innerHTML = `<i class='bx ${icon}'></i>`;
+  const tone = okClass.includes('danger')  ? ['var(--danger-light)',  'var(--danger)']
+             : okClass.includes('success') ? ['var(--success-light)', 'var(--success)']
+             :                               ['var(--primary-light)', 'var(--primary)'];
+  iconEl.style.background = tone[0];
+  iconEl.style.color      = tone[1];
 
   /* Optional box: the textarea for a reason, the date control for a
      new delivery date. Whichever is not in use is hidden and emptied,
