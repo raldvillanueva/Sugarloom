@@ -331,6 +331,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
+/* The four stages an order passes through while its status is
+   'Preparing', in the customer's words. The tracker below and the
+   badge above both read preparingSubStatus; this is the one place
+   that says what each value means, so the two cannot disagree. */
+const PREP_LABELS = {
+  baking:       { label: '🔥 Baking',               color: '#EA580C' },
+  packing:      { label: '📦 Packing',              color: '#EA580C' },
+  packed:       { label: '✅ Packed',               color: '#0891B2' },
+  readyForBook: { label: '🛵 Waiting for a rider',  color: '#0891B2' },
+};
+
 async function renderOrders() {
   const container   = document.getElementById('orders-list');
   const currentUser = await getCurrentUser();
@@ -425,10 +436,21 @@ async function renderOrders() {
       : status === 'Cancelled' ? '#DC2626'
       : status === 'Cancel Requested' ? '#EA580C'
       : '#D97706';
-    const prepLabel = order.preparingSubStatus === 'packing' ? '📦 Packing' : '🔥 Baking';
-    const statusBadge = status === 'Preparing'
-      ? `<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${statusColor}1a;color:${statusColor}">${prepLabel}</span>`
-      : `<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${statusColor}1a;color:${statusColor}">${status}</span>`;
+    /* Preparing covers four stages in the kitchen, and this used to
+       name two of them: anything that was not 'packing' was called
+       Baking. So an order that was packed and waiting for a rider told
+       the customer it was in the oven — while the tracker underneath
+       it, which reads the same field properly, showed Packing already
+       done. Two answers on one card, from one order.
+
+       readyForBook is the admin's word for it. The customer is told
+       it is packed and waiting for a rider, which is the same fact
+       without the internal vocabulary. */
+    const prep = PREP_LABELS[order.preparingSubStatus] || PREP_LABELS.baking;
+    const badgeLabel = status === 'Preparing' ? prep.label : status;
+    const badgeColor = status === 'Preparing' ? prep.color : statusColor;
+    const statusBadge =
+      `<span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${badgeColor}1a;color:${badgeColor}">${badgeLabel}</span>`;
 
     return `
       <div class="order-card" id="order-card-${order.id}">
