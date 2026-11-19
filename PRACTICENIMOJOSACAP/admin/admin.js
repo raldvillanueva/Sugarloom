@@ -1485,6 +1485,7 @@ function saveProduct(){
   const name = document.getElementById('pm-name').value.trim();
   const cat  = document.getElementById('pm-category').value;
   if(!name||!cat||isNaN(price)){ toast('Fill required fields','danger'); return; }
+  if(!isValidName(name)){ toast('Product names are letters only — no numbers, emoji or symbols','danger'); return; }
   const data = {
     name, category:cat,
     flavor:      document.getElementById('pm-flavor').value.trim(),
@@ -4410,6 +4411,11 @@ function saveIngredient(){
   const cat   = document.getElementById('ing-category').value;
 
   if(!name || isNaN(stock)){ toast('Fill all fields','danger'); return; }
+  /* The box filters as it is typed; this is the rule itself, for a
+     value that arrived some other way. An ingredient name is read off
+     a shelf and printed on a restock form — letters, and the
+     punctuation a name uses. */
+  if(!isValidName(name)){ toast('Ingredient names are letters only — no numbers, emoji or symbols','danger'); return; }
   if(isNaN(cap) || cap <= 0){ toast('Set the full stock level','danger'); return; }
 
   /* threshold is kept in sync as a plain quantity so anything reading it
