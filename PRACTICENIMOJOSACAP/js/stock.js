@@ -79,9 +79,23 @@ function todayISO(){
    because one query failed. */
 async function loadCommitted(supa, isoDay){
   try {
-    const { data, error } = await supa.from('orders').select('status,data');
+    /* Three fields, not the whole order. This asked for `data` — the
+       entire jsonb of every order, including the base64 GCash receipt
+       attached to each one — and ran on the products page, the product
+       page, the cart and checkout. 1.8 MB per page view to count how
+       many cookies are spoken for.
+
+       committedForDay reads status, items and preferredDate and
+       nothing else, so that is what is fetched: the same answer for a
+       fraction of a percent of the bytes. */
+    const { data, error } = await supa.from('orders')
+      .select('status,data->items,data->preferredDate');
     if(error || !data) return null;
-    const orders = data.map(r => Object.assign({ status: r.status }, r.data || {}));
+    const orders = data.map(r => ({
+      status:        r.status,
+      items:         r.items || [],
+      preferredDate: r.preferredDate
+    }));
     return committedForDay(orders, isoDay || todayISO());
   } catch(e){
     console.warn('could not read committed stock:', e);

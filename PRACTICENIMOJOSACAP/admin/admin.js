@@ -753,8 +753,35 @@ async function refreshTrackingCache(){
   (data || []).forEach(row => { _trackingCache[row.order_id] = row.data; });
 }
 
+/* The id and status of every order, as one short string. Nothing in
+   the panel changes an order without changing one of the two, so if
+   this is the same as last time there is nothing to fetch. */
+let _ordersSignature = null;
+
 async function syncStoreOrders(){
   await refreshTrackingCache(); // keep tracking cache fresh every poll cycle
+
+  /* ── WHY THERE ARE TWO QUERIES ──
+     This ran every three seconds and asked for `data` — the whole
+     jsonb of every order, each carrying a base64 GCash receipt. That
+     is 1.8 MB a poll, 2.1 GB an hour, for an admin tab left open. It
+     is what put the project 400% over its egress quota.
+
+     So the poll asks the cheap question first: id and status for every
+     order, about a kilobyte. Only when that answer differs from the
+     last one is the expensive fetch worth making. A quiet shop now
+     costs a kilobyte every cycle instead of nearly two megabytes. */
+  const { data: sig, error: sigErr } = await _supa
+    .from('orders').select('id,status').order('date', { ascending: false });
+
+  if(!sigErr && sig){
+    const signature = sig.map(r => r.id + ':' + r.status).join('|');
+    /* Only skip when there is something in memory to keep — the first
+       sync of a session must fetch however quiet the shop is. */
+    if(signature === _ordersSignature && DB.orders.length) return 0;
+    _ordersSignature = signature;
+  }
+
   const { data: rows } = await _supa.from('orders').select('data, status').order('date', { ascending: false });
   if (!rows) return 0;
 
