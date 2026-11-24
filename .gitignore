@@ -13,3 +13,7 @@ node_modules/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Python bytecode (docs/source build scripts)
+__pycache__/
+*.pyc
