@@ -31,13 +31,10 @@ const WALLET_ACCOUNTS = {
     label:  'KARL NORBY RONQUILLO',
     holder: 'KARL NORBY RONQUILLO',
 
-    /* The Maya username, not a phone number. Maya masks the number on
-       the QR card (+63 ••• ••• 7385), so there are no full digits to
-       copy here and guessing them would send money to a stranger. The
-       handle is a complete address on Maya and is what the card shows
-       in full, so it is what the customer gets. Replace it with the
-       phone number only if you have the real one in front of you. */
-    number: '@karl.norby',
+    /* Grouped 4-3-4 to match the GCash line above, so the two wallets
+       read the same way. The card only shows +63 ••• ••• 7385; these
+       are the full digits, and the last four agree with the mask. */
+    number: '0994 460 7385',
 
     /* The space in the filename has to be written as %20 — a raw space
        in an href is not a valid URL and some hosts will not serve it. */
