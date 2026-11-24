@@ -567,6 +567,22 @@ a { text-decoration: none; color: inherit; }
 .stock-badge.out { background: #991B1B; }
 .stock-badge.low { background: #B45309; }
 
+/* ── HOW MANY ARE LEFT, UNDER THE NAME ──
+   On every card, so the number is a steady fact about the product
+   rather than an alarm that only appears once it is nearly too late
+   to act on. Sits between the name and the price, quiet by default
+   and coloured only when the news matters. */
+.product-clean .stock-line {
+  margin: 2px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--muted, #8a8275);
+}
+.product-clean .stock-line.low { color: #B45309; }
+.product-clean .stock-line.out { color: #991B1B; }
+.product-clean.stock-tight .stock-line { opacity: .9; }
+
 /* Tight on today, but still orderable for a later date — so it is
    dimmed to be noticed, not greyed out to look unavailable. It stays
    clickable: being full today says nothing about next week, and

@@ -37,6 +37,8 @@ function loadProduct(){
   const descEl = document.getElementById("product-desc");
   if(descEl) descEl.innerText = data.description || "Freshly baked premium treat made with love 🍪";
 
+  showStockLine(data);
+
   const boxInfo = document.getElementById("box-info");
   if(boxInfo) boxInfo.style.display = data.name.toLowerCase().includes("box") ? "block" : "none";
 
@@ -52,6 +54,49 @@ function loadProduct(){
   }
 
   updateCart();
+}
+
+/* ── HOW MANY ARE LEFT TODAY ──
+   The page let a customer set a quantity and add to the basket with
+   nothing said about whether the shop can still make it. The shop
+   grid has shown that for a while; this page, which is where somebody
+   actually decides how many to buy, did not.
+
+   The number is today's. A product full for today can still be
+   ordered for a later date — capacity is per baking day, so a date
+   further out is worth more — which is why a full product says to
+   pick another date rather than claiming to be unavailable. Checkout
+   knows the date the customer picked and is the one that decides.
+
+   `availability()` is the same rule the shop, the cart and checkout
+   use, so the four cannot disagree. */
+function describeStock(a){
+  if(a.left === Infinity) return null;              // no daily limit set
+  if(a.state === 'out')   return { cls:'out',  text:'Full for today — pick a later delivery date' };
+  if(a.state === 'low')   return { cls:'low',  text:'Low for today — order ahead for a later date' };
+  if(a.state === 'nearly')return { cls:'low',  text:`Only ${a.left} left today` };
+  return { cls:'ok', text:`${a.left} left today` };
+}
+
+async function showStockLine(product){
+  const el = document.getElementById('product-stock');
+  if(!el) return;
+
+  /* The hand-off carries dailyLimit, but how much of it is spoken for
+     is only knowable from the orders. Without that count this would
+     fall back to soldToday, which is stale — so the line is left off
+     entirely rather than shown wrong. */
+  let committed = null;
+  try { committed = await loadCommitted(_supa); }
+  catch(e){ console.warn("could not count today's orders:", e); }
+  if(!committed) return;
+
+  const said = describeStock(availability(product, committed));
+  if(!said) return;
+
+  el.textContent = said.text;
+  el.className   = 'stock-line ' + said.cls;
+  el.hidden      = false;
 }
 
 /* Fetches the picture the hand-off could not carry. A failure leaves

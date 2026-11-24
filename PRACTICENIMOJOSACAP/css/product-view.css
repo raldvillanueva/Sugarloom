@@ -200,6 +200,19 @@ button {
   margin: 14px 0;
 }
 
+/* How many are left today, under the price. `hidden` on the element
+   keeps it out of the layout until the day's orders have been
+   counted, so the page does not show a number and then correct it. */
+.stock-line {
+  margin: -8px 0 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted, #8a8275);
+}
+.stock-line.low { color: #B45309; }
+.stock-line.out { color: #991B1B; }
+.stock-line[hidden] { display: none; }
+
 .desc {
   color: var(--text-muted);
   margin-top: 10px;

@@ -42,6 +42,20 @@ function render(list){
       a.state === 'low'    ? '<span class="stock-badge low">Low — order ahead</span>' :
       a.state === 'nearly' ? `<span class="stock-badge low">Only ${a.left} left today</span>` : '';
 
+    /* Under the name, on every card rather than only the tight ones.
+       The corner badge shouts when something is nearly gone, which is
+       useful but says nothing at all the rest of the time — so a
+       customer could not tell a product with four left from one with
+       forty until it was almost too late to order.
+
+       A product with no daily limit set has no number to show and
+       gets no line, rather than a line saying nothing. */
+    const stockLine =
+      a.left === Infinity  ? '' :
+      a.state === 'out'    ? '<p class="stock-line out">Full for today</p>' :
+      a.state === 'low'    ? '<p class="stock-line low">Low for today</p>' :
+      `<p class="stock-line ${a.state === 'nearly' ? 'low' : 'ok'}">${a.left} left today</p>`;
+
     div.className = "product-clean" + (a.orderable ? "" : " stock-tight");
     div.innerHTML = `
       <div class="product-thumb">
@@ -49,6 +63,7 @@ function render(list){
         ${badge}
       </div>
       <h3>${p.name}</h3>
+      ${stockLine}
       <p class="price">₱${p.price}</p>`;
 
     if(!a.orderable){

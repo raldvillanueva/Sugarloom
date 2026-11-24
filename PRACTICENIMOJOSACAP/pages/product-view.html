@@ -43,6 +43,11 @@
     <h1 id="product-name"></h1>
     <p class="price" id="product-price"></p>
 
+    <!-- How many are left for today. Filled by showStockLine() in
+         js/product-view.js once the day's orders are counted; stays
+         empty for a product with no daily limit. -->
+    <p class="stock-line" id="product-stock" hidden></p>
+
     <p class="desc" id="product-desc">Freshly baked premium treat made with love 🍪</p>
     <div id="box-info" style="display:none;margin-top:8px">
       <span style="display:inline-flex;align-items:center;gap:6px;background:#f5f0eb;border:1px solid #e0d8ce;border-radius:20px;padding:4px 12px;font-size:13px;color:#7a5c3e;font-weight:500">
