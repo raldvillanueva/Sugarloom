@@ -54,7 +54,7 @@ function renderCart(){
     item.qty = item.qty || 1;
     container.innerHTML += `
       <div class="item">
-        <img src="${productImgSrc(item)}" alt="${item.name}" onerror="productImgFallback(this)">
+        <img src="${itemImgSrc(item)}" alt="${item.name}" onerror="productImgFallback(this)">
         <div class="item-info">
           <h3>${item.name}</h3>
           <p class="desc">₱${item.price} each</p>
@@ -382,6 +382,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     ]);
     _cartAdminProducts    = (pRes.data || []).map(r => r.data);
     _cartAdminIngredients = (iRes.data || []).map(r => r.data);
+    rememberProductImages(_cartAdminProducts);
   } catch(e) {}
 
   renderCart();

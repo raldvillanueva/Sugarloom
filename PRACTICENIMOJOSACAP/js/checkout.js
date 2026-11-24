@@ -19,7 +19,7 @@ function loadCheckout(){
 
     container.innerHTML += `
       <div class="order-item">
-        <img src="${productImgSrc(item)}" class="order-img" alt="${item.name}" onerror="productImgFallback(this)">
+        <img src="${itemImgSrc(item)}" class="order-img" alt="${item.name}" onerror="productImgFallback(this)">
         <div class="order-info">
           <p class="name">${item.name}</p>
           <p class="qty">x${item.qty}</p>
@@ -783,6 +783,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   ]);
   _adminProducts    = (pRes.data || []).map(r => r.data);
   _adminIngredients = (iRes.data || []).map(r => r.data);
+  rememberProductImages(_adminProducts);
 
   loadCheckout();
   setupProofDropzone();

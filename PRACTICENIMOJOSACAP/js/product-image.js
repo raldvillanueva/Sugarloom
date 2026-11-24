@@ -36,6 +36,40 @@ function productImgSrc(product){
   return src || PRODUCT_PLACEHOLDER;
 }
 
+/* ── A CART LINE OR AN ORDER ITEM ──
+   These carry a copy of the product's picture, and for an uploaded
+   one that copy is blank: products.js strips a data URL out of the
+   hand-off because it is a six-figure string and localStorage is
+   small. So a product with an uploaded photo showed the placeholder
+   in the cart even though the picture exists.
+
+   Carrying the picture was the wrong idea anyway. A data URL in the
+   cart eats the browser's storage, and the same string copied into
+   every order is what put 1.8 MB of base64 into the orders table and
+   the project 400% over its egress quota. The name is the key; the
+   picture is looked up from the product list the page has already
+   loaded for its prices and stock.
+
+   An item that does carry a usable picture — an ordinary http one —
+   keeps it, so an order placed before a product's photo changed
+   still shows what was bought. */
+let PRODUCT_IMG_BY_NAME = {};
+
+function rememberProductImages(products){
+  (products || []).forEach(p => {
+    if(p && p.name && String(p.img || '').trim()){
+      PRODUCT_IMG_BY_NAME[p.name.toLowerCase()] = p.img;
+    }
+  });
+}
+
+function itemImgSrc(item){
+  const own = item && typeof item.img === 'string' ? item.img.trim() : '';
+  if(own) return own;
+  const known = item && item.name ? PRODUCT_IMG_BY_NAME[item.name.toLowerCase()] : '';
+  return known || PRODUCT_PLACEHOLDER;
+}
+
 /* For an <img> that already has a src: swap to the placeholder when
    that src fails, and only once, so a placeholder that somehow fails
    cannot loop. Used as onerror="productImgFallback(this)". */
