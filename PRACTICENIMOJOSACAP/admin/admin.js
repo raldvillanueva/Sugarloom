@@ -823,15 +823,11 @@ async function syncStoreOrders(){
                String(d.getMonth() + 1).padStart(2, '0') + '-' +
                String(d.getDate()).padStart(2, '0');
       })();
-      if (deliveryDate === today) {
-        (order.items || []).forEach(item => {
-          const p = DB.products.find(pp => pp.name === item.name || pp.id === item.id);
-          if (p) {
-            if ((p.lastResetDate || '') !== today) { p.soldToday = 0; p.lastResetDate = today; }
-            p.soldToday = (p.soldToday || 0) + (item.qty || 1);
-          }
-        });
-      }
+      /* This used to add the order's quantities to p.soldToday here.
+         It counted only same-day deliveries, ran only in whichever
+         browser had the panel open, and was never saved — see
+         leftToday(). The orders are the count now, so there is
+         nothing to add. */
       added++;
     } else {
       // Sync status changes pushed by customer (cancel request)
@@ -1016,7 +1012,7 @@ function renderDashboard(){
         <span class="dash-prod-cat">${p.category||''}</span>
         <span class="dash-prod-price">₱${Number(p.price).toLocaleString()}</span>
       </div>
-      <span class="dash-prod-stock${Math.max(0,(p.dailyLimit||0)-(p.soldToday||0))<=(p.threshold||0)?' low':''}">${Math.max(0,(p.dailyLimit||0)-(p.soldToday||0))} left</span>
+      <span class="dash-prod-stock${leftToday(p)<=(p.threshold||0)?' low':''}">${leftToday(p)} left</span>
     </div>`).join('') || '<p style="color:var(--text-2);font-size:13px;padding:8px 0">No active products</p>';
 
   // recent activity
@@ -1291,7 +1287,7 @@ function renderProducts(){
       <td>
         <div class="stock-bar-wrap">
           <div class="stock-bar"><div class="stock-bar-fill ${stockClass(p)}" style="width:${stockPct(p)}%"></div></div>
-          <div class="stock-label">${Math.max(0,(p.dailyLimit||0)-(p.soldToday||0))}/${p.dailyLimit||0} left</div>
+          <div class="stock-label">${leftToday(p)}/${p.dailyLimit||0} left</div>
         </div>
       </td>
       <td><span class="pill ${p.active?'active':'inactive'}">${p.active?'Active':'Inactive'}</span></td>
@@ -1347,15 +1343,48 @@ function isIngLow(ing){
   return Number(ing.stock) <= ingThresholdQty(ing);
 }
 
+/* ── HOW MUCH OF TODAY IS SPOKEN FOR ──
+   The panel used to read p.soldToday, and that number is not true.
+
+   It is only ever incremented inside syncStoreOrders(), in the
+   admin's own browser, only for an order being delivered the same
+   day — and it was never saved. So it moved while a panel happened to
+   be open and went back to zero on the next reload, which is why a
+   product that had just been ordered four times still read "50/50
+   left".
+
+   The orders are the count. committedForDay() in js/stock.js is the
+   same rule the shop, the product page, the cart and checkout already
+   use to decide what can still be ordered, so the panel and the
+   storefront now answer this question the same way instead of two
+   ways. DB.orders is already in memory, so this costs no query.
+
+   p.soldToday stays as the fallback for a product the orders say
+   nothing about. */
+function committedToday(){
+  return committedForDay(DB.orders, todayISO());
+}
+
+function soldTodayFor(p, committed){
+  const m = committed || committedToday();
+  return Object.prototype.hasOwnProperty.call(m, p.name)
+    ? m[p.name]
+    : (Number(p.soldToday) || 0);
+}
+
+function leftToday(p, committed){
+  return Math.max(0, (Number(p.dailyLimit) || 0) - soldTodayFor(p, committed));
+}
+
 function stockClass(p){
-  const remaining = Math.max(0, (p.dailyLimit||0) - (p.soldToday||0));
+  const remaining = leftToday(p);
   if(remaining <= 0) return 'low';
   if(remaining <= (p.threshold||1)) return 'warn';
   return 'ok';
 }
 function stockPct(p){
   const limit = p.dailyLimit || 1;
-  const remaining = Math.max(0, limit - (p.soldToday||0));
+  const remaining = leftToday(p);
   return Math.min(100, Math.round((remaining / limit) * 100));
 }
 
@@ -3006,15 +3035,11 @@ function openFulfillModal(id){
   openOrderModal(id);
 }
 
-function restoreDailyLimit(order){
-  const today = todayDate();
-  (order.items||[]).forEach(item => {
-    const p = DB.products.find(pp => pp.name===item.name || pp.id===item.id);
-    if(p && p.lastResetDate === today){
-      p.soldToday = Math.max(0, (p.soldToday||0) - (item.qty||1));
-    }
-  });
-}
+/* restoreDailyLimit() stood here, undoing the increment above when an
+   order was cancelled. A cancelled order simply stops being counted
+   now — commitsStock() in js/stock.js excludes it — so the day's
+   capacity comes back on its own, in every browser rather than the
+   one that did the cancelling. */
 
 function confirmOrderAction(){
   const o = DB.orders.find(oo=>oo.id===currentOrderId);
@@ -3030,8 +3055,6 @@ function confirmOrderAction(){
         o.status = 'Cancelled';
         o.cancelRequestedByBuyer = false;
 
-        // Restore soldToday since order was deducted at placement
-        restoreDailyLimit(o);
         // Put back any ingredients already taken out for baking
         const putBack = restoreIngredientsFor(o);
 
@@ -3054,8 +3077,6 @@ function confirmOrderAction(){
       icon: 'bx-x-circle',
       onConfirm: () => {
         o.cancelledByBuyer = false;
-        // Restore soldToday since order was deducted at placement
-        restoreDailyLimit(o);
         // Put back any ingredients already taken out for baking
         const putBack = restoreIngredientsFor(o);
         syncStatusToCustomer(o, 'Cancelled');
@@ -3617,7 +3638,7 @@ function renderInventory(){
       <td>
         <div class="stock-bar-wrap">
           <div class="stock-bar"><div class="stock-bar-fill ${sc}" style="width:${stockPct(p)}%"></div></div>
-          <div class="stock-label">${Math.max(0,(p.dailyLimit||0)-(p.soldToday||0))}/${p.dailyLimit||0} left</div>
+          <div class="stock-label">${leftToday(p)}/${p.dailyLimit||0} left</div>
         </div>
       </td>
       <td>${p.threshold}</td>
@@ -5979,7 +6000,7 @@ function exportAuditCSV(){
    NOTIFICATIONS & BADGES
    ============================================= */
 function getLowStockItems(){
-  const lowP = DB.products.filter(p => p.active && Math.max(0,(p.dailyLimit||0)-(p.soldToday||0)) <= (p.threshold||0));
+  const lowP = DB.products.filter(p => p.active && leftToday(p) <= (p.threshold||0));
   const lowI = DB.ingredients.filter(isIngLow);
   return [...lowP, ...lowI];
 }
@@ -6075,8 +6096,8 @@ function buildNotifs(){
   notifList = [];
 
   // Near daily limit products
-  DB.products.filter(p => p.active && Math.max(0,(p.dailyLimit||0)-(p.soldToday||0)) <= (p.threshold||0)).forEach(p=>{
-    const remaining = Math.max(0,(p.dailyLimit||0)-(p.soldToday||0));
+  DB.products.filter(p => p.active && leftToday(p) <= (p.threshold||0)).forEach(p=>{
+    const remaining = leftToday(p);
     const id = `product_${p.id||p.name}`;
     if(seen.has(id)) return;
     notifList.push({ id, view:'inventory', icon:'bx-error-circle', color:'#DC2626', standing: true,
