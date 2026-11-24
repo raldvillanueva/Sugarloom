@@ -486,8 +486,13 @@ body {
 /* The GCash card is a tall portrait screenshot, not a bare square QR.
    Fixing the height would letterbox it and shrink the code to the point
    of being hard to scan, so only the width is set. */
+/* 300 rather than 240: Maya's QR arrives as a whole card — name, handle
+   and logo around it — so the code itself is only about half the image
+   width. At 240 that left roughly 120px of actual QR, which a phone can
+   read but has to be coaxed into. The GCash code is bare and simply
+   gets bigger. */
 .gcash-qr-img {
-  width: 240px;
+  width: 300px;
   max-width: 100%;
   height: auto;
   display: block;
@@ -501,9 +506,9 @@ body {
    which draws the broken-image icon. The same size as the real code,
    so the panel does not change height when one is added. */
 .wallet-qr-missing {
-  width: 240px;
+  width: 300px;
   max-width: 100%;
-  min-height: 240px;
+  min-height: 300px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;

@@ -25,19 +25,23 @@ const WALLET_ACCOUNTS = {
   },
 
   Maya: {
-    /* ⚠ PLACEHOLDERS. Fill these in with the real Maya account before
-       taking a payment through it: `label` and `number` are what the
-       customer is told to send to, and `holder` is the name Maya
-       prints on its receipt — the same masked form GCash uses, if a
-       reader is ever written for it.
+    /* Taken from the QR card in Images, which is a different account
+       and a different name from the GCash one — a customer paying by
+       Maya is told to send to Karl, not to GCASHMOJO. */
+    label:  'KARL NORBY RONQUILLO',
+    holder: 'KARL NORBY RONQUILLO',
 
-       `qr: ''` is deliberate rather than missing: the panel shows a
-       "no QR code yet" note instead of a broken image, and starts
-       showing the picture the moment a path is put here. */
-    label:  'SugarLoom Ph',
-    holder: '',
-    number: '0949 399 7899',
-    qr:     '',
+    /* The Maya username, not a phone number. Maya masks the number on
+       the QR card (+63 ••• ••• 7385), so there are no full digits to
+       copy here and guessing them would send money to a stranger. The
+       handle is a complete address on Maya and is what the card shows
+       in full, so it is what the customer gets. Replace it with the
+       phone number only if you have the real one in front of you. */
+    number: '@karl.norby',
+
+    /* The space in the filename has to be written as %20 — a raw space
+       in an href is not a valid URL and some hosts will not serve it. */
+    qr:     '../Images/QR%20MAYAS.png',
     reader: null
   }
 };
