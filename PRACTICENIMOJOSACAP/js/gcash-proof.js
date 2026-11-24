@@ -95,15 +95,82 @@ function findReference(text){
   return m ? m[1] : null;
 }
 
+/* Maya prints a "Reference ID" rather than a 13-digit reference number,
+   and it is not always all digits — InstaPay transfers come back with
+   letters in them. So the label is matched first and the token after it
+   taken, instead of hunting for a run of digits of a known length.
+
+   The token is read from the spaced text, not the flattened text. With
+   the spaces stripped out, "Reference ID 1234567890 Amount" runs
+   together and a greedy match swallows the word after it. */
+function findMayaReference(text){
+  const m = text.match(/ref(?:erence)?\s*(?:id|no\.?|number)?\s*[:#.]?\s*([A-Za-z0-9][A-Za-z0-9 -]{6,28})/i);
+  if(m){
+    /* A reference may be printed in groups ("1234 5678 9012"), so the
+       pieces are joined back up — but only while each piece still has
+       a digit in it. Without that, the word after the number joins on
+       too and the reference comes out as "1029384756102Novembe". */
+    let ref = '';
+    for(const piece of m[1].trim().split(/[\s-]+/)){
+      if(!/\d/.test(piece)) break;
+      if(ref.length + piece.length > 20) break;
+      ref += piece;
+    }
+    if(ref.length >= 8) return ref;
+  }
+  /* No label read — fall back to the longest plausible run of digits. */
+  const flat = text.replace(/[\s-]/g, '');
+  const d = flat.match(/(\d{12,20})/);
+  return d ? d[1] : null;
+}
+
+/* ── What each wallet's receipt looks like ──
+   The amount, the date and the recipient's name are read the same way
+   whatever the wallet; only the wording and the reference format
+   differ. A third wallet is an entry here plus one in WALLET_ACCOUNTS.
+
+   `brand` is the wallet's own name, kept apart from `looksLike`
+   because it answers a different question: `looksLike` asks "is this a
+   receipt at all", `brand` asks "is this THIS wallet's receipt". A
+   customer who picks Maya and pays through GCash is a routine mistake,
+   and the two together catch it. */
+const WALLET_READERS = {
+  gcash: {
+    name:  'GCash',
+    brand: /gcash/,
+    looksLike: [/gcash/, /express\s*send/, /send\s*money/, /ref(?:erence)?\s*no/],
+    reference: findReference,
+    referenceHint: 'No 13-digit reference number found'
+  },
+
+  maya: {
+    name:  'Maya',
+    brand: /\bmaya\b|paymaya/,
+    /* "instapay" earns its place: paying a Maya account from another
+       bank's app produces an InstaPay receipt that never says Maya. */
+    looksLike: [/\bmaya\b/, /paymaya/, /instapay/, /you\s*sent/,
+                /send\s*money/, /reference\s*id/],
+    reference: findMayaReference,
+    referenceHint: 'No reference ID found'
+  }
+};
+
 /* Figures on a send receipt that are not the payment. The balance is
    the dangerous one: it is usually the largest number on the screen, so
    a naive "take the biggest" reads someone's wallet balance as the
    amount they sent. */
 const NOT_THE_AMOUNT = /(balance|fee|charge|discount|rebate|cashback|points)/i;
 
+/* A peso figure. The peso sign is the obvious form, but OCR very often
+   reads ₱ as a plain "P" — and Maya's own receipts lead with "P850.00"
+   rather than labelling it — so a bare P immediately followed by digits
+   counts too. The word boundary keeps it from firing on the "p" at the
+   end of an ordinary word. */
+const PESO = /(?:₱|php|\bp)\s*([\d,]+(?:\.\d{2})?)/gi;
+
 function findAmount(text){
   // A labelled figure is the reliable one — "Amount", "Total Amount Sent".
-  const labelled = text.match(/(?:amount|total(?:\s+amount)?(?:\s+sent)?)[^\d₱]{0,12}(?:₱|php)?\s*([\d,]+(?:\.\d{2})?)/i);
+  const labelled = text.match(/(?:amount|total(?:\s+amount)?(?:\s+sent)?)[^\d₱]{0,12}(?:₱|php|p)?\s*([\d,]+(?:\.\d{2})?)/i);
   if(labelled){
     const n = parseFloat(labelled[1].replace(/,/g, ''));
     if(!isNaN(n)) return n;
@@ -112,7 +179,7 @@ function findAmount(text){
   /* Otherwise take the largest peso figure that is not sitting next to
      a word saying it is something else. */
   const candidates = [];
-  for(const m of text.matchAll(/(?:₱|php)\s*([\d,]+(?:\.\d{2})?)/gi)){
+  for(const m of text.matchAll(PESO)){
     const before = text.slice(Math.max(0, m.index - 20), m.index);
     if(NOT_THE_AMOUNT.test(before)) continue;
     const n = parseFloat(m[1].replace(/,/g, ''));
@@ -164,27 +231,37 @@ function nameLooksRight(text, expected){
    `review` — readable, but something does not match or could not be found
    `fail`   — this is not a GCash receipt, or the amount is plainly wrong
 */
-function judgeGcashProof(rawText, expected = {}){
+function judgeWalletProof(rawText, expected = {}){
   const text = normaliseOcr(rawText);
   const low  = text.toLowerCase();
 
+  const reader = WALLET_READERS[expected.reader] || WALLET_READERS.gcash;
+
   const found = {
-    reference: findReference(text),
+    reference: reader.reference(text),
     amount:    findAmount(text),
     date:      findDate(text)
   };
 
-  const isGcash = /gcash/.test(low) || /express\s*send/.test(low) ||
-                  /send\s*money/.test(low) || /ref(?:erence)?\s*no/.test(low);
+  const looks = reader.looksLike.some(re => re.test(low));
+
+  /* A receipt that names a different wallet and not this one. Only
+     asked when this wallet's own name is absent, so a receipt that
+     happens to mention both is not accused of being the other. */
+  const ownBrand = reader.brand.test(low);
+  const other = ownBrand ? null
+    : Object.values(WALLET_READERS).find(r => r !== reader && r.brand.test(low));
 
   const checks = [];
   const add = (ok, label, detail) => checks.push({ ok, label, detail: detail || '' });
 
-  add(isGcash, 'Looks like a GCash receipt',
-      isGcash ? '' : 'None of the usual GCash wording was found in the image');
+  add(looks && !other, `Looks like a ${reader.name} receipt`,
+      other  ? `This looks like a ${other.name} receipt — the order is being paid by ${reader.name}`
+    : looks  ? ''
+             : `None of the usual ${reader.name} wording was found in the image`);
 
   add(!!found.reference, 'Reference number',
-      found.reference || 'No 13-digit reference number found');
+      found.reference || reader.referenceHint);
 
   if(expected.amount != null){
     /* A peso or two of rounding is not worth a rejection; a different
@@ -199,11 +276,23 @@ function judgeGcashProof(rawText, expected = {}){
   /* Matched against the registered holder, reported as the name the
      customer was given — they were told GCASHMOJO, so a message about
      "GE***D V." would mean nothing to them. */
-  const holder = expected.holder || GCASH_ACCOUNT.holder;
-  const shown  = expected.label  || GCASH_ACCOUNT.label;
-  const nameOk = nameLooksRight(text, holder);
-  add(nameOk, `Sent to ${shown}`,
-      nameOk ? '' : `The receipt does not name ${holder}, the account behind ${shown}`);
+  const fallback = reader === WALLET_READERS.gcash ? GCASH_ACCOUNT : {};
+  const holder = expected.holder || fallback.holder;
+  const shown  = expected.label  || fallback.label || holder;
+
+  /* Skipped rather than failed when the shop's account is not known
+     here — an unanswerable check reported as a failure would put every
+     receipt into review for a missing setting, not a bad payment. */
+  if(holder){
+    const nameOk = nameLooksRight(text, holder);
+    /* GCash's label and holder differ (GCASHMOJO vs GE***D V.), so the
+       customer is told both. Maya's are the same name, and saying it
+       twice reads like a bug. */
+    add(nameOk, `Sent to ${shown}`,
+        nameOk ? ''
+      : holder === shown ? `The receipt does not name ${shown}`
+      : `The receipt does not name ${holder}, the account behind ${shown}`);
+  }
 
   if(found.date){
     const ageDays = (Date.now() - found.date.getTime()) / 86400000;
@@ -215,16 +304,20 @@ function judgeGcashProof(rawText, expected = {}){
   const failed      = checks.filter(c => !c.ok).length;
 
   let verdict;
-  if(!isGcash || amountWrong) verdict = 'fail';
-  else if(failed === 0)       verdict = 'pass';
-  else                        verdict = 'review';
+  if(!looks || other || amountWrong) verdict = 'fail';
+  else if(failed === 0)              verdict = 'pass';
+  else                               verdict = 'review';
 
-  return { text, found, checks, verdict };
+  return { text, found, checks, verdict, method: reader.name };
 }
+
+/* The old name, kept because it says GCash and some of this project
+   still calls it that. */
+const judgeGcashProof = judgeWalletProof;
 
 /* Reads an uploaded file end to end. Returns the shrunken image
    alongside the verdict so a caller can store both together. */
-async function readGcashProof(file, expected = {}, onProgress){
+async function readWalletProof(file, expected = {}, onProgress){
   const img = await shrinkProof(file);
 
   let rawText = '';
@@ -252,12 +345,15 @@ async function readGcashProof(file, expected = {}, onProgress){
     };
   }
 
-  return { img, ...judgeGcashProof(rawText, expected) };
+  return { img, ...judgeWalletProof(rawText, expected) };
 }
 
-const GCASH_VERDICT_LABEL = {
+const readGcashProof = readWalletProof;   // the old name
+
+const WALLET_VERDICT_LABEL = {
   pass:   'Checks passed',
   review: 'Needs a look',
   fail:   'Does not match',
   unread: 'Could not be read'
 };
+const GCASH_VERDICT_LABEL = WALLET_VERDICT_LABEL;   // the old name

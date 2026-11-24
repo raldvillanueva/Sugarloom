@@ -18,9 +18,10 @@ const WALLET_ACCOUNTS = {
     holder: 'GE***D V.',          // as GCash prints it on the receipt
     number: '0949 399 7899',
     qr:     '../Images/GCASHMOJO.png',
-    /* Which receipt reader understands this wallet's screenshots.
-       null means nobody does yet, so the upload goes straight to a
-       person — see readWalletProof() in js/checkout.js. */
+    /* Which reader in WALLET_READERS (js/gcash-proof.js) understands
+       this wallet's screenshots — its wording and the shape of its
+       reference number. null means none does, and the upload goes
+       straight to a person unread. */
     reader: 'gcash'
   },
 
@@ -39,7 +40,7 @@ const WALLET_ACCOUNTS = {
     /* The space in the filename has to be written as %20 — a raw space
        in an href is not a valid URL and some hosts will not serve it. */
     qr:     '../Images/QR%20MAYAS.png',
-    reader: null
+    reader: 'maya'
   }
 };
 

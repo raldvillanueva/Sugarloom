@@ -280,44 +280,24 @@ async function processProofFile(file){
   box.className = 'gcash-proof-result reading';
   box.innerHTML = '<strong>Reading your receipt…</strong><div class="proof-bar"><span id="proof-bar-fill"></span></div>';
 
-  /* The reader understands GCash receipts. A wallet with no reader of
-     its own — Maya, today — is not put through it: the GCash checks
-     would look for a GCash account holder on a Maya receipt and
-     report it as paid to the wrong person, which is a worse answer
-     than no answer. It is stored unread and goes to a human, which
-     is the path a failed read already takes. */
+  /* Every wallet's receipt is read, each by its own reader — which
+     wording to expect, and what shape its reference number takes. The
+     shop's account for that wallet is passed in rather than left to
+     default, so a Maya receipt is matched against the Maya account
+     and not against GCash's. */
   const chosen = document.querySelector('input[name="payment"]:checked')?.value;
-  const acct   = walletAccount(chosen);
+  const acct   = walletAccount(chosen) || {};
 
-  if(acct && !acct.reader){
-    let img;
-    try {
-      img = await shrinkProof(file);
-    } catch(err){
-      console.error('proof upload failed:', err);
-      box.className = 'gcash-proof-result fail';
-      box.innerHTML = '<strong>Could not process that image.</strong> Try another screenshot.';
-      return;
-    }
-    _gcashProof = {
-      img, verdict: 'unread', reference: null, amountRead: null,
-      /* `ok: null` is neither a pass nor a failure — nothing was
-         checked. The field is `label`, which is what the renderer
-         reads; `text` silently rendered as "undefined". */
-      checks: [{ ok: null, label: `${chosen} receipts are checked by hand`, detail: '' }],
-      readAt: new Date().toISOString()
-    };
-    renderProofResult({ verdict: 'unread', img, checks: _gcashProof.checks,
-                        found: {}, method: chosen });
-    updatePlaceOrderBtn();
-    return;
-  }
-
-  const expected = { amount: Math.round(orderTotalNow()) };   // account comes from GCASH_ACCOUNT
+  const expected = {
+    amount: Math.round(orderTotalNow()),
+    reader: acct.reader,
+    label:  acct.label,
+    holder: acct.holder
+  };
 
   let result;
   try {
-    result = await readGcashProof(file, expected, pct => {
+    result = await readWalletProof(file, expected, pct => {
       const fill = document.getElementById('proof-bar-fill');
       if(fill) fill.style.width = Math.round(pct * 100) + '%';
     });
@@ -367,8 +347,8 @@ function renderProofResult(r){
         <ul class="proof-checks">
           ${r.checks.map(c => `
             <li class="${c.ok == null ? 'info' : c.ok ? 'ok' : 'no'}">
-              <span aria-hidden="true">${c.ok == null ? '•' : c.ok ? '✓' : '!'}</span>
-              ${escapeProof(c.label)}${c.detail ? ` — <em>${escapeProof(c.detail)}</em>` : ''}
+              <span class="proof-mark" aria-hidden="true">${c.ok == null ? '•' : c.ok ? '✓' : '!'}</span>
+              <span class="proof-text">${escapeProof(c.label)}${c.detail ? ` — <em>${escapeProof(c.detail)}</em>` : ''}</span>
             </li>`).join('')}
         </ul>
       </div>
