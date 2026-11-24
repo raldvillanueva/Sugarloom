@@ -301,10 +301,14 @@ async function processProofFile(file){
     }
     _gcashProof = {
       img, verdict: 'unread', reference: null, amountRead: null,
-      checks: [{ ok: null, text: `${chosen} receipts are checked by hand` }],
+      /* `ok: null` is neither a pass nor a failure — nothing was
+         checked. The field is `label`, which is what the renderer
+         reads; `text` silently rendered as "undefined". */
+      checks: [{ ok: null, label: `${chosen} receipts are checked by hand`, detail: '' }],
       readAt: new Date().toISOString()
     };
-    renderProofResult({ verdict: 'unread', img, checks: _gcashProof.checks, found: {} });
+    renderProofResult({ verdict: 'unread', img, checks: _gcashProof.checks,
+                        found: {}, method: chosen });
     updatePlaceOrderBtn();
     return;
   }
@@ -348,6 +352,12 @@ function renderProofResult(r){
     unread: 'Uploaded — we could not read it automatically'
   }[r.verdict] || 'Uploaded';
 
+  /* Whichever wallet this receipt is for. Falls back to whatever is
+     selected, so a result rendered from the GCash reader — which does
+     not carry a method — still names the right wallet. */
+  const picked = document.querySelector('input[name="payment"]:checked')?.value;
+  const method = r.method || (isWalletPayment(picked) ? picked : null);
+
   box.className = 'gcash-proof-result ' + r.verdict;
   box.innerHTML = `
     <div class="proof-head">
@@ -356,8 +366,8 @@ function renderProofResult(r){
         <strong>${headline}</strong>
         <ul class="proof-checks">
           ${r.checks.map(c => `
-            <li class="${c.ok ? 'ok' : 'no'}">
-              <span aria-hidden="true">${c.ok ? '✓' : '!'}</span>
+            <li class="${c.ok == null ? 'info' : c.ok ? 'ok' : 'no'}">
+              <span aria-hidden="true">${c.ok == null ? '•' : c.ok ? '✓' : '!'}</span>
               ${escapeProof(c.label)}${c.detail ? ` — <em>${escapeProof(c.detail)}</em>` : ''}
             </li>`).join('')}
         </ul>
@@ -366,7 +376,7 @@ function renderProofResult(r){
     <p class="proof-foot">${
       r.verdict === 'fail'
         ? 'You can still place the order, but it will be held until we have checked the payment by hand.'
-        : 'Your order will be confirmed once we have matched this against our GCash account.'
+        : `Your order will be confirmed once we have matched this against our ${method || 'payment'} account.`
     }</p>
     <button type="button" class="proof-replace" onclick="clearProof()">Upload a different screenshot</button>`;
 }

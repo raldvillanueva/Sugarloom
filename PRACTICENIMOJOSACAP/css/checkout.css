@@ -603,6 +603,12 @@ body {
 .proof-checks li.ok  span { color: #16a34a; }
 .proof-checks li.no  span { color: #dc2626; }
 .proof-checks li.no      { color: var(--text-muted); }
+
+/* Neither a tick nor a warning: nothing was checked. A red "!" here
+   would read as "something is wrong with your receipt" when the real
+   message is "nobody has looked at it yet". */
+.proof-checks li.info span { color: var(--text-muted); }
+.proof-checks li.info      { color: var(--text-muted); }
 .proof-checks em { font-style: normal; color: var(--text-muted); }
 
 .proof-foot { margin: 10px 0 0; font-size: 12.5px; color: var(--text-muted); }
