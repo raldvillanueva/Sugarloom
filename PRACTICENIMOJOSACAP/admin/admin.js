@@ -23,8 +23,8 @@ function sendStatusEmail(order, status){
   if(!url) return;   // no backend reachable — see js/api-config.js
 
   const messages = {
-    'Payment Received': 'We have matched your GCash payment to this order — thank you! Your order is now with the kitchen.',
-    'Payment Rejected': 'We could not match a payment to this order, so it has been cancelled and nothing has been charged. If you believe this is a mistake, reply to this email with your GCash receipt and we will put the order straight back through.',
+    'Payment Received': `We have matched your ${walletName(order)} payment to this order — thank you! Your order is now with the kitchen.`,
+    'Payment Rejected': `We could not match a payment to this order, so it has been cancelled and nothing has been charged. If you believe this is a mistake, reply to this email with your ${walletName(order)} receipt and we will put the order straight back through.`,
     'Confirmed':      'Great news! Your order has been confirmed. We\'re preparing to bake your treats fresh.',
     'Preparing':      'We\'re baking your order right now! Your goodies will be ready soon.',
     'Ready for Packing': 'Your order is out of the oven and heading to our packing table.',
@@ -1780,7 +1780,7 @@ function renderOrders(){
        the queue is worked rather than only inside the order. */
     const payTag = (isWalletPayment(o.payment) && o.paymentStatus && o.paymentStatus !== 'Verified')
       ? `<span class="pay-tag ${o.paymentStatus === 'Rejected' ? 'bad' : 'wait'}" title="${
-           o.paymentStatus === 'Rejected' ? 'GCash payment rejected' : 'GCash payment not checked yet'
+           o.paymentStatus === 'Rejected' ? `${walletName(o)} payment rejected` : `${walletName(o)} payment not checked yet`
          }">${o.paymentStatus === 'Rejected' ? 'PAYMENT REJECTED' : 'CHECK PAYMENT'}</span>`
       : '';
 
@@ -2829,9 +2829,9 @@ function buildPaymentProof(o){
   if(!p){
     return `
       <div class="pay-proof none">
-        <strong>GCash payment</strong>
+        <strong>${escHTML(walletName(o))} payment</strong>
         <p>No screenshot was attached. This order was placed before receipts were required,
-           or the upload failed — check the GCash account by hand before confirming.</p>
+           or the upload failed — check the ${escHTML(walletName(o))} account by hand before confirming.</p>
       </div>${appeal}`;
   }
 
@@ -2849,13 +2849,13 @@ function buildPaymentProof(o){
   return `
     <div class="pay-proof ${verdictClass}">
       <div class="pay-proof-head">
-        <strong>GCash payment</strong>
+        <strong>${escHTML(walletName(o))} payment</strong>
         <span class="pill ${status === 'Verified' ? 'fulfilled' : status === 'Rejected' ? 'cancelled' : 'pending'}">${escHTML(status)}</span>
       </div>
 
       <div class="pay-proof-body">
         <a href="${p.img}" target="_blank" rel="noopener" title="Open the full screenshot">
-          <img src="${p.img}" alt="GCash receipt uploaded by the customer" class="pay-proof-img">
+          <img src="${p.img}" alt="${escHTML(walletName(o))} receipt uploaded by the customer" class="pay-proof-img">
         </a>
 
         <div class="pay-proof-detail">
@@ -2868,9 +2868,9 @@ function buildPaymentProof(o){
 
           <ul class="pay-proof-checks">
             ${(p.checks || []).map(c => `
-              <li class="${c.ok ? 'ok' : 'no'}">
-                <span aria-hidden="true">${c.ok ? '✓' : '!'}</span>
-                ${escHTML(c.label)}${c.detail ? ` — <em>${escHTML(c.detail)}</em>` : ''}
+              <li class="${c.ok == null ? 'info' : c.ok ? 'ok' : 'no'}">
+                <span class="chk-mark" aria-hidden="true">${c.ok == null ? '•' : c.ok ? '✓' : '!'}</span>
+                <span class="chk-text">${escHTML(c.label)}${c.detail ? ` — <em>${escHTML(c.detail)}</em>` : ''}</span>
               </li>`).join('')}
           </ul>
 
@@ -2917,7 +2917,7 @@ function verifyPayment(id){
 
   showConfirm({
     title: 'Mark the payment as received',
-    message: `Confirm that ₱${Number(o.total||0).toLocaleString()} for ${o.id} is in the GCash account` +
+    message: `Confirm that ₱${Number(o.total||0).toLocaleString()} for ${o.id} is in the ${walletName(o)} account` +
              `${o.paymentProof?.reference ? ` under reference ${o.paymentProof.reference}` : ''}. ` +
              `Check the GCash history rather than the screenshot — this is the record that says the money arrived.`,
     okText: 'Payment received',
@@ -2934,7 +2934,7 @@ function verifyPayment(id){
          in-app notification comes from paymentStatus, which
          savePaymentDecision() has already written to Supabase. */
       sendStatusEmail(o, 'Payment Received');
-      logAudit('Orders', 'GCash payment verified', `${o.id} — ${o.customer || 'Customer'}`,
+      logAudit('Orders', `${walletName(o)} payment verified`, `${o.id} — ${o.customer || 'Customer'}`,
                `₱${Number(o.total||0).toLocaleString()}${o.paymentProof?.reference ? ' · ref ' + o.paymentProof.reference : ''}`);
       renderOrders(); openOrderModal(o.id, true);
       toast('Payment verified', 'success');
@@ -2948,7 +2948,7 @@ function rejectPayment(id){
 
   showConfirm({
     title: 'Reject this payment',
-    message: `The screenshot for ${o.id} does not match a payment in the GCash account. ` +
+    message: `The screenshot for ${o.id} does not match a payment in the ${walletName(o)} account. ` +
              `Rejecting it cancels the order and tells ${o.customer || 'the customer'} why, ` +
              `so write something they can act on.`,
     okText: 'Reject & cancel order',
@@ -2989,7 +2989,7 @@ function rejectPayment(id){
          the order is off, and the customer's bell picks the cancelled
          status straight out of Supabase. */
       sendStatusEmail(o, 'Payment Rejected');
-      logAudit('Orders', 'GCash payment rejected', `${o.id} — ${o.customer || 'Customer'}`,
+      logAudit('Orders', `${walletName(o)} payment rejected`, `${o.id} — ${o.customer || 'Customer'}`,
                `${why} · order cancelled from ${wasStatus}` +
                (putBack.length ? ` · ${putBack.length} ingredient${putBack.length === 1 ? '' : 's'} returned` : ''));
 

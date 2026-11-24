@@ -55,6 +55,18 @@ function walletAccount(method){
   return WALLET_ACCOUNTS[method] || null;
 }
 
+/* What to call the wallet an order was paid through, for anything a
+   person reads — a heading, an email, an audit entry.
+
+   Orders placed before Maya existed carry no method, or carry one the
+   shop no longer offers. They were all GCash, so that is what they are
+   called; the alternative is a panel heading reading "undefined
+   payment" over a real receipt. */
+function walletName(order){
+  const m = order && order.payment;
+  return isWalletPayment(m) ? m : 'GCash';
+}
+
 /* The wallets the shop can be paid through, in the order they are
    offered. */
 function walletMethods(){

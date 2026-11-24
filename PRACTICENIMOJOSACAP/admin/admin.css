@@ -1530,10 +1530,20 @@ textarea { resize: vertical; }
   display: flex; gap: 6px; align-items: baseline;
   font-size: 12.5px; margin-bottom: 3px; line-height: 1.45;
 }
-.pay-proof-checks li span { font-weight: 700; width: 12px; flex-shrink: 0; }
-.pay-proof-checks li.ok span { color: #16A34A; }
-.pay-proof-checks li.no span { color: #DC2626; }
+/* The marker and the text are each their own element. As a span and a
+   bare text node the browser made them two flex items, so a long
+   detail sat in a column beside its label instead of wrapping under
+   it — which is most of them, now that a check can explain itself. */
+.pay-proof-checks li .chk-mark { font-weight: 700; width: 12px; flex-shrink: 0; }
+.pay-proof-checks li .chk-text { flex: 1; min-width: 0; }
+.pay-proof-checks li.ok   .chk-mark { color: #16A34A; }
+.pay-proof-checks li.no   .chk-mark { color: #DC2626; }
 .pay-proof-checks li.no { color: var(--text-2); }
+
+/* Nothing was checked — not a pass, not a failure. A red marker here
+   would read as a problem with the receipt. */
+.pay-proof-checks li.info .chk-mark { color: var(--text-3); }
+.pay-proof-checks li.info { color: var(--text-2); }
 .pay-proof-checks em { font-style: normal; color: var(--text-2); }
 
 .pay-proof-dupe {
