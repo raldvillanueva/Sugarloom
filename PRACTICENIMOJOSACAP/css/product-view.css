@@ -197,20 +197,62 @@ button {
   color: var(--text);
   font-size: 22px;
   font-weight: 700;
-  margin: 14px 0;
+  margin: 14px 0 12px;
 }
 
 /* How many are left today, under the price. `hidden` on the element
    keeps it out of the layout until the day's orders have been
    counted, so the page does not show a number and then correct it. */
+/* ── HOW MANY ARE LEFT ──
+   A chip rather than a line of grey text. As plain text under the
+   price it read as a caption on the price — something about the
+   money — and carried no weight at all next to a 22px bold figure.
+
+   It hugs its content instead of spanning the column, so it reads as
+   one fact rather than a stray sentence, and the dot carries the
+   state at a glance before the words are read. The tint is soft
+   enough to sit under a price without competing with Add to Cart. */
 .stock-line {
-  margin: -8px 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 7px 14px 7px 12px;
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
-  color: var(--muted, #8a8275);
+  letter-spacing: .01em;
+  line-height: 1;
+
+  color: #3F6212;
+  background: #F4F9EC;
+  border: 1px solid rgba(63, 98, 18, 0.16);
 }
-.stock-line.low { color: #B45309; }
-.stock-line.out { color: #991B1B; }
+
+/* The dot is the state; the words are the detail. */
+.stock-line::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
+}
+
+.stock-line.low {
+  color: #92400E;
+  background: #FEF6E7;
+  border-color: rgba(146, 64, 14, 0.18);
+}
+
+.stock-line.out {
+  color: #991B1B;
+  background: #FDF0EF;
+  border-color: rgba(153, 27, 27, 0.18);
+}
+
+/* Beats the display above on specificity, so the chip takes up no
+   room at all until the day's orders have been counted. */
 .stock-line[hidden] { display: none; }
 
 .desc {

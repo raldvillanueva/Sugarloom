@@ -570,14 +570,29 @@ a { text-decoration: none; color: inherit; }
 /* ── HOW MANY ARE LEFT, UNDER THE NAME ──
    On every card, so the number is a steady fact about the product
    rather than an alarm that only appears once it is nearly too late
-   to act on. Sits between the name and the price, quiet by default
-   and coloured only when the news matters. */
+   to act on. Sits between the name and the price.
+
+   The same dot the product page uses, but without the chip around it:
+   a card already has a border and a badge, and a third box inside it
+   is noise. The dot is what carries the state across both. */
 .product-clean .stock-line {
-  margin: 2px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 5px 0 0;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: .01em;
-  color: var(--muted, #8a8275);
+  line-height: 1;
+  color: #5F7A3A;
+}
+.product-clean .stock-line::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: currentColor;
 }
 .product-clean .stock-line.low { color: #B45309; }
 .product-clean .stock-line.out { color: #991B1B; }
