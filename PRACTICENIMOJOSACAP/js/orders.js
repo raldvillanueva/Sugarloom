@@ -289,6 +289,35 @@ function updateOrderBadge(){
 }
 
 // 🔥 RUN ON LOAD
+/* ── THE PICTURES ──
+   An order item carries a name, a price and a quantity. It no longer
+   carries a picture: a product photographed through the admin panel is
+   stored as a data URL, and copying that six-figure string into every
+   order is what put the project 400% over its egress quota.
+
+   So the picture is looked up by name from the product list, the same
+   way the cart and the checkout do it. Without this the page fell back
+   to `item.img`, which for any product added since is empty — and an
+   empty src fails, which the old `onerror` answered by hiding the
+   image, leaving a gap rather than a placeholder.
+
+   Fetched once per visit. renderOrders() runs again after a cancel or
+   an appeal, and the lookup is remembered, so those do not refetch. */
+let _orderProductsLoaded = false;
+
+async function loadProductImages(){
+  if(_orderProductsLoaded) return;
+  _orderProductsLoaded = true;
+  try {
+    const { data } = await _supa.from('products').select('data');
+    rememberProductImages((data || []).map(r => r.data));
+  } catch(e){
+    /* Offline or blocked. Items then show the placeholder rather than
+       a broken icon, which is what it is for. */
+    console.warn('could not load product pictures:', e);
+  }
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
 
   const userIcon = document.getElementById('userIcon');
@@ -306,6 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   showView('ordersView');
   await loadProfile();
+  await loadProductImages();
   await renderOrders();
   updateOrderBadge();
 
@@ -403,7 +433,7 @@ async function renderOrders() {
   container.innerHTML = sorted.map(order => {
     const itemsHTML = order.items.map(item => `
       <div class="order-item">
-        <img src="${item.img}" class="order-img" onerror="this.style.display='none'">
+        <img src="${itemImgSrc(item)}" class="order-img" alt="" onerror="productImgFallback(this)">
         <div class="order-info">
           <p class="name">${item.name}</p>
           <p class="qty">x${item.qty || 1}</p>
@@ -850,7 +880,7 @@ async function renderReviews() {
     const review    = savedReviews[order.id] || null;
     const itemsHTML = order.items.map(item => `
       <div class="order-item">
-        <img src="${item.img}" class="order-img" onerror="this.style.display='none'">
+        <img src="${itemImgSrc(item)}" class="order-img" alt="" onerror="productImgFallback(this)">
         <div class="order-info">
           <p class="name">${item.name}</p>
           <p class="qty">x${item.qty || 1}</p>
@@ -947,6 +977,9 @@ async function renderBuyAgain() {
   orders.forEach(order => {
     (order.items || []).forEach(item => {
       if (!seen.has(item.name)) {
+        /* The picture is resolved at render, not stored here: an item
+           from an order placed after the cart stopped carrying pictures
+           has none of its own, and the name is what finds it. */
         seen.set(item.name, { name: item.name, price: item.price, img: item.img });
       }
     });
@@ -956,7 +989,7 @@ async function renderBuyAgain() {
 
   container.innerHTML = `<div class="buy-again-grid">${_buyAgainItems.map((item, idx) => `
     <div class="buy-again-card">
-      <img src="${item.img}" class="buy-again-img" onerror="this.style.display='none'">
+      <img src="${itemImgSrc(item)}" class="buy-again-img" alt="" onerror="productImgFallback(this)">
       <div class="buy-again-info">
         <p class="buy-again-name">${item.name}</p>
         <p class="buy-again-price">₱${item.price}</p>
