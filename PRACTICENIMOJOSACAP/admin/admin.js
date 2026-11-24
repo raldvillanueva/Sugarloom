@@ -1076,7 +1076,10 @@ function setRevPeriod(period, btn){
 function renderSalesRevenueChart(period){
   const txs = DB.transactions;
   const isCOD    = t => t.payment === 'Cash on Delivery' || t.payment === 'Cash';
-  const isGCash  = t => t.payment === 'GCash';
+  /* Both wallets together: the chart splits paid-before-delivery
+     from paid-at-the-door, which is the distinction that matters to
+     cash flow. */
+  const isGCash  = t => isWalletPayment(t.payment);
   let labels = [], codData = [], gcashData = [];
 
   if(period === 'week'){
@@ -1134,7 +1137,7 @@ function renderSalesRevenueChart(period){
           categoryPercentage: 0.7
         },
         {
-          label: 'GCash',
+          label: 'Paid online',
           data: gcashData,
           backgroundColor: 'rgba(16,185,129,0.75)',
           borderWidth: 0,
@@ -1775,7 +1778,7 @@ function renderOrders(){
        sitting on Pending. */
     /* A GCash order whose payment has not been settled, flagged where
        the queue is worked rather than only inside the order. */
-    const payTag = (o.payment === 'GCash' && o.paymentStatus && o.paymentStatus !== 'Verified')
+    const payTag = (isWalletPayment(o.payment) && o.paymentStatus && o.paymentStatus !== 'Verified')
       ? `<span class="pay-tag ${o.paymentStatus === 'Rejected' ? 'bad' : 'wait'}" title="${
            o.paymentStatus === 'Rejected' ? 'GCash payment rejected' : 'GCash payment not checked yet'
          }">${o.paymentStatus === 'Rejected' ? 'PAYMENT REJECTED' : 'CHECK PAYMENT'}</span>`
@@ -1840,7 +1843,7 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
        Confirm is disabled for this too, but offering the word
        "Confirm" on the row and then greying it out one click later
        reads as a bug rather than a rule. */
-    if(o.status === 'Pending' && isAdmin && o.payment === 'GCash' && o.paymentStatus === 'Rejected')
+    if(o.status === 'Pending' && isAdmin && isWalletPayment(o.payment) && o.paymentStatus === 'Rejected')
       primary = { label: 'Review',        icon: 'bx-x-circle',     cls: 'btn-secondary', fn: `openOrderModal('${o.id}')` };
     /* Confirming is a promise to deliver on the date the order carries.
        When that date has gone, the promise is already broken and
@@ -1874,7 +1877,7 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
       primary = { label: 'Track delivery', icon: 'bx-map',          cls: 'btn-secondary', fn: `openOrderModal('${o.id}')` };
     else if(o.status === 'Cancel Requested' && isAdmin)
       primary = { label: 'Review',        icon: 'bx-x-circle',     cls: 'btn-danger',    fn: `openOrderModal('${o.id}')` };
-    else if(o.status === 'Cancelled' && isAdmin && o.payment === 'GCash' && !o.refunded)
+    else if(o.status === 'Cancelled' && isAdmin && isWalletPayment(o.payment) && !o.refunded)
       primary = { label: 'Refund',        icon: 'bx-money-withdraw', cls: 'btn-secondary', fn: `openRefundModal('${o.id}')` };
   }
 
@@ -1930,7 +1933,7 @@ function orderActionsHtml(o, { isAdmin, isBaker, isPacker, canReorder }){
   if(isAdmin && o.archived)
     menu.push({ label: 'Delete permanently', icon: 'bx-trash', danger: true, fn: `deleteOrder('${o.id}')` });
 
-  const refunded = isAdmin && o.status === 'Cancelled' && live && o.payment === 'GCash' && o.refunded
+  const refunded = isAdmin && o.status === 'Cancelled' && live && isWalletPayment(o.payment) && o.refunded
     ? `<span class="refund-done-badge" title="Refund processed">Refunded</span>` : '';
 
   /* stopPropagation so using a button doesn't also open the row's
@@ -2492,7 +2495,7 @@ function openOrderModal(id, viewOnly=false){
        ingredients out of stock. Doing that on a GCash payment nobody
        has checked is how a bakery bakes for free. Orders placed before
        receipts existed have no paymentStatus and are not held up. */
-    if(o.payment === 'GCash' && o.paymentStatus && o.paymentStatus !== 'Verified'){
+    if(isWalletPayment(o.payment) && o.paymentStatus && o.paymentStatus !== 'Verified'){
       btn.disabled = true;
       btn.title = o.paymentStatus === 'Rejected'
         ? 'The payment was rejected — contact the customer before confirming'
@@ -2819,7 +2822,7 @@ function buildPaymentAppeal(o){
 }
 
 function buildPaymentProof(o){
-  if(o.payment !== 'GCash') return '';
+  if(!isWalletPayment(o.payment)) return '';
 
   const appeal = buildPaymentAppeal(o);
   const p = o.paymentProof;

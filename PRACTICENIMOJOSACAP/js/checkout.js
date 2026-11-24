@@ -166,7 +166,9 @@ function updatePlaceOrderBtn(total){
   const notice = document.getElementById("cod-notice");
   if(!btn) return;
 
-  const isCOD = document.querySelector('input[name="payment"]:checked')?.value === 'Cash on Delivery';
+  const chosenMethod = document.querySelector('input[name="payment"]:checked')?.value;
+  const isCOD  = chosenMethod === 'Cash on Delivery';
+  const wallet = isWalletPayment(chosenMethod);
   const qr = document.getElementById("gcash-qr");
 
   const cod = judgeCod(total, _customerRecord);
@@ -183,20 +185,22 @@ function updatePlaceOrderBtn(total){
     if(notice) notice.style.display = 'none';
   }
 
-  if(qr) qr.style.display = isCOD ? 'none' : 'block';
+  /* Shown for a wallet, not merely for "not COD" — an unknown method
+     should show nothing rather than an empty payment panel. */
+  if(qr) qr.style.display = wallet ? 'block' : 'none';
 
   /* Paying by GCash means a receipt has to be attached. The button is
      a hint only — placeOrder() checks again, since a disabled button
      can be re-enabled from the console. */
-  if(!isCOD && !_gcashProof && !btn.disabled){
+  if(wallet && !_gcashProof && !btn.disabled){
     btn.disabled = true;
     if(notice){
-      notice.textContent = 'Upload your GCash payment screenshot to place the order.';
+      notice.textContent = `Upload your ${chosenMethod} payment screenshot to place the order.`;
       notice.style.display = 'block';
     }
   }
 
-  if(!isCOD) showGcashAccount();
+  if(wallet) showWalletAccount(chosenMethod);
 }
 
 /* ── GCASH PAYMENT PROOF ──
@@ -211,11 +215,42 @@ function updatePlaceOrderBtn(total){
    findings and the picture itself. */
 let _gcashProof = null;
 
-function showGcashAccount(){
+/* Fills the one wallet panel for whichever wallet is chosen. A wallet
+   with no QR picture yet shows a note saying so rather than a broken
+   image; putting a path in WALLET_ACCOUNTS is all it takes to start
+   showing one. */
+function showWalletAccount(method){
+  const acct = walletAccount(method);
+  if(!acct) return;
+
+  const label = document.getElementById('wallet-qr-label');
+  if(label) label.textContent = 'Scan to pay via ' + method;
+
+  const img     = document.getElementById('wallet-qr-img');
+  const missing = document.getElementById('wallet-qr-missing');
+  const hasQr   = !!String(acct.qr || '').trim();
+  if(img){
+    img.style.display = hasQr ? '' : 'none';
+    if(hasQr){
+      img.src = acct.qr;
+      img.alt = method + ' QR code for SugarLoom Ph';
+    } else {
+      img.removeAttribute('src');   // never leave an empty src to break
+      img.alt = '';
+    }
+  }
+  if(missing) missing.style.display = hasQr ? 'none' : '';
+
   const n = document.getElementById('gcash-acct-name');
   const u = document.getElementById('gcash-acct-number');
-  if(n) n.textContent = GCASH_ACCOUNT.label;
-  if(u) u.textContent = GCASH_ACCOUNT.number;
+  if(n) n.textContent = acct.label;
+  if(u) u.textContent = acct.number;
+
+  const hint = document.getElementById('wallet-proof-hint');
+  if(hint){
+    hint.textContent = `After paying, screenshot the ${method} receipt and upload it here. ` +
+      'We check it against your order before baking starts.';
+  }
 }
 
 function orderTotalNow(){
@@ -244,6 +279,35 @@ async function processProofFile(file){
   box.style.display = 'block';
   box.className = 'gcash-proof-result reading';
   box.innerHTML = '<strong>Reading your receipt…</strong><div class="proof-bar"><span id="proof-bar-fill"></span></div>';
+
+  /* The reader understands GCash receipts. A wallet with no reader of
+     its own — Maya, today — is not put through it: the GCash checks
+     would look for a GCash account holder on a Maya receipt and
+     report it as paid to the wrong person, which is a worse answer
+     than no answer. It is stored unread and goes to a human, which
+     is the path a failed read already takes. */
+  const chosen = document.querySelector('input[name="payment"]:checked')?.value;
+  const acct   = walletAccount(chosen);
+
+  if(acct && !acct.reader){
+    let img;
+    try {
+      img = await shrinkProof(file);
+    } catch(err){
+      console.error('proof upload failed:', err);
+      box.className = 'gcash-proof-result fail';
+      box.innerHTML = '<strong>Could not process that image.</strong> Try another screenshot.';
+      return;
+    }
+    _gcashProof = {
+      img, verdict: 'unread', reference: null, amountRead: null,
+      checks: [{ ok: null, text: `${chosen} receipts are checked by hand` }],
+      readAt: new Date().toISOString()
+    };
+    renderProofResult({ verdict: 'unread', img, checks: _gcashProof.checks, found: {} });
+    updatePlaceOrderBtn();
+    return;
+  }
 
   const expected = { amount: Math.round(orderTotalNow()) };   // account comes from GCASH_ACCOUNT
 
@@ -358,7 +422,7 @@ function setupProofDropzone(){
      field is never hijacked. */
   document.addEventListener('paste', e => {
     const chosen = document.querySelector('input[name="payment"]:checked')?.value;
-    if(chosen !== 'GCash') return;
+    if(!isWalletPayment(chosen)) return;
     if(/^(INPUT|TEXTAREA)$/.test(document.activeElement?.tagName || '')) return;
 
     const item = [...(e.clipboardData?.items || [])].find(i => /^image\//.test(i.type));
@@ -443,8 +507,8 @@ async function placeOrder(){
 
     /* Same reasoning as the COD check above: the greyed button is a
        hint, this is the part that holds. */
-    if(chosen === 'GCash' && !_gcashProof){
-      showMsg('Please upload your GCash payment screenshot before placing the order.', 'error');
+    if(isWalletPayment(chosen) && !_gcashProof){
+      showMsg(`Please upload your ${chosen} payment screenshot before placing the order.`, 'error');
       document.getElementById('gcash-proof-drop')?.scrollIntoView({ behavior:'smooth', block:'center' });
       return;
     }
@@ -629,7 +693,7 @@ async function placeOrder(){
     /* A GCash order carries its receipt and what the reader made of it.
        paymentStatus is the admin's decision, not the reader's — the
        verdict only tells them where to look first. */
-    ...(selectedPayment === 'GCash' && _gcashProof && {
+    ...(isWalletPayment(selectedPayment) && _gcashProof && {
       paymentStatus: 'Awaiting verification',
       paymentProof: {
         img:        _gcashProof.img,

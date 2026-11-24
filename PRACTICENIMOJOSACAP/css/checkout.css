@@ -496,6 +496,29 @@ body {
   border: 1px solid var(--border);
 }
 
+/* ── A WALLET WITH NO QR CODE YET ──
+   Shown in the QR's place rather than leaving an <img> with no src,
+   which draws the broken-image icon. The same size as the real code,
+   so the panel does not change height when one is added. */
+.wallet-qr-missing {
+  width: 240px;
+  max-width: 100%;
+  min-height: 240px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-2, #f5f3ee);
+  color: var(--text-muted, #777);
+}
+.wallet-qr-missing span  { font-size: 14px; font-weight: 600; }
+.wallet-qr-missing small { font-size: 12px; max-width: 80%; line-height: 1.5; }
+
 /* Who the money is going to, under the QR, so someone paying by
    number rather than by scanning has it in front of them. */
 .gcash-acct {

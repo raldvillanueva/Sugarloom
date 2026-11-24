@@ -12,6 +12,7 @@
   <script src="../js/service-area.js"></script>
   <script src="../js/cod-policy.js"></script>
   <script src="../js/delivery-fee.js"></script>
+  <script src="../js/payment-methods.js"></script>
   <script src="../js/gcash-proof.js"></script>
   <script src="../js/stock.js"></script>
   <script src="../js/form-validate.js"></script>
@@ -154,12 +155,29 @@
           </div>
           <span class="pay-icon">&#128241;</span>
         </label>
-        <div id="gcash-qr" class="gcash-qr-wrap" style="display:none;">
-          <p class="gcash-qr-label">Scan to pay via GCash</p>
-          <img src="../Images/GCASHMOJO.png" alt="GCash QR code for SugarLoom Ph" class="gcash-qr-img">
+        <label class="pay-row" id="pay-maya">
+          <div class="pay-radio-wrap">
+            <input type="radio" name="payment" value="Maya" onchange="updatePlaceOrderBtn()">
+            <span class="pay-name">Maya</span>
+          </div>
+          <span class="pay-icon">&#128179;</span>
+        </label>
 
-          <!-- Filled from GCASH_ACCOUNT in js/gcash-proof.js, so the name
-               and number are set in one place. -->
+        <!-- One panel for every wallet, not one per wallet. The label,
+             the QR and the account are filled from WALLET_ACCOUNTS in
+             js/payment-methods.js when a wallet is chosen; a second
+             copy of this block would mean a second upload box, a second
+             set of ids and two places to fix anything. -->
+        <div id="gcash-qr" class="gcash-qr-wrap" style="display:none;">
+          <p class="gcash-qr-label" id="wallet-qr-label">Scan to pay</p>
+          <img src="" alt="" class="gcash-qr-img" id="wallet-qr-img" style="display:none">
+
+          <!-- Shown when that wallet has no QR picture yet. -->
+          <div class="wallet-qr-missing" id="wallet-qr-missing" style="display:none">
+            <span>No QR code yet</span>
+            <small>Send to the account below instead.</small>
+          </div>
+
           <div class="gcash-acct">
             <span>Send to</span>
             <strong id="gcash-acct-name">—</strong>
@@ -168,8 +186,8 @@
 
           <div class="gcash-proof">
             <p class="gcash-proof-label">Upload your payment screenshot <span class="req">*</span></p>
-            <p class="gcash-proof-hint">
-              After paying, screenshot the GCash receipt and upload it here. We check it against your
+            <p class="gcash-proof-hint" id="wallet-proof-hint">
+              After paying, screenshot the receipt and upload it here. We check it against your
               order before baking starts.
             </p>
 
