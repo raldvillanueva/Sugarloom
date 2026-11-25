@@ -357,8 +357,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   showView('ordersView');
-  await loadProfile();
-  await loadProductImages();
+
+  /* These were awaited one after another — the profile, then the
+     product pictures, then the orders — so the page sat through three
+     round trips before it drew anything. The first two do not depend
+     on each other and neither blocks the list, so they go together
+     and the orders fetch starts straight away. */
+  await Promise.all([loadProfile(), loadProductImages()]);
   await renderOrders();
   updateOrderBadge();
 
@@ -395,6 +400,24 @@ const PREP_LABELS = {
   readyForBook: { label: '🛵 Waiting for a rider',  color: '#0891B2' },
 };
 
+/* Card-shaped placeholders while the first fetch is in flight. Only
+   the first: the list refreshes itself every thirty seconds, and
+   replacing a list the customer is reading with grey boxes would be
+   worse than leaving it alone for a moment. */
+let _ordersFirstRender = true;
+
+function showOrdersLoading(container){
+  container.innerHTML = Array.from({ length: 2 }, () => `
+    <div class="order-card order-skeleton" aria-hidden="true">
+      <div class="sk-line sk-head"></div>
+      <div class="sk-row"><div class="sk-thumb"></div>
+        <div class="sk-col"><div class="sk-line"></div><div class="sk-line short"></div></div>
+      </div>
+      <div class="sk-line sk-total"></div>
+    </div>`).join('');
+  container.setAttribute('aria-busy', 'true');
+}
+
 async function renderOrders() {
   const container   = document.getElementById('orders-list');
   const currentUser = await getCurrentUser();
@@ -404,17 +427,38 @@ async function renderOrders() {
     return;
   }
 
+  if (_ordersFirstRender) showOrdersLoading(container);
+
   // Fetch this customer's orders from Supabase
-  const { data: rows } = await _supa
+  const { data: rows, error } = await _supa
     .from('orders')
     .select('data')
     .eq('customer_email', currentUser.email)
     .order('date', { ascending: false });
 
-  const orders = (rows || []).map(r => r.data);
+  _ordersFirstRender = false;
+  container.removeAttribute('aria-busy');
+
+  /* The error used to be destructured away, so a query that failed
+     came back as rows = null and the customer was told "No orders
+     yet" — the one thing we had just failed to find out. A slow or
+     refused request now falls back to the copy the bell keeps, and
+     says so plainly if there is nothing to fall back to. */
+  const failed = !!error;
+  if (failed) console.warn('could not load orders:', error);
+
+  const orders = failed
+    ? JSON.parse(localStorage.getItem('orders_' + currentUser.email) || '[]')
+    : (rows || []).map(r => r.data);
 
   if (orders.length === 0) {
-    container.innerHTML = `<div class="empty-box"><h3>No orders yet</h3><p>Go to store to place an order.</p></div>`;
+    container.innerHTML = failed
+      ? `<div class="empty-box">
+           <h3>Could not load your orders</h3>
+           <p>Check your connection and try again — nothing has been lost.</p>
+           <button class="empty-retry" onclick="renderOrders()">Try again</button>
+         </div>`
+      : `<div class="empty-box"><h3>No orders yet</h3><p>Go to store to place an order.</p></div>`;
     return;
   }
 
@@ -884,21 +928,34 @@ async function renderReviews() {
   const savedReviews = {};
   (reviewsRes.data || []).forEach(r => { savedReviews[r.order_id] = r.data; });
 
-  const delivered = orders.filter(order => {
-    const t = allTracking[order.id] || null;
-    return isDelivered(order, t) && !reviewedIds.has(order.id);
-  }).reverse();
+  /* Every delivered order, not only the unreviewed ones.
+
+     This filtered reviewed orders out, which left the branch below
+     that renders a submitted review unreachable — a customer who
+     rated an order watched it disappear from the only tab it lived
+     in, and the bell's link to it had nowhere to land. The order
+     stays; the form becomes the rating they gave. */
+  const delivered = orders.filter(order =>
+    isDelivered(order, allTracking[order.id] || null)).reverse();
+
+  const pending = delivered.filter(o => !reviewedIds.has(o.id)).length;
 
   if (delivered.length === 0) {
     container.innerHTML = `
       <div class="empty-box">
-        <h3>No pending reviews</h3>
-        <p>You've reviewed all your delivered orders. Thank you!</p>
+        <h3>Nothing delivered yet</h3>
+        <p>Once an order arrives you can rate it here.</p>
       </div>`;
     return;
   }
 
-  container.innerHTML = delivered.map(order => {
+  /* Said once at the top rather than by hiding the ones already
+     done. */
+  const heading = pending === 0
+    ? `<p class="reviews-note">You have rated every delivered order. Thank you!</p>`
+    : '';
+
+  container.innerHTML = heading + delivered.map(order => {
     const dateStr   = order.date ? new Date(order.date).toLocaleString('en-PH', {month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}) : '';
     const total     = order.total || order.items.reduce((sum, i) => sum + i.price * (i.qty || 1), 0);
     const review    = savedReviews[order.id] || null;
@@ -985,15 +1042,27 @@ async function renderBuyAgain() {
     return;
   }
 
-  const { data: rows } = await _supa
+  /* Same swallowed error the orders list had: a query that failed
+     came back as null and was reported as "no past orders". */
+  const { data: rows, error } = await _supa
     .from('orders')
     .select('data')
     .eq('customer_email', currentUser.email);
 
-  const orders = (rows || []).map(r => r.data);
+  if (error) console.warn('could not load past orders:', error);
+
+  const orders = error
+    ? JSON.parse(localStorage.getItem('orders_' + currentUser.email) || '[]')
+    : (rows || []).map(r => r.data);
 
   if (orders.length === 0) {
-    container.innerHTML = `<div class="empty-box"><h3>No past orders</h3><p>Place an order first to buy again.</p></div>`;
+    container.innerHTML = error
+      ? `<div class="empty-box">
+           <h3>Could not load your orders</h3>
+           <p>Check your connection and try again — nothing has been lost.</p>
+           <button class="empty-retry" onclick="renderBuyAgain()">Try again</button>
+         </div>`
+      : `<div class="empty-box"><h3>No past orders</h3><p>Place an order first to buy again.</p></div>`;
     return;
   }
 

@@ -148,6 +148,69 @@ body {
   line-height: 1.6;
 }
 
+/* Offered when the list could not be fetched. "No orders yet" needs
+   no button; "we could not reach the server" does. */
+.empty-retry {
+  margin-top: 16px;
+  padding: 10px 22px;
+  border: none;
+  border-radius: 999px;
+  background: var(--text);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .2s ease;
+}
+.empty-retry:hover { opacity: .85; }
+
+/* ── WHILE THE ORDERS ARE BEING FETCHED ──
+   The page used to hold whatever was on screen through the round
+   trip, and the empty box underneath it said "No orders yet" — a
+   customer arriving from a notification about an order was told they
+   had never placed one. Card-shaped placeholders say the same thing
+   the real cards will, in the same shape, so nothing jumps when they
+   arrive. */
+.order-skeleton { pointer-events: none; }
+
+.order-skeleton .sk-line,
+.order-skeleton .sk-thumb {
+  background: linear-gradient(90deg,
+    var(--bg-2, #f1efea) 25%, rgba(0,0,0,.045) 37%, var(--bg-2, #f1efea) 63%);
+  background-size: 400% 100%;
+  animation: order-sk 1.4s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.order-skeleton .sk-head  { width: 45%; height: 12px; margin-bottom: 16px; }
+.order-skeleton .sk-row   { display: flex; gap: 14px; align-items: center; }
+.order-skeleton .sk-thumb { width: 64px; height: 64px; border-radius: 10px; flex-shrink: 0; }
+.order-skeleton .sk-col   { flex: 1; }
+.order-skeleton .sk-col .sk-line { height: 12px; margin-bottom: 8px; }
+.order-skeleton .sk-col .sk-line.short { width: 28%; margin-bottom: 0; }
+.order-skeleton .sk-total { width: 32%; height: 14px; margin: 18px 0 0 auto; }
+
+@keyframes order-sk {
+  0%   { background-position: 100% 50%; }
+  100% { background-position: 0 50%; }
+}
+
+/* A viewer who has asked for less movement gets the shape without
+   the shimmer. */
+@media (prefers-reduced-motion: reduce) {
+  .order-skeleton .sk-line,
+  .order-skeleton .sk-thumb { animation: none; }
+}
+
+/* Shown above the list when every delivered order has been rated. */
+.reviews-note {
+  margin: 0 0 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13.5px;
+}
+
 /* PROFILE LAYOUT */
 .profile-container {
   display: flex;
