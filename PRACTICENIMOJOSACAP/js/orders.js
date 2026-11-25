@@ -406,8 +406,11 @@ const PREP_LABELS = {
    worse than leaving it alone for a moment. */
 let _ordersFirstRender = true;
 
-function showOrdersLoading(container){
-  container.innerHTML = Array.from({ length: 2 }, () => `
+/* The same shape the real cards have, so nothing jumps when they
+   arrive. The markup of pages/orders.html opens with two of these
+   already in it — this is for every render after the first paint. */
+function skeletonCards(n = 2){
+  return Array.from({ length: n }, () => `
     <div class="order-card order-skeleton" aria-hidden="true">
       <div class="sk-line sk-head"></div>
       <div class="sk-row"><div class="sk-thumb"></div>
@@ -415,19 +418,31 @@ function showOrdersLoading(container){
       </div>
       <div class="sk-line sk-total"></div>
     </div>`).join('');
+}
+
+function showLoading(container, n){
+  if(!container) return;
+  container.innerHTML = skeletonCards(n);
   container.setAttribute('aria-busy', 'true');
 }
 
+function showOrdersLoading(container){ showLoading(container, 2); }
+
 async function renderOrders() {
-  const container   = document.getElementById('orders-list');
+  const container = document.getElementById('orders-list');
+
+  /* Before getCurrentUser(), not after: with nothing cached that call
+     fetches the session and then the profile, and the list would sit
+     showing the last thing in it for both round trips. */
+  if (_ordersFirstRender) showOrdersLoading(container);
+
   const currentUser = await getCurrentUser();
 
   if (!currentUser) {
+    container.removeAttribute('aria-busy');
     container.innerHTML = `<div class="empty-box"><h3>Not logged in</h3><p>Please sign in to view your orders.</p></div>`;
     return;
   }
-
-  if (_ordersFirstRender) showOrdersLoading(container);
 
   // Fetch this customer's orders from Supabase
   const { data: rows, error } = await _supa
@@ -912,15 +927,28 @@ function closeCancelModal(){
 /* ── REVIEWS TAB ─────────────────────────── */
 
 async function renderReviews() {
-  const container   = document.getElementById('reviews-list');
+  const container = document.getElementById('reviews-list');
+
+  /* This tab is where a delivery notification lands, so it is read
+     the moment it opens — and it used to open empty and stay that way
+     through two Supabase round trips. */
+  if (!container.dataset.loaded) showLoading(container, 2);
+
   const currentUser = await getCurrentUser();
-  if (!currentUser) { container.innerHTML = `<div class="empty-box"><h3>Not logged in</h3></div>`; return; }
+  if (!currentUser) {
+    container.removeAttribute('aria-busy');
+    container.innerHTML = `<div class="empty-box"><h3>Not logged in</h3></div>`;
+    return;
+  }
 
   // Fetch orders + tracking + reviews from Supabase
   const [ordersRes, reviewsRes] = await Promise.all([
     _supa.from('orders').select('data').eq('customer_email', currentUser.email),
     _supa.from('reviews').select('data, order_id').eq('user_email', currentUser.email)
   ]);
+
+  container.removeAttribute('aria-busy');
+  container.dataset.loaded = '1';
 
   const orders      = (ordersRes.data || []).map(r => r.data);
   const reviewedIds = new Set((reviewsRes.data || []).map(r => r.order_id));
@@ -1042,12 +1070,17 @@ async function renderBuyAgain() {
     return;
   }
 
+  if (!container.dataset.loaded) showLoading(container, 2);
+
   /* Same swallowed error the orders list had: a query that failed
      came back as null and was reported as "no past orders". */
   const { data: rows, error } = await _supa
     .from('orders')
     .select('data')
     .eq('customer_email', currentUser.email);
+
+  container.removeAttribute('aria-busy');
+  container.dataset.loaded = '1';
 
   if (error) console.warn('could not load past orders:', error);
 

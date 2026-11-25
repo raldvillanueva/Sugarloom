@@ -67,9 +67,27 @@
   <div class="orders-container">
 
 
-  <div id="orders-list" class="empty-box">
-    <h3>No orders yet</h3>
-    <p>Go to store to place an order.</p>
+  <!-- Card-shaped placeholders, in the markup rather than put up by
+       JavaScript, because this is what the browser paints before any
+       script has run. It used to read "No orders yet. Go to store to
+       place an order." — so a customer arriving from a notification
+       about an order was told they had never placed one, before the
+       page had looked. Replaced by renderOrders() either way. -->
+  <div id="orders-list" aria-busy="true">
+    <div class="order-card order-skeleton" aria-hidden="true">
+      <div class="sk-line sk-head"></div>
+      <div class="sk-row"><div class="sk-thumb"></div>
+        <div class="sk-col"><div class="sk-line"></div><div class="sk-line short"></div></div>
+      </div>
+      <div class="sk-line sk-total"></div>
+    </div>
+    <div class="order-card order-skeleton" aria-hidden="true">
+      <div class="sk-line sk-head"></div>
+      <div class="sk-row"><div class="sk-thumb"></div>
+        <div class="sk-col"><div class="sk-line"></div><div class="sk-line short"></div></div>
+      </div>
+      <div class="sk-line sk-total"></div>
+    </div>
   </div>
 
 
