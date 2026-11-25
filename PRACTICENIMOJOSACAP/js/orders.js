@@ -222,6 +222,26 @@ async function logoutAll(){
    matched none of them — fell through and lit the Profile tab: the
    page changed, the tab said otherwise. A table cannot drift like
    that, because every view names its own tab. */
+/* ── WHEN IS AN ORDER DELIVERED? ──
+   There were two answers to this and they disagreed.
+
+   The bell says "your order has been delivered" the moment the admin
+   marks it Fulfilled. The Reviews tab asked a different question —
+   whether Lalamove's tracking row had reached COMPLETED — so an order
+   fulfilled without the delivery simulation ever completing was
+   announced as delivered and then could not be reviewed. Clicking the
+   notification took the customer to a Reviews tab their order was not
+   in. The active list had the same gap from the other side: it only
+   dropped an order on tracking, so that order also stayed in the
+   active list, delivered.
+
+   Either signal means delivered. The progress tracker already read it
+   this way; now everything does. */
+function isDelivered(order, tracking){
+  return (tracking && tracking.status === 'COMPLETED')
+      || (order && order.status === 'Fulfilled');
+}
+
 const VIEW_TABS = {
   ordersView:   { tab: 'ordersTab' },
   reviewsView:  { tab: 'reviewsTab',  render: () => renderReviews() },
@@ -245,7 +265,11 @@ function showView(view){
      menu is what is covering the view they just opened. */
   document.getElementById("dropdown")?.classList.remove("show");
 
-  entry.render?.();
+  /* Returned so a caller can wait for the view to actually be on
+     screen. renderReviews() makes two Supabase round trips, and
+     anything that guesses at how long that takes guesses wrong on a
+     slow connection. */
+  return entry.render?.();
 }
 
 /* ── ARRIVING FROM A NOTIFICATION ──
@@ -265,8 +289,7 @@ async function focusOrderFromHash(){
 
   if(!el){
     // delivered or cancelled — it lives under Reviews now
-    showView('reviewsView');
-    await new Promise(r => setTimeout(r, 120));   // let renderReviews() paint
+    await showView('reviewsView');                // waits for the fetch
     el = document.getElementById('review-card-' + id);
   }
 
@@ -412,7 +435,8 @@ async function renderOrders() {
   // Exclude delivered and cancelled orders
   const activeOrders = orders.filter(order => {
     const t = allTracking[order.id] || order.tracking || null;
-    if (t && (t.status === 'COMPLETED' || t.status === 'CANCELED')) return false;
+    if (isDelivered(order, t)) return false;
+    if (t && t.status === 'CANCELED') return false;
     const s = order.status || 'Pending';
     return s !== 'Cancelled' || rejectedPayment(order);
   });
@@ -862,7 +886,7 @@ async function renderReviews() {
 
   const delivered = orders.filter(order => {
     const t = allTracking[order.id] || null;
-    return t && t.status === 'COMPLETED' && !reviewedIds.has(order.id);
+    return isDelivered(order, t) && !reviewedIds.has(order.id);
   }).reverse();
 
   if (delivered.length === 0) {
@@ -1043,7 +1067,7 @@ function buildTrackingHTML(order, tracking) {
 
   const packedDone = (sub === 'packed' || sub === 'readyForBook');
 
-  if (tStatus === 'COMPLETED' || status === 'Fulfilled') {
+  if (isDelivered({ status }, { status: tStatus })) {
     doneThrough = 5; activeStep = -1;
   } else if (tStatus === 'ON_GOING' || tStatus === 'PICKED_UP' || tStatus === 'ASSIGNING_DRIVER') {
     doneThrough = 3; activeStep = 4;
