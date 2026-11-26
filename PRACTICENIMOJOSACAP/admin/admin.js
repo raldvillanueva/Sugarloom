@@ -3416,7 +3416,10 @@ function deductIngredientsFor(o){
 /* Puts an order's ingredients back. Cancelling after baking has started
    used to write the stock off permanently, leaving inventory lower than
    what was really in the storeroom. */
-function restoreIngredientsFor(o){
+/* `note` is what the stock log will say. It used to be hard-coded to
+   "Order cancelled", which was the only caller at the time — a
+   send-back then read as a cancellation in the audit of the shelf. */
+function restoreIngredientsFor(o, note = 'Order cancelled'){
   if(!o.stockDeducted) return [];
 
   const back = [];
@@ -3430,7 +3433,7 @@ function restoreIngredientsFor(o){
       const amount = r.qty * item.qty;
       ing.stock = before + amount;
       back.push({ name: ing.name, amount, unit: ing.unit });
-      logStock({ type:'ingredient', itemId:ing.id, itemName:ing.name, unit:ing.unit, op:'return', before, after:ing.stock, note:'Order cancelled', ref:o.id });
+      logStock({ type:'ingredient', itemId:ing.id, itemName:ing.name, unit:ing.unit, op:'return', before, after:ing.stock, note, ref:o.id });
     });
   });
 
@@ -3617,6 +3620,20 @@ function bakerDeclineOrder(id){
     inputLabel: 'Reason (the admin will see this)',
     inputPlaceholder: 'e.g. out of red velvet mix',
     onConfirm: (reason) => {
+      /* Whatever was taken out for this bake goes back.
+
+         It did not, and the consequences ran past the wrong number on
+         the shelf: o.stockDeducted stayed true, so when the admin
+         sorted the order out and it was baked for real,
+         deductIngredientsFor() saw the flag and took nothing out at
+         all. One send-back and the order was baked off the books for
+         good.
+
+         No-ops when nothing was deducted, which is the ordinary case:
+         the order is usually still Confirmed and has not been near an
+         oven. */
+      const putBack = restoreIngredientsFor(o, 'Sent back by the baker');
+
       o.status        = 'Pending';
       o.declineReason = reason || 'No reason given';
       o.declinedBy    = `${currentUser.fname} ${currentUser.lname}`.trim();
@@ -3629,8 +3646,10 @@ function bakerDeclineOrder(id){
       if(_soMatch){ _soMatch.status = 'Pending'; localStorage.setItem('sl_store_orders', JSON.stringify(_so)); }
       syncStatusToCustomer(o, 'Pending');
 
-      saveDB(); renderOrders(); updateBadges();
-      toast('Sent back to the admin', 'success');
+      saveDB(); renderOrders(); updateBadges(); renderInventory();
+      toast(putBack.length
+        ? 'Sent back to the admin — ingredients returned to stock'
+        : 'Sent back to the admin', 'success');
     }
   });
 }
@@ -3877,6 +3896,20 @@ function updateOrderStatus(id, status){
   const o = DB.orders.find(oo=>oo.id===id);
   if(!o) return;
   const was = o.status;
+
+  /* Ingredients come out when baking starts. An order sent back to a
+     stage before baking has not been made, so they go back with it.
+
+     Here as well as in the send-back itself, because this is the one
+     function every status change passes through and the next person
+     to move an order backwards should not have to remember. The
+     packer's send-back is the deliberate exception and does not come
+     through here: that batch really was baked and wasted, so it
+     clears the flag itself and lets the re-bake take fresh stock. */
+  if((status === 'Pending' || status === 'Confirmed') && o.stockDeducted){
+    restoreIngredientsFor(o, `Sent back from ${was}`);
+  }
+
   o.status = status;
   logAudit('Orders', 'Status changed', `${o.id} — ${o.customer || 'Customer'}`, `${was} → ${status}`);
   // Keep sl_store_orders in sync so a DB re-init never re-imports a stale status

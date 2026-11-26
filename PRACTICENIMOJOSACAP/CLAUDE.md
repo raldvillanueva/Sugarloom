@@ -231,6 +231,25 @@ shelf.
 are returned if the order is later cancelled. `order.stockDeducted`
 guards against deducting twice for the same bake.
 
+**An order that moves backwards gives its ingredients back.** A bake
+that was started and then sent back did not happen, so the stock
+returns with it. This is enforced in `updateOrderStatus()` — the one
+function every status change passes through — as well as in
+`bakerDeclineOrder()`, which sets the status directly. Without it
+`stockDeducted` stayed `true`, so the eventual real bake took nothing
+out at all and the order was baked off the books.
+
+`packerSendBackToBaker()` is the deliberate exception: that batch *was*
+baked and is being remade, so it clears `stockDeducted` without
+returning anything and lets the re-bake draw fresh stock. It sets the
+status directly rather than through `updateOrderStatus()`, which is
+what keeps the central rule from undoing it.
+
+**Being sent back is not being cancelled.** The order is still live at
+Pending, so it still counts against the day's capacity in
+`committedForDay()` — the customer still wants it and the admin still
+has to resolve it. Only cancelling releases the reservation.
+
 Orders whose delivery date has passed are archived automatically, but
 **only if they were Fulfilled or Cancelled** (`ORDER_SETTLED`). An order
 nobody finished is not a finished order: it stays in its tab flagged
