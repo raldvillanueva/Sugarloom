@@ -128,16 +128,25 @@ missing the page says so and the rest of the panel is unaffected; run
 
 ## The daily limit
 
-`dailyLimit` is how much of a product the shop is **willing** to bake in
-a day — oven space, hands, hours. It says nothing about whether there is
-flour, so on its own it let a product advertise fifty with butter for
-two.
+**What a product can make is decided by its ingredients.**
 
 `ingredientCap(p)` walks the recipe and asks each ingredient how many
-whole units are left in it; the smallest answer is the ceiling, and that
-ingredient is the one to buy. `effectiveLimit(p)` is the lower of the
-two numbers, and the panel counts against it everywhere — Products,
-Inventory, the bars and the pills.
+whole units are left in it; the smallest answer is the limit, and that
+ingredient is the one to buy. `effectiveLimit(p)` is that number, and
+the panel counts against it everywhere — Products, Inventory, the bars
+and the pills.
+
+`dailyLimit` is what the shop *intends* to bake, and is now only the
+fallback for a product with **no recipe**, where there is nothing to
+count from. It used to be an upper bound as well — `effectiveLimit` was
+the lower of the two — which meant a product with eggs for seventy-two
+still read "50/50 left", a figure nobody had checked against the stock
+room presented as though they had. The limit on a bake is the raw
+materials.
+
+`isStockLimited(p)` is still measured against `dailyLimit`: it is true
+only when the ingredients come to **less** than the shop meant to bake,
+which is the case worth naming the short ingredient for.
 
 The storefront cannot see the ingredient table, so `syncStockLimits()`
 writes the ceiling onto each product as `stockLimit`, and
@@ -146,8 +155,9 @@ data: recomputed at the top of `saveDB()` rather than at each of the
 dozen places stock moves, because all of them end in a save and none of
 them can then forget. It is arithmetic over memory and costs no query.
 
-**The ceiling binds only at short notice** (`leadDays < 2`, the same
-rule the rest of `stock.js` uses). An order for next Friday is baked
+**The ingredient figure applies only at short notice** (`leadDays < 2`,
+the same rule the rest of `stock.js` uses); beyond that `dailyLimit`
+governs, because there is time to buy more of whatever ran short. An order for next Friday is baked
 from flour nobody has bought yet, and the restock draft is what gets it
 bought — refusing it because today's shelf is bare would turn away the
 bulk orders the shop wants. Today and tomorrow nothing can be bought in

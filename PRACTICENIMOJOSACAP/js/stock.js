@@ -266,7 +266,12 @@ function stockCappedLimit(p, leadDays){
   const limit = Number(p && p.dailyLimit);
   const cap   = Number(p && p.stockLimit);
   if(!Number.isFinite(cap) || cap < 0) return limit;
-  return (Number(leadDays) || 0) < 2 ? Math.min(limit, cap) : limit;
+  /* At short notice the shelf is the answer, not the smaller of the
+     shelf and a typed figure — the panel counts the same way, and a
+     shop showing fewer than it can actually bake today turns away
+     orders it could have filled. Further out, dailyLimit governs:
+     there is time to buy more of whatever ran short. */
+  return (Number(leadDays) || 0) < 2 ? cap : limit;
 }
 
 /* The single question the storefront asks.

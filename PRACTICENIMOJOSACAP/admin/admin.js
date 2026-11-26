@@ -1376,16 +1376,27 @@ function ingredientCap(p){
   return { units, limiting };
 }
 
-/* What today's limit really is: the smaller of what the shop will
-   bake and what it can bake. */
+/* What today's limit really is: what the ingredients can produce.
+
+   This was the smaller of the typed dailyLimit and the ingredient
+   ceiling, which meant a product with eggs for seventy-two still read
+   "50/50 left" — a number nobody had checked against the stock room,
+   presented as if it had been. The limit on a bake is the raw
+   materials, so that is the number.
+
+   dailyLimit survives as the fallback for a product with no recipe,
+   where there is nothing to count from. It is still what the shop
+   intends to bake; it is no longer allowed to claim capacity the
+   shelves cannot back. */
 function effectiveLimit(p){
-  const limit = Number(p && p.dailyLimit) || 0;
   const { units } = ingredientCap(p);
-  return Number.isFinite(units) ? Math.min(limit, units) : limit;
+  return Number.isFinite(units) ? units : (Number(p && p.dailyLimit) || 0);
 }
 
-/* True when the shelf, not the admin's number, is what is holding a
-   product back — which is the thing worth saying out loud. */
+/* True when the ingredients come to less than the shop meant to bake,
+   which is the case worth naming the short ingredient for. Above the
+   intended figure the ingredients are not a problem, so the row says
+   nothing. */
 function isStockLimited(p){
   const limit = Number(p && p.dailyLimit) || 0;
   const { units } = ingredientCap(p);
