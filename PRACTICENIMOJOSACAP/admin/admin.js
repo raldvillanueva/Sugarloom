@@ -2492,10 +2492,12 @@ function openOrderModal(id, viewOnly=false){
   const rejectBtn   = document.getElementById('order-reject-cancel-btn');
 
   const packingBtn = document.getElementById('order-packing-btn');
+  const footerNote = document.getElementById('order-footer-note');
 
   // reset all
   btn.style.display='none'; lalamoveBtn.style.display='none'; prepareBtn.style.display='none'; rejectBtn.style.display='none'; packingBtn.style.display='none';
   btn.disabled=false; btn.style.background='';
+  if(footerNote){ footerNote.style.display='none'; footerNote.textContent=''; }
 
   // View-only mode — no action buttons
   if(viewOnly){ openModal('order-modal'); return; }
@@ -2521,14 +2523,25 @@ function openOrderModal(id, viewOnly=false){
   } else if(o.status==='Pending'){
     btn.textContent='Confirm Order'; btn.style.display='';
     /* Confirming hands the order to the baker, who takes the
-       ingredients out of stock. Doing that on a GCash payment nobody
-       has checked is how a bakery bakes for free. Orders placed before
-       receipts existed have no paymentStatus and are not held up. */
+       ingredients out of stock. Doing that on a GCash or Maya payment
+       nobody has checked is how a bakery bakes for free. Orders placed
+       before receipts existed have no paymentStatus and are not held
+       up.
+
+       The button is taken away rather than disabled. .btn-primary has
+       no :disabled rule, so a disabled one rendered at full strength —
+       it read as the thing to press, and pressing it did nothing. The
+       decision belongs to Payment received / Reject payment in the
+       panel above, so the footer points there instead of offering an
+       action that is not available yet. */
     if(isWalletPayment(o.payment) && o.paymentStatus && o.paymentStatus !== 'Verified'){
-      btn.disabled = true;
-      btn.title = o.paymentStatus === 'Rejected'
-        ? 'The payment was rejected — contact the customer before confirming'
-        : 'Check the payment first, then mark it received';
+      btn.style.display = 'none';
+      if(footerNote){
+        footerNote.textContent = o.paymentStatus === 'Rejected'
+          ? 'Payment was rejected — this order is being cancelled.'
+          : 'Check the payment above first.';
+        footerNote.style.display = '';
+      }
     }
     /* The same rule as the row: a date that has gone cannot be
        confirmed, only moved or cancelled. Checked here too, because
@@ -3086,6 +3099,18 @@ function confirmOrderAction(){
     });
     return;
   } else if(o.status==='Pending'){
+    /* The same rule the footer enforces by hiding the button, enforced
+       where it actually matters. Until now it lived only in whether
+       the button was disabled, which is a property of one view: the
+       modal opens from several places, and nothing stopped the call
+       arriving another way. */
+    if(isWalletPayment(o.payment) && o.paymentStatus && o.paymentStatus !== 'Verified'){
+      toast(o.paymentStatus === 'Rejected'
+        ? 'That payment was rejected — this order cannot be confirmed'
+        : 'Verify the payment before confirming this order', 'error');
+      return;
+    }
+
     /* Ingredients are NOT taken out here — confirming only accepts the
        order. They come out when baking actually starts, in
        prepareOrderAction(), so stock reflects what is really in the

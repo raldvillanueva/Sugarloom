@@ -1100,6 +1100,9 @@
       <button class="btn-secondary" id="order-reject-cancel-btn" onclick="rejectCancelRequest()" style="display:none">
         Reject Cancel
       </button>
+      <!-- Stands in for Confirm Order when the order cannot be confirmed
+           yet, so the footer says why instead of going quiet. -->
+      <span id="order-footer-note" class="modal-footer-note" style="display:none"></span>
       <button class="btn-primary" id="order-confirm-btn" onclick="confirmOrderAction()"></button>
     </div>
   </div>
