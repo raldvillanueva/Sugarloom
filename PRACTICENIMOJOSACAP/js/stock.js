@@ -49,11 +49,45 @@ function orderDeliveryDay(order){
   return isNaN(d) ? null : localDay(d);
 }
 
-/* A cancelled order gives its capacity back; everything else is a
-   commitment, including one already delivered — it still used up part
-   of what could be baked that day. */
+/* ── WHAT COUNTS AS A COMMITMENT ──────────────────────────────────
+   The day's capacity is held from **Confirmed** onwards, not from the
+   moment an order is placed.
+
+   A Pending order is not yet an agreement. The customer can still
+   cancel it themselves — the Cancel Order button on their orders page
+   is offered on Pending and on nothing else — so holding capacity for
+   one reserves the day against something that may simply go away.
+   Confirming is the point the shop accepts the order, and from then
+   the customer cannot cancel; the reservation is as firm as the
+   order.
+
+   Everything after Confirmed commits, including an order already
+   delivered: it still used up part of what could be baked that day.
+   'Cancel Requested' commits too — the order is live until an admin
+   accepts the request, and until then it is still going to be baked.
+
+   The trade-off, deliberately accepted: while orders sit Pending —
+   GCash ones waiting for a receipt to be checked especially — the
+   shop shows capacity it has not formally promised, so more can be
+   taken than a day can bake. Confirming promptly is what keeps that
+   honest. */
 function commitsStock(order){
-  return (order.status || 'Pending') !== 'Cancelled';
+  const s = order.status || 'Pending';
+  if(s === 'Cancelled') return false;
+  if(s !== 'Pending')   return true;
+
+  /* One Pending order does hold its place: the one the shop already
+     accepted and the kitchen handed back. The baker's send-back
+     returns it to Pending for the admin to sort out, but the shop has
+     not changed its mind about baking it — only the ingredients go
+     back, because no bake happened. Treating it as a fresh order
+     would quietly put those twenty pieces back on sale for the same
+     day they are still owed on.
+
+     declineReason is what marks it, and confirmOrderAction() clears
+     it the moment the order is confirmed again, so this cannot
+     outlive the situation it describes. */
+  return !!order.declineReason;
 }
 
 /* { "Fudge Brownies": 6, ... } for one delivery day. */

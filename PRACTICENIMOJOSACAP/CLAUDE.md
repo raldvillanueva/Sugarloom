@@ -245,10 +245,26 @@ returning anything and lets the re-bake draw fresh stock. It sets the
 status directly rather than through `updateOrderStatus()`, which is
 what keeps the central rule from undoing it.
 
-**Being sent back is not being cancelled.** The order is still live at
-Pending, so it still counts against the day's capacity in
-`committedForDay()` — the customer still wants it and the admin still
-has to resolve it. Only cancelling releases the reservation.
+**The day's capacity is held from Confirmed, not from placement.**
+`commitsStock()` in `js/stock.js` is the rule. A Pending order is not
+yet an agreement — the customer's Cancel Order button is offered on
+Pending and on nothing else, so holding the day against one reserves it
+for something that may simply go away. Confirming is where the shop
+accepts the order, and from then the customer cannot cancel.
+
+The accepted trade-off: while orders sit Pending — GCash ones waiting
+for a receipt to be checked especially — the shop shows capacity it has
+not formally promised and can take more than a day can bake. Confirming
+promptly is what keeps that honest.
+
+**Being sent back is not being cancelled.** One Pending order does hold
+its place: the one the shop accepted and the kitchen handed back. Only
+the ingredients return, because no bake happened — the shop has not
+changed its mind about baking it, and treating it as a fresh order
+would put those pieces back on sale for a day they are still owed on.
+`declineReason` is what marks it, and `confirmOrderAction()` clears
+that the moment the order is confirmed again, so the exemption cannot
+outlive the situation. Only cancelling releases the reservation.
 
 Orders whose delivery date has passed are archived automatically, but
 **only if they were Fulfilled or Cancelled** (`ORDER_SETTLED`). An order
