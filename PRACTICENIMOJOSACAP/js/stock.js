@@ -150,6 +150,36 @@ function leadDaysUntil(isoDay){
   return Math.max(0, Math.round((target - today) / 86400000));
 }
 
+/* ── WHAT THE INGREDIENTS ACTUALLY ALLOW ──────────────────────────
+   dailyLimit is how much the shop is WILLING to bake in a day: oven
+   space, hands, hours. It says nothing about whether there is flour,
+   so a product could read "50 left" with sugar for three.
+
+   The panel writes stockLimit onto each product — how many whole
+   units its recipe can still produce from the ingredients on the
+   shelf right now — so the shop can apply the same ceiling without
+   needing the ingredient table, which it cannot see.
+
+   The two are different kinds of limit and the honest answer is
+   whichever binds first.
+
+   It binds only at short notice. An order for next Friday will be
+   baked from flour nobody has bought yet, and the restock draft is
+   the thing that gets it bought — refusing that order because the
+   shelf is bare today would turn away exactly the bulk orders this
+   shop wants. Today and tomorrow nothing can be bought in time, so
+   today's shelf is the ceiling.
+
+   An absent stockLimit means the panel has not computed one (a
+   product with no recipe, or a version saved before this existed) and
+   constrains nothing. Zero is a real answer and means zero. */
+function stockCappedLimit(p, leadDays){
+  const limit = Number(p && p.dailyLimit);
+  const cap   = Number(p && p.stockLimit);
+  if(!Number.isFinite(cap) || cap < 0) return limit;
+  return (Number(leadDays) || 0) < 2 ? Math.min(limit, cap) : limit;
+}
+
 /* The single question the storefront asks.
 
    `committed` is the live count for the delivery day in question,
@@ -164,6 +194,11 @@ function availability(p, committed, opts){
   const leadDays    = opts && opts.leadDays != null ? opts.leadDays : 0;
   const shortNotice = leadDays < 2;
 
+  /* Asked of dailyLimit alone, deliberately: a product with no daily
+     limit is unlimited, and that must be decided before the
+     ingredient ceiling is applied. Otherwise a cap of zero would read
+     as "no limit set" and put a product with no ingredients left back
+     on the shelf as unlimited. */
   const limit = Number(p && p.dailyLimit);
   if(!Number.isFinite(limit) || limit <= 0){
     return { left: Infinity, orderable: true, state: 'ok', capacity: Infinity };
@@ -173,7 +208,9 @@ function availability(p, committed, opts){
     ? committed[p.name]
     : Number(p.soldToday) || 0;
 
-  const capacity = capacityFor(limit, leadDays);
+  /* Beyond short notice this is dailyLimit unchanged, so nothing about
+     booking ahead moves. */
+  const capacity = capacityFor(stockCappedLimit(p, leadDays), leadDays);
   const left     = Math.max(0, capacity - used);
   const bar      = shortNotice ? hideThreshold(p) : 0;
 

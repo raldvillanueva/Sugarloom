@@ -319,6 +319,12 @@ async function initDB(){
   // Prime the tracking cache so it's available before first poll
   await refreshTrackingCache().catch(() => {});
   checkDailyReset();
+
+  /* So the ceilings are right from the first render rather than from
+     the first save. Products stored before this field existed arrive
+     without one, and the shop would read no ceiling at all until
+     something in the panel happened to save. */
+  syncStockLimits();
 }
 
 /* Orders rejected before rejection cancelled the order are stranded:
@@ -394,6 +400,13 @@ function uniqueById(arr){
 
 function saveDB(){
   if (!DB.stockLog) DB.stockLog = [];
+
+  /* Derived from the ingredients, so it is recomputed here rather than
+     at each of the dozen places stock moves — baking, a cancellation
+     putting it back, an adjustment, a delivery arriving. Every one of
+     those ends in a save, and none of them can forget. It is arithmetic
+     over data already in memory, so it costs no query. */
+  syncStockLimits();
 
   // Persist all tables to Supabase (fire-and-forget so callers stay synchronous)
   const rows = (arr, extraFn) =>
@@ -1318,7 +1331,7 @@ function renderProducts(){
       <td>
         <div class="stock-bar-wrap">
           <div class="stock-bar"><div class="stock-bar-fill ${stockClass(p)}" style="width:${stockPct(p)}%"></div></div>
-          <div class="stock-label">${leftToday(p)}/${p.dailyLimit||0} left</div>
+          <div class="stock-label">${leftToday(p)}/${effectiveLimit(p)} left</div>
         </div>
       </td>
       <td><span class="pill ${p.active?'active':'inactive'}">${p.active?'Active':'Inactive'}</span></td>
@@ -1333,14 +1346,65 @@ function renderProducts(){
     </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-2)">No products found</td></tr>';
 }
 
-function ingEstimate(p){
-  if(!p.recipe || !p.recipe.length) return p.dailyLimit||0;
-  let min = Infinity;
+/* ── HOW MANY THE SHELF CAN STILL PRODUCE ──────────────────────────
+   Walks the recipe and asks each ingredient how many whole units it
+   has left in it. The smallest answer is the product's ceiling, and
+   that ingredient is the one to buy.
+
+   This replaces ingEstimate(), which computed almost the same number
+   and was never called from anywhere: the daily limit stayed whatever
+   somebody last typed, however little was on the shelf. A product
+   could advertise fifty with butter for two, take the orders, and the
+   baker found out at the mixer.
+
+   Infinity, not zero, when there is nothing to go on — a product with
+   no recipe is not a product that can make none. Zero is reserved for
+   a recipe whose ingredients have genuinely run out. */
+function ingredientCap(p){
+  if(!p || !Array.isArray(p.recipe) || !p.recipe.length){
+    return { units: Infinity, limiting: null };
+  }
+  let units = Infinity, limiting = null;
   p.recipe.forEach(r => {
     const ing = DB.ingredients.find(i => i.id === r.ingredientId);
-    if(ing && r.qty > 0) min = Math.min(min, Math.floor(ing.stock / r.qty));
+    const per = Number(r.qty);
+    if(!ing || !(per > 0)) return;   // an ingredient we know nothing about constrains nothing
+    const canMake = Math.floor((Number(ing.stock) || 0) / per);
+    if(canMake < units){ units = canMake; limiting = ing; }
   });
-  return min === Infinity ? (p.dailyLimit||0) : min;
+  return { units, limiting };
+}
+
+/* What today's limit really is: the smaller of what the shop will
+   bake and what it can bake. */
+function effectiveLimit(p){
+  const limit = Number(p && p.dailyLimit) || 0;
+  const { units } = ingredientCap(p);
+  return Number.isFinite(units) ? Math.min(limit, units) : limit;
+}
+
+/* True when the shelf, not the admin's number, is what is holding a
+   product back — which is the thing worth saying out loud. */
+function isStockLimited(p){
+  const limit = Number(p && p.dailyLimit) || 0;
+  const { units } = ingredientCap(p);
+  return Number.isFinite(units) && units < limit;
+}
+
+/* ── PUBLISHING THE CEILING TO THE SHOP ──
+   The storefront cannot see the ingredient table, so the number is
+   written onto the product itself and travels with it on the next
+   save. stock.js applies it there.
+
+   Left undefined rather than null when there is nothing to say:
+   Number(null) is 0, and a zero cap means "cannot make any", which is
+   the opposite of "no recipe to judge by". */
+function syncStockLimits(){
+  (DB.products || []).forEach(p => {
+    const { units } = ingredientCap(p);
+    if(Number.isFinite(units)) p.stockLimit = units;
+    else delete p.stockLimit;
+  });
 }
 /* ── INGREDIENT STOCK LEVELS ──
    The low-stock threshold is a percentage of a full shelf rather than a
@@ -1403,8 +1467,12 @@ function soldTodayFor(p, committed){
     : (Number(p.soldToday) || 0);
 }
 
+/* Counted against the effective limit, not the typed one. The panel
+   read dailyLimit straight, so a product with the ingredients for
+   three still showed "50 left" — the one screen whose job is to tell
+   the admin what the kitchen can do was the screen furthest from it. */
 function leftToday(p, committed){
-  return Math.max(0, (Number(p.dailyLimit) || 0) - soldTodayFor(p, committed));
+  return Math.max(0, effectiveLimit(p) - soldTodayFor(p, committed));
 }
 
 function stockClass(p){
@@ -1414,7 +1482,7 @@ function stockClass(p){
   return 'ok';
 }
 function stockPct(p){
-  const limit = p.dailyLimit || 1;
+  const limit = effectiveLimit(p) || 1;
   const remaining = leftToday(p);
   return Math.min(100, Math.round((remaining / limit) * 100));
 }
@@ -3701,14 +3769,28 @@ function renderInventory(){
 
   // Product stock
   document.getElementById('product-stock-body').innerHTML = DB.products.map(p=>{
-    const sc = stockClass(p);
+    const sc    = stockClass(p);
+    const cap   = ingredientCap(p);
+    const typed = Number(p.dailyLimit) || 0;
+
+    /* When the shelf is the thing holding a product back, say so and
+       name the ingredient. "12/50 left" with no explanation reads as
+       a slow day; the admin needs to know it is the butter, because
+       buying butter is the fix. */
+    const capNote = isStockLimited(p)
+      ? `<div class="stock-capped" title="The daily limit is ${typed}, but the ingredients on hand make ${cap.units}">
+           <i class='bx bx-bowl-hot'></i> ingredients allow ${cap.units}${cap.limiting ? ' — short on ' + escHTML(cap.limiting.name) : ''}
+         </div>`
+      : '';
+
     return `<tr>
       <td><div class="product-cell"><div class="product-thumb"><img src="${productImgSrc(p)}" alt="${escHTML(p.name)}" onerror="productImgFallback(this)"></div><div class="product-name">${escHTML(p.name)}</div></div></td>
       <td>${p.category}</td>
       <td>
         <div class="stock-bar-wrap">
           <div class="stock-bar"><div class="stock-bar-fill ${sc}" style="width:${stockPct(p)}%"></div></div>
-          <div class="stock-label">${leftToday(p)}/${p.dailyLimit||0} left</div>
+          <div class="stock-label">${leftToday(p)}/${effectiveLimit(p)} left</div>
+          ${capNote}
         </div>
       </td>
       <td>${p.threshold}</td>
@@ -4483,11 +4565,27 @@ function printRestockForm(){
 function openAdjustStock(id, type){
   document.getElementById('adj-id').value   = id;
   document.getElementById('adj-type').value = type;
+  const capNote = document.getElementById('adj-cap-note');
+  if(capNote){ capNote.style.display='none'; capNote.textContent=''; }
+
   let current;
   if(type==='product'){
     const p = DB.products.find(pp=>pp.id===id);
     current = p.dailyLimit||0;
     document.getElementById('adjust-title').textContent = 'Set Daily Limit — '+p.name;
+
+    /* The limit typed here is a ceiling on willingness, not on
+       possibility — the ingredients cap it separately and will win
+       whenever they are lower. Saying so here stops the admin raising
+       a number that cannot take effect and wondering why the shop
+       still turns orders away. */
+    const cap = ingredientCap(p);
+    if(capNote && Number.isFinite(cap.units)){
+      capNote.textContent = cap.units === 0
+        ? `No stock for this right now${cap.limiting ? ' — out of ' + cap.limiting.name : ''}. It stays off the shelf for same-day orders whatever is set here.`
+        : `Ingredients on hand make ${cap.units}${cap.limiting ? ' (limited by ' + cap.limiting.name + ')' : ''}. A higher limit applies only once stock allows.`;
+      capNote.style.display = '';
+    }
   } else {
     const i = DB.ingredients.find(ii=>ii.id===id);
     current = i.stock;

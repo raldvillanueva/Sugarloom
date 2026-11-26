@@ -1030,6 +1030,30 @@ textarea { resize: vertical; }
 /* Takes the place of an action that is not available yet, so the
    footer says why rather than going quiet. Reordered to the left so
    it reads before the buttons rather than looking like one. */
+.adj-cap-note {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #FFFBEB;
+  border: 1px solid #FDE68A;
+  color: #92400E;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Shown under a product's stock bar when the ingredients, not the
+   admin's number, are what is capping it. */
+.stock-capped {
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #B45309;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.stock-capped i { font-size: 13px; }
+
 .modal-footer-note {
   order: -1;            /* ahead of Close, which the markup puts first */
   margin-right: auto;

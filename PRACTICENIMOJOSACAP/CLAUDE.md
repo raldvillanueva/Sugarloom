@@ -126,6 +126,40 @@ the console and never blocks the action it describes. If the table is
 missing the page says so and the rest of the panel is unaffected; run
 `supabase-audit-log.sql`.
 
+## The daily limit
+
+`dailyLimit` is how much of a product the shop is **willing** to bake in
+a day — oven space, hands, hours. It says nothing about whether there is
+flour, so on its own it let a product advertise fifty with butter for
+two.
+
+`ingredientCap(p)` walks the recipe and asks each ingredient how many
+whole units are left in it; the smallest answer is the ceiling, and that
+ingredient is the one to buy. `effectiveLimit(p)` is the lower of the
+two numbers, and the panel counts against it everywhere — Products,
+Inventory, the bars and the pills.
+
+The storefront cannot see the ingredient table, so `syncStockLimits()`
+writes the ceiling onto each product as `stockLimit`, and
+`stockCappedLimit()` in `js/stock.js` applies it there. It is derived
+data: recomputed at the top of `saveDB()` rather than at each of the
+dozen places stock moves, because all of them end in a save and none of
+them can then forget. It is arithmetic over memory and costs no query.
+
+**The ceiling binds only at short notice** (`leadDays < 2`, the same
+rule the rest of `stock.js` uses). An order for next Friday is baked
+from flour nobody has bought yet, and the restock draft is what gets it
+bought — refusing it because today's shelf is bare would turn away the
+bulk orders the shop wants. Today and tomorrow nothing can be bought in
+time, so today's shelf is the ceiling.
+
+An absent `stockLimit` constrains nothing; **zero is a real answer and
+means zero**. Keep the distinction: `Number(null)` is `0`, so the field
+is deleted rather than nulled when there is nothing to say, and
+`availability()` decides "no daily limit set" from `dailyLimit` alone
+before the cap is applied — otherwise a product with no ingredients
+would read as unlimited.
+
 ## Restocking
 
 An ingredient at or below its reorder point puts a **Draft** restock
