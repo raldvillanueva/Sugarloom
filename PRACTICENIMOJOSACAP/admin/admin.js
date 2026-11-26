@@ -2062,14 +2062,28 @@ async function setBulkThreshold(value){
   renderOrders();
 }
 
-/* Asked from the Bulk tab, where the number is on screen. */
+/* Asked from the Bulk tab, where the number is on screen.
+
+   Through the panel's own dialog rather than prompt(). A browser
+   prompt is drawn by the browser, in its own colours, titled with the
+   site's domain — it looked nothing like the rest of the panel and
+   announced that it came from somewhere else. showConfirm already
+   took a reason and a date; it takes a number now, so the range is
+   enforced in the dialog instead of by a toast after it has closed. */
 function promptBulkThreshold(){
-  const raw = prompt('An order counts as bulk at this many pieces or more:', bulkThreshold);
-  if(raw === null) return;
-  const n = Number(raw);
-  if(!Number.isFinite(n)){ toast('That is not a number', 'danger'); return; }
-  if(n < 2 || n > 500){ toast('Pick something between 2 and 500', 'warning'); return; }
-  setBulkThreshold(n);
+  showConfirm({
+    title:   'What counts as a bulk order?',
+    message: 'Orders with at least this many pieces, counted across every line, are listed under Bulk.',
+    okText:  'Save threshold',
+    okClass: 'btn-primary',
+    icon:    'bx-layer',
+    inputLabel: 'Pieces',
+    inputType:  'number',
+    inputValue: bulkThreshold,
+    inputMinValue: 2,
+    inputMaxValue: 500,
+    onConfirm: n => setBulkThreshold(n)
+  });
 }
 
 /* ── ROW ACTIONS ──
@@ -2297,7 +2311,7 @@ function archiveOrder(id){
   });
 }
 
-function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', inputLabel=null, inputPlaceholder='', inputRequired=false, inputMin=0, inputType='text', inputMinValue=null, onConfirm }){
+function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='btn-danger', icon='bx-archive-in', inputLabel=null, inputPlaceholder='', inputRequired=false, inputMin=0, inputType='text', inputMinValue=null, inputMaxValue=null, inputValue='', onConfirm }){
   document.getElementById('confirm-modal-title').textContent = title;
   document.getElementById('confirm-modal-message').textContent = message;
   /* The circle was hardcoded red in the markup, so every dialog looked
@@ -2318,18 +2332,28 @@ function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='b
   const wrap  = document.getElementById('confirm-modal-input-wrap');
   const text  = document.getElementById('confirm-modal-input');
   const date  = document.getElementById('confirm-modal-date');
+  const num   = document.getElementById('confirm-modal-number');
   const error = document.getElementById('confirm-modal-input-error');
   const isDate = inputType === 'date';
-  const input  = isDate ? date : text;
+  const isNum  = inputType === 'number';
+  const input  = isDate ? date : isNum ? num : text;
 
-  text.value = ''; date.value = '';
-  text.classList.toggle('hidden', isDate);
+  text.value = ''; date.value = ''; num.value = isNum ? inputValue : '';
+  text.classList.toggle('hidden', isDate || isNum);
   date.classList.toggle('hidden', !isDate);
+  num.classList.toggle('hidden',  !isNum);
   if(isDate && inputMinValue) date.min = inputMinValue; else date.removeAttribute('min');
+
+  /* The browser's own spinner bounds. They are a convenience, not the
+     check — a number can still be typed or pasted straight past them,
+     so the range is tested again below. */
+  if(isNum && inputMinValue != null) num.min = inputMinValue; else num.removeAttribute('min');
+  if(isNum && inputMaxValue != null) num.max = inputMaxValue; else num.removeAttribute('max');
 
   error.classList.add('hidden');
   text.classList.remove('invalid');
   date.classList.remove('invalid');
+  num.classList.remove('invalid');
   if(inputLabel){
     document.getElementById('confirm-modal-input-label').textContent =
       inputLabel + (inputRequired || isDate ? ' *' : '');
@@ -2361,6 +2385,26 @@ function showConfirm({ title='Confirm', message='', okText='Confirm', okClass='b
         input.focus();
         return;
       }
+    } else if(isNum){
+      const n = Number(v);
+      const lo = inputMinValue, hi = inputMaxValue;
+      if(v === '' || !Number.isFinite(n)){
+        error.textContent = 'Please enter a number.';
+      } else if(lo != null && hi != null && (n < lo || n > hi)){
+        error.textContent = `Pick a number between ${lo} and ${hi}.`;
+      } else if(lo != null && n < lo){
+        error.textContent = `It cannot be lower than ${lo}.`;
+      } else if(hi != null && n > hi){
+        error.textContent = `It cannot be higher than ${hi}.`;
+      } else {
+        closeConfirmModal();
+        onConfirm(n);          // a number, not the typed string
+        return;
+      }
+      error.classList.remove('hidden');
+      input.classList.add('invalid');
+      input.focus();
+      return;
     } else if(inputRequired && v.length < Math.max(1, inputMin)){
       error.textContent = inputMin > 1
         ? `Please give a reason — at least ${inputMin} characters.`

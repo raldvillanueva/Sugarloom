@@ -2111,9 +2111,24 @@ textarea { resize: vertical; }
   font-weight: 600;
   color: var(--danger);
 }
-#confirm-modal-input.invalid {
+/* All three of the dialog's inputs, not only the textarea. The date
+   field has always been given .invalid on a bad value and never shown
+   it; the number field would have been the second. */
+#confirm-modal-input.invalid,
+#confirm-modal-date.invalid,
+#confirm-modal-number.invalid {
   border-color: var(--danger);
 }
+
+/* The spinner arrows sit on top of the rounded border at this size
+   and read as a rendering fault. The value is typed, and the range is
+   checked on save. */
+#confirm-modal-number::-webkit-outer-spin-button,
+#confirm-modal-number::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#confirm-modal-number { -moz-appearance: textfield; appearance: textfield; }
 
 /* ── A customer disputing a refused payment ──
    Sits directly under the payment panel it argues with, in the same
