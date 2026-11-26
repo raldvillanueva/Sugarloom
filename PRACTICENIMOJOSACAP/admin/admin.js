@@ -712,8 +712,17 @@ function showApp(){
   const notifBtn = document.querySelector('.notif-btn');
   if(notifBtn) notifBtn.style.display = isStaff ? 'none' : '';
 
+  /* Land on this role's own view before anything is awaited.
+
+     The markup carries the Administrator's layout, so view-dashboard
+     is the section marked active — and the app was revealed and then
+     left to wait on syncStoreOrders(). A Baker or Packer spent that
+     round trip looking at a dashboard their sidebar does not even
+     offer, counting products and revenue at zero, before being moved
+     to the one page they work from. */
+  switchView(homeView());
+
   syncStoreOrders().then(async () => {
-    switchView(homeView());
     updateBadges();
     buildNotifs();
     renderNotifPanel();
@@ -758,7 +767,20 @@ async function refreshTrackingCache(){
    this is the same as last time there is nothing to fetch. */
 let _ordersSignature = null;
 
-async function syncStoreOrders(){
+/* Signing in asked for the same sync twice: showApp() calls this, and
+   the switchView('orders') it then performs calls it again. Both do
+   the tracking refresh and both Supabase queries. Callers that arrive
+   while one is already running now wait on that one instead of
+   starting a second. */
+let _syncInFlight = null;
+
+function syncStoreOrders(){
+  if(_syncInFlight) return _syncInFlight;
+  _syncInFlight = _syncStoreOrders().finally(() => { _syncInFlight = null; });
+  return _syncInFlight;
+}
+
+async function _syncStoreOrders(){
   await refreshTrackingCache(); // keep tracking cache fresh every poll cycle
 
   /* ── WHY THERE ARE TWO QUERIES ──
@@ -882,7 +904,16 @@ function switchView(view){
 
   if(view==='dashboard')  renderDashboard();
   if(view==='products')   renderProducts();
-  if(view==='orders'){    syncStoreOrders().then(()=>renderOrders()); }
+  /* Drawn from what is already in memory, then redrawn when the sync
+     lands. The page used to stay blank for the whole round trip, and
+     on a first sign-in there is nothing in memory yet — so a Baker or
+     Packer opening the one page they have waited at an empty table,
+     or at "No orders found", which is not the same thing as not
+     having asked yet. */
+  if(view==='orders'){
+    if(DB.orders.length) renderOrders(); else showOrdersLoadingRow();
+    syncStoreOrders().then(()=>renderOrders());
+  }
   if(view==='inventory')  renderInventory();
   if(view==='reports')    renderReports();
   /* Drawn straight away from what is already known, then redrawn once
@@ -1619,6 +1650,13 @@ function toggleProduct(id){
 /* =============================================
    ORDERS
    ============================================= */
+/* Says the list is on its way, rather than that there is none. */
+function showOrdersLoadingRow(){
+  const body = document.getElementById('orders-body');
+  if(body) body.innerHTML =
+    '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-2)">Loading orders…</td></tr>';
+}
+
 function renderOrders(){
   const isBaker  = currentUser.role === 'Baker';
   const isPacker = currentUser.role === 'Packer';
@@ -3654,6 +3692,13 @@ function syncStatusToCustomer(order, status){
    INVENTORY
    ============================================= */
 function renderInventory(){
+  /* A Baker and a Packer have Orders and nothing else, but every order
+     action called this: both stock tables rebuilt, every product
+     thumbnail re-resolved, and syncRestockForm() sent off to Supabase
+     — all to fill a page the role cannot open. That was the lag on
+     taking an order through its step. */
+  if(currentUser && !canView('inventory')) return;
+
   // Product stock
   document.getElementById('product-stock-body').innerHTML = DB.products.map(p=>{
     const sc = stockClass(p);
