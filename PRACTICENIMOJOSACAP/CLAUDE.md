@@ -160,6 +160,37 @@ is deleted rather than nulled when there is nothing to say, and
 before the cap is applied — otherwise a product with no ingredients
 would read as unlimited.
 
+## Bulk orders
+
+**Two different questions wear this word. Keep them apart.**
+
+*The customer's* "This is a bulk order" (`js/cart.js`) fires per line,
+when a quantity is above what can be baked for the date chosen. It is
+not a refusal: the order is prepared as a scheduled batch and needs two
+days' notice, and the message offers the earliest date that works or a
+smaller quantity. The panel is blue because a bulk order is not a
+warning. It is date-relative, so the same basket is bulk for tomorrow
+and ordinary for next week.
+
+*The panel's* **Bulk tab** classifies a whole order by size:
+`orderPieces(o) >= bulkThreshold`, counted across every line, so thirty
+cookies is bulk whether it arrived as one line of thirty or five of six.
+It is a fact about the job, fixed once the order exists, and it cuts
+across status — a bulk order still Pending and one already Baking both
+belong in that tab.
+
+Do not collapse one into the other. The first schedules a delivery date;
+the second plans a workload.
+
+`bulkThreshold` lives in `app_settings` under id `orders` (default 30,
+clamped 2–500), beside the audit retention period, so there is one
+answer rather than a page and a database that can drift. Only an
+Administrator can change it, and a change is written to the audit trail.
+The Bulk tab is the Administrator's: a Baker and a Packer work one queue
+in order and do not choose what to pick up, so the tab is hidden from
+them — but the row badge still shows them how big the job in front of
+them is, which is the part that changes what they do.
+
 ## Restocking
 
 An ingredient at or below its reorder point puts a **Draft** restock

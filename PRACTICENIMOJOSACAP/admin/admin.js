@@ -315,6 +315,7 @@ async function initDB(){
 
   await ensureSuperAdmin();
   await cancelRejectedPayments();
+  await loadBulkThreshold();
 
   // Prime the tracking cache so it's available before first poll
   await refreshTrackingCache().catch(() => {});
@@ -1765,6 +1766,15 @@ function renderOrders(){
     if(msg) msg.textContent = n === 1 ? '1 order is ready to be packed.' : `${n} orders are ready to be packed.`;
   }
 
+  /* Bulk is the Administrator's view of the workload. A Baker and a
+     Packer work one queue in order and do not choose what to pick up,
+     so a tab that re-sorts the work by size is not theirs. The badge
+     on the row still tells them how big the job in front of them is,
+     which is the part that changes what they do. */
+  const bulkTab = document.getElementById('tab-bulk');
+  if(bulkTab) bulkTab.style.display = isAdmin ? '' : 'none';
+  if(!isAdmin && orderFilter === 'Bulk') orderFilter = 'All';
+
   // Role-based tab visibility
   if(isBaker){
     ['tab-all','tab-pending','tab-ready-packing','tab-packing','tab-ready-for-book','tab-completed','tab-fulfilled','tab-cancel','tab-archived'].forEach(id => { const el=document.getElementById(id); if(el) el.style.display='none'; });
@@ -1824,9 +1834,29 @@ function renderOrders(){
   setTabCount('tab-count-fulfilled',     counts.Fulfilled);
   setTabCount('tab-count-cancel',        counts['Cancel Requested']);
   setTabCount('tab-count-archived',      archivedCount);
+  setTabCount('tab-count-bulk', DB.orders.filter(o=>!o.archived && o.status !== 'Cancel Requested' && isBulkOrder(o)).length);
+
+  /* Shown only where it is the subject. */
+  const bulkNote = document.getElementById('bulk-note');
+  if(bulkNote){
+    if(orderFilter==='Bulk'){
+      const n = DB.orders.filter(o=>!o.archived && o.status !== 'Cancel Requested' && isBulkOrder(o)).length;
+      bulkNote.innerHTML =
+        `<span><strong>${n}</strong> order${n===1?'':'s'} of <strong>${bulkThreshold}</strong> pieces or more.</span>` +
+        (isAdmin ? `<button class="bulk-note-btn" onclick="promptBulkThreshold()">Change threshold</button>` : '');
+      bulkNote.style.display = 'flex';
+    } else {
+      bulkNote.style.display = 'none';
+    }
+  }
 
   let list;
-  if(orderFilter==='Archived'){
+  if(orderFilter==='Bulk'){
+    /* Cuts across status rather than replacing it: a bulk order that
+       is still Pending and one already Baking both belong here, which
+       is the whole point of looking at them together. */
+    list = DB.orders.filter(o=>!o.archived && o.status !== 'Cancel Requested' && isBulkOrder(o));
+  } else if(orderFilter==='Archived'){
     list = DB.orders.filter(o=>o.archived);
   } else if(orderFilter==='All'){
     list = DB.orders.filter(o=>!o.archived && o.status !== 'Cancel Requested');
@@ -1930,10 +1960,18 @@ function renderOrders(){
     const riskTag = risk
       ? `<span class="cod-risk ${risk.level}" title="Cash on Delivery — ${risk.note}. Worth confirming by phone before baking.">${risk.level === 'high' ? 'VERIFY' : 'NEW'}</span>`
       : '';
+    /* Carried on the row in every tab, not only the Bulk one — the
+       size of a job is what decides how it is planned, and whoever is
+       looking at Pending needs to see it there. */
+    const pieces  = orderPieces(o);
+    const bulkTag = isBulkOrder(o)
+      ? `<span class="bulk-tag" title="${pieces} pieces — bulk is ${bulkThreshold} or more">BULK · ${pieces}</span>`
+      : '';
+
     return `
-    <tr class="order-row ${isQueue && idx===0 ? 'queue-next-row' : ''}"
+    <tr class="order-row ${isQueue && idx===0 ? 'queue-next-row' : ''} ${isBulkOrder(o) ? 'bulk-row' : ''}"
         onclick="openOrderModal('${o.id}', true)" title="Click to view details">
-      <td class="fw-bold">${queueTag}${o.id}${deferTag}${payTag}${dueTag}${overdueTag}${riskTag}</td>
+      <td class="fw-bold">${queueTag}${o.id}${bulkTag}${deferTag}${payTag}${dueTag}${overdueTag}${riskTag}</td>
       <td>${escHTML(o.customer)}</td>
       <td>${o.items.map(i=>i.name+(i.qty>1?' x'+i.qty:'')).join(', ')}</td>
       <td class="fw-bold">₱${o.total.toLocaleString()}</td>
@@ -1945,6 +1983,93 @@ function renderOrders(){
       </td>
     </tr>`;
   }).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-2)">No orders found</td></tr>';
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   BULK ORDERS
+
+   A sixty-piece order for a party and a six-piece order for a Tuesday
+   are not the same job. They are baked in different batches, planned
+   differently and worth different money, and the panel showed them as
+   one undifferentiated list sorted by date.
+
+   Size is what separates them, counted in pieces across the whole
+   order rather than per line: thirty cookies is a bulk order whether
+   it arrived as one line of thirty or five lines of six.
+
+   The threshold is a number the shop sets, not one hard-coded here —
+   a home bakery's "large" is not a commissary's. It lives in
+   app_settings beside the audit retention period, so there is one
+   answer rather than a page and a database that can drift.
+   ══════════════════════════════════════════════════════════════════ */
+const BULK_DEFAULT_THRESHOLD = 30;
+let bulkThreshold = BULK_DEFAULT_THRESHOLD;
+
+/* Clamped at both ends. One would make every order bulk and the tab
+   meaningless; nothing sensible is above a few hundred pieces. */
+function clampBulkThreshold(n){
+  const v = Math.round(Number(n));
+  if(!Number.isFinite(v)) return BULK_DEFAULT_THRESHOLD;
+  return Math.max(2, Math.min(500, v));
+}
+
+/* Pieces in an order, across every line. */
+function orderPieces(o){
+  return (o && Array.isArray(o.items) ? o.items : [])
+    .reduce((n, it) => n + (Number(it && it.qty) || 1), 0);
+}
+
+function isBulkOrder(o){
+  return orderPieces(o) >= bulkThreshold;
+}
+
+async function loadBulkThreshold(){
+  const { data, error } = await _supa.from('app_settings')
+    .select('data').eq('id', 'orders').maybeSingle();
+  if(error){
+    /* No settings row yet, or no table — the default stands rather
+       than the panel claiming a policy nobody set. */
+    console.warn('bulk threshold unavailable, using the default:', error.message);
+    return;
+  }
+  if(data?.data?.bulkThreshold) bulkThreshold = clampBulkThreshold(data.data.bulkThreshold);
+}
+
+async function setBulkThreshold(value){
+  if(currentUser && currentUser.role !== 'Administrator'){
+    toast('Only an Administrator can change this', 'danger');
+    return;
+  }
+  const n = clampBulkThreshold(value);
+  const was = bulkThreshold;
+  if(n === was) return;
+
+  const { error } = await _supa.from('app_settings').upsert({
+    id: 'orders',
+    data: { bulkThreshold: n, updatedAt: new Date().toISOString(),
+            updatedBy: `${currentUser.fname} ${currentUser.lname}`.trim() }
+  }, { onConflict: 'id' });
+
+  if(error){
+    console.error('could not save the bulk threshold:', error);
+    toast('Could not save: ' + error.message, 'danger');
+    return;
+  }
+
+  bulkThreshold = n;
+  await logAudit('Orders', 'Bulk threshold changed', 'Orders', `${was} → ${n} pieces`);
+  toast(`Bulk now means ${n} pieces or more`, 'success');
+  renderOrders();
+}
+
+/* Asked from the Bulk tab, where the number is on screen. */
+function promptBulkThreshold(){
+  const raw = prompt('An order counts as bulk at this many pieces or more:', bulkThreshold);
+  if(raw === null) return;
+  const n = Number(raw);
+  if(!Number.isFinite(n)){ toast('That is not a number', 'danger'); return; }
+  if(n < 2 || n > 500){ toast('Pick something between 2 and 500', 'warning'); return; }
+  setBulkThreshold(n);
 }
 
 /* ── ROW ACTIONS ──

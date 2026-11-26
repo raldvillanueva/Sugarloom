@@ -1537,6 +1537,40 @@ textarea { resize: vertical; }
 .pay-tag.wait { background: #E0E7FF; color: #3730A3; }
 .pay-tag.bad  { background: #FEE2E2; color: #991B1B; }
 
+/* ── Bulk orders ──
+   A sixty-piece job and a six-piece one are different work. The badge
+   rides on the row in every tab, because the size of an order is what
+   decides how it gets planned and whoever is looking at Pending needs
+   to see it there. Teal: it is a fact about the order, not a warning,
+   so it must not read like the payment and overdue tags beside it. */
+.bulk-tag {
+  display: inline-block; margin-left: 6px; padding: 2px 7px;
+  border-radius: 6px; font-size: 10px; font-weight: 700;
+  letter-spacing: .04em; vertical-align: middle; white-space: nowrap;
+  background: #CCFBF1; color: #115E59;
+}
+
+/* A hairline, not a fill — the row still has to show the payment and
+   due states, and a tinted row would fight them. */
+.bulk-row td:first-child { box-shadow: inset 3px 0 0 #14B8A6; }
+
+.status-tab.bulk-tab { margin-left: auto; }
+.tab-count.bulk { background: #CCFBF1; color: #115E59; }
+
+.bulk-note {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 12px; padding: 10px 14px;
+  background: #F0FDFA; border: 1px solid #99F6E4;
+  border-radius: 10px; font-size: 13px; color: #115E59;
+}
+.bulk-note strong { font-weight: 700; }
+.bulk-note-btn {
+  margin-left: auto; border: 1px solid #5EEAD4; background: #fff;
+  color: #0F766E; font: inherit; font-size: 12px; font-weight: 600;
+  padding: 5px 12px; border-radius: 999px; cursor: pointer;
+}
+.bulk-note-btn:hover { background: #F0FDFA; }
+
 /* ── Payment proof panel, inside the order ── */
 .pay-proof {
   margin-top: 18px; padding: 14px 16px;

@@ -404,7 +404,15 @@
           <button class="status-tab" id="tab-fulfilled" onclick="filterOrders('Fulfilled',this)">Fulfilled <span class="tab-count fulfilled" id="tab-count-fulfilled"></span></button>
           <button class="status-tab cancel-requests-tab" id="tab-cancel" onclick="filterOrders('Cancel Requested',this)">Cancel Requests <span class="tab-count cancel-req" id="tab-count-cancel"></span></button>
           <button class="status-tab" id="tab-archived" onclick="filterOrders('Archived',this)">Archived <span class="tab-count" id="tab-count-archived"></span></button>
+          <!-- Size, not status: this one cuts across the others, so it
+               sits at the end rather than in the middle of the flow. -->
+          <button class="status-tab bulk-tab" id="tab-bulk" onclick="filterOrders('Bulk',this)">Bulk <span class="tab-count bulk" id="tab-count-bulk"></span></button>
         </div>
+
+        <!-- Only on the Bulk tab: says what bulk currently means and
+             lets the Administrator change it where the number is in
+             front of them. -->
+        <div id="bulk-note" class="bulk-note" style="display:none"></div>
 
         <div class="card">
           <table class="data-table">
