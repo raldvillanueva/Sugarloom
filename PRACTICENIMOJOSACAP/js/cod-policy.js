@@ -4,15 +4,22 @@
    bigger the order the worse it hurts, so bulk orders carry the most
    risk.
 
-   Three rules, in one place so checkout and the admin panel judge an
+   Four rules, in one place so checkout and the admin panel judge an
    order the same way:
 
-     1. A hard ceiling. Above it, the order must be paid online.
-     2. Above a lower "trusted" threshold, the customer needs at least
+     1. A bulk order is paid online, whatever it costs. Size is the
+        risk here, not price: a twenty-one-piece order is a batch
+        baked to order, and a no-show wastes the ingredients and the
+        oven time whether it came to ₱1,500 or ₱2,500. The amount
+        ceiling below cannot see that — ₱1,520 of cookies sat under
+        it and was offered COD.
+     2. A hard ceiling on the amount. Above it, the order must be
+        paid online.
+     3. Above a lower "trusted" threshold, the customer needs at least
         one completed order behind them. A first-time buyer can still
         use COD for a small order — which is how they earn the history —
         but cannot have ₱2,000 of cake baked on a promise.
-     3. Anyone who has walked away from orders before loses COD.
+     4. Anyone who has walked away from orders before loses COD.
 
    Everyone ordering is signed in with a verified email already, so this
    builds on an identity rather than on nothing. */
@@ -51,7 +58,19 @@ async function customerOrderRecord(email){
 
 /* Decides whether this order may be COD, and says why not in words the
    customer can act on. */
-function judgeCod(total, record){
+/* `pieces` is how many items the order is, from orderPieces() in
+   js/stock.js — the same count the panel's Bulk tab uses. Left out,
+   the bulk rule simply does not fire, so an older caller behaves as
+   it did. */
+function judgeCod(total, record, pieces){
+  const n = Number(pieces) || 0;
+  if(n > 0 && n >= bulkThreshold){
+    return {
+      allowed: false,
+      bulk: true,
+      reason: `This is a bulk order (${n} pieces), so it needs to be paid online. Please choose GCash or Maya.`
+    };
+  }
   if(total > COD_POLICY.maxAmount){
     return {
       allowed: false,

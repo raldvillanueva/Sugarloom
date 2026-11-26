@@ -171,7 +171,10 @@ function updatePlaceOrderBtn(total){
   const wallet = isWalletPayment(chosenMethod);
   const qr = document.getElementById("gcash-qr");
 
-  const cod = judgeCod(total, _customerRecord);
+  /* Pieces as well as pesos: a bulk order is paid online whatever it
+     costs, and the amount ceiling alone cannot see that. */
+  const cartNow = JSON.parse(localStorage.getItem('cart')) || [];
+  const cod = judgeCod(total, _customerRecord, orderPieces(cartNow));
   applyCodAvailability(cod, total);
 
   if(_deliveryQuote?.outOfRange){
@@ -489,7 +492,7 @@ async function placeOrder(){
     const chosen = document.querySelector('input[name="payment"]:checked')?.value;
     const cart   = JSON.parse(localStorage.getItem('cart')) || [];
     const sum    = cart.reduce((s, i) => s + i.price * (i.qty || 1), 0) + currentDeliveryFee();
-    const cod    = judgeCod(sum, _customerRecord);
+    const cod    = judgeCod(sum, _customerRecord, orderPieces(cart));
     if(chosen === 'Cash on Delivery' && !cod.allowed){
       showMsg(cod.reason, 'error');
       return;
@@ -847,11 +850,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   /* Load the customer's track record so COD eligibility can be judged
      before they pick a payment method. */
+  /* What the shop counts as bulk. Loaded before the first judgement
+     so the page does not offer COD on a bulk order for a moment and
+     then take it away. A failure leaves the default standing. */
+  await loadBulkThreshold(_supa);
+
   const signedIn = JSON.parse(localStorage.getItem('loggedInUser') || 'null');
   if(signedIn?.email){
     _customerRecord = await customerOrderRecord(signedIn.email);
-    loadCheckout();
   }
+  loadCheckout();
 
   /* Price the delivery from the address, and re-price whenever it
      changes. prefillFromProfile() may have filled it already, so quote

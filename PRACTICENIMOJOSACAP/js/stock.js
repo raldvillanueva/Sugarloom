@@ -150,6 +150,61 @@ function leadDaysUntil(isoDay){
   return Math.max(0, Math.round((target - today) / 86400000));
 }
 
+/* ── BULK ORDERS ──────────────────────────────────────────────────
+   How many pieces an order is, counted across every line: thirty
+   cookies is a bulk order whether it arrived as one line of thirty or
+   five lines of six.
+
+   This lives here, not in the admin panel, because both sides need
+   the same answer. The panel groups bulk orders into their own tab;
+   checkout refuses Cash on Delivery on them. Two definitions would
+   mean an order the panel calls bulk and the shop lets through on
+   COD, which is the exact gap this closes.
+
+   The threshold is the shop's, stored in app_settings and loaded by
+   whoever needs it. Until it is loaded the default stands. */
+const BULK_DEFAULT_THRESHOLD = 30;
+let bulkThreshold = BULK_DEFAULT_THRESHOLD;
+
+/* Clamped at both ends. One would make every order bulk; nothing
+   sensible is above a few hundred pieces. */
+function clampBulkThreshold(n){
+  const v = Math.round(Number(n));
+  if(!Number.isFinite(v)) return BULK_DEFAULT_THRESHOLD;
+  return Math.max(2, Math.min(500, v));
+}
+
+function applyBulkThreshold(n){
+  bulkThreshold = clampBulkThreshold(n);
+  return bulkThreshold;
+}
+
+/* Takes an order ({items:[…]}) or a bare cart array, since checkout
+   has the one and the panel has the other. */
+function orderPieces(o){
+  const items = Array.isArray(o) ? o
+              : (o && Array.isArray(o.items) ? o.items : []);
+  return items.reduce((n, it) => n + (Number(it && it.qty) || 1), 0);
+}
+
+function isBulkOrder(o){
+  return orderPieces(o) >= bulkThreshold;
+}
+
+/* Read once per page. A failure leaves the default standing rather
+   than the page inventing a policy. */
+async function loadBulkThreshold(supa){
+  try {
+    const { data, error } = await supa.from('app_settings')
+      .select('data').eq('id', 'orders').maybeSingle();
+    if(error) throw error;
+    if(data?.data?.bulkThreshold) applyBulkThreshold(data.data.bulkThreshold);
+  } catch(e){
+    console.warn('bulk threshold unavailable, using the default:', e.message || e);
+  }
+  return bulkThreshold;
+}
+
 /* ── WHAT THE INGREDIENTS ACTUALLY ALLOW ──────────────────────────
    dailyLimit is how much the shop is WILLING to bake in a day: oven
    space, hands, hours. It says nothing about whether there is flour,

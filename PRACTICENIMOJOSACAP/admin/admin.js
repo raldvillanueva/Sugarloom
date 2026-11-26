@@ -315,7 +315,7 @@ async function initDB(){
 
   await ensureSuperAdmin();
   await cancelRejectedPayments();
-  await loadBulkThreshold();
+  await loadBulkThreshold(_supa);
 
   // Prime the tracking cache so it's available before first poll
   await refreshTrackingCache().catch(() => {});
@@ -2002,39 +2002,16 @@ function renderOrders(){
    app_settings beside the audit retention period, so there is one
    answer rather than a page and a database that can drift.
    ══════════════════════════════════════════════════════════════════ */
-const BULK_DEFAULT_THRESHOLD = 30;
-let bulkThreshold = BULK_DEFAULT_THRESHOLD;
+/* The rule itself — bulkThreshold, orderPieces(), isBulkOrder() and
+   loadBulkThreshold() — lives in js/stock.js, which this page loads
+   before this one. It was defined here first, and then checkout
+   needed the same answer to refuse Cash on Delivery on a bulk order:
+   two copies would have meant an order the panel calls bulk and the
+   shop lets through on COD.
 
-/* Clamped at both ends. One would make every order bulk and the tab
-   meaningless; nothing sensible is above a few hundred pieces. */
-function clampBulkThreshold(n){
-  const v = Math.round(Number(n));
-  if(!Number.isFinite(v)) return BULK_DEFAULT_THRESHOLD;
-  return Math.max(2, Math.min(500, v));
-}
-
-/* Pieces in an order, across every line. */
-function orderPieces(o){
-  return (o && Array.isArray(o.items) ? o.items : [])
-    .reduce((n, it) => n + (Number(it && it.qty) || 1), 0);
-}
-
-function isBulkOrder(o){
-  return orderPieces(o) >= bulkThreshold;
-}
-
-async function loadBulkThreshold(){
-  const { data, error } = await _supa.from('app_settings')
-    .select('data').eq('id', 'orders').maybeSingle();
-  if(error){
-    /* No settings row yet, or no table — the default stands rather
-       than the panel claiming a policy nobody set. */
-    console.warn('bulk threshold unavailable, using the default:', error.message);
-    return;
-  }
-  if(data?.data?.bulkThreshold) bulkThreshold = clampBulkThreshold(data.data.bulkThreshold);
-}
-
+   What stays here is the write. The panel is the only place the
+   number can be changed, because it is the only place with an
+   Administrator in front of it. */
 async function setBulkThreshold(value){
   if(currentUser && currentUser.role !== 'Administrator'){
     toast('Only an Administrator can change this', 'danger');
@@ -2056,7 +2033,7 @@ async function setBulkThreshold(value){
     return;
   }
 
-  bulkThreshold = n;
+  applyBulkThreshold(n);
   await logAudit('Orders', 'Bulk threshold changed', 'Orders', `${was} → ${n} pieces`);
   toast(`Bulk now means ${n} pieces or more`, 'success');
   renderOrders();

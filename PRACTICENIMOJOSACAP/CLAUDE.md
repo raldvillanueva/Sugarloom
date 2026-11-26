@@ -182,10 +182,26 @@ belong in that tab.
 Do not collapse one into the other. The first schedules a delivery date;
 the second plans a workload.
 
+**A bulk order is paid online.** `judgeCod()` refuses Cash on Delivery
+on one whatever it costs, because size is the risk and the amount
+ceiling cannot see it: twenty-one pieces of cookies came to ₱1,520,
+sat under the ₱2,000 ceiling, and was offered COD. A no-show wastes the
+ingredients and the oven time whether the batch was cheap or dear.
+
+The rule itself — `bulkThreshold`, `orderPieces()`, `isBulkOrder()`,
+`loadBulkThreshold()` — lives in **`js/stock.js`**, which both the
+panel and checkout load, so there is one answer. It was briefly defined
+in `admin.js`; two copies would have meant an order the panel calls
+bulk and the shop lets through on COD. `admin.js` keeps only
+`setBulkThreshold()`, because the panel is the only place with an
+Administrator in front of it.
+
 `bulkThreshold` lives in `app_settings` under id `orders` (default 30,
 clamped 2–500), beside the audit retention period, so there is one
 answer rather than a page and a database that can drift. Only an
 Administrator can change it, and a change is written to the audit trail.
+Checkout loads it before judging anything, so COD is never offered on a
+bulk order and then taken away.
 The Bulk tab is the Administrator's: a Baker and a Packer work one queue
 in order and do not choose what to pick up, so the tab is hidden from
 them — but the row badge still shows them how big the job in front of
