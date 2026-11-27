@@ -1,6 +1,10 @@
 /* ── cart.js ── */
 
 let _cartAdminProducts   = [];
+/* What other customers have already booked, per delivery day. Null
+   until it loads; availability() falls back to soldToday without it. */
+let _cartCommitted       = null;
+let _cartCommittedDay    = null;
 let _cartAdminIngredients = [];
 
 // NAV
@@ -207,23 +211,39 @@ function checkout(){
   minQtyError.innerText = "";
   minQtyError.style.display = "none";
 
+  /* ── WHAT CAN BE BAKED FOR THIS DATE ──
+     Through availability() in js/stock.js, which the shop, the product
+     page and checkout all use. This block used to work it out for
+     itself:
+
+         const limit = match.dailyLimit ?? match.stock ?? 0;
+
+     and that was the one place still reading dailyLimit raw. When the
+     product form stopped asking for a daily limit — the recipe
+     decides now — every newly added product arrived here with none,
+     the limit fell through to 0, and four cookies were announced as a
+     bulk order needing two days' notice. */
   const adminProducts = _cartAdminProducts;
   const stockErrors = [];
-  const todayStr = new Date().toISOString().slice(0,10);
+  /* True when at least one flagged line could be part-filled today.
+     When none can, "lower the quantity" is not advice worth giving. */
+  let someAvailable = false;
+  const fpNow     = document.getElementById("preferredDate")?._flatpickr;
+  const chosen    = fpNow?.selectedDates?.[0] || null;
+  const leadDays  = chosen ? leadDaysUntil(localDay(chosen)) : 0;
+
   cart.forEach(item => {
     const match = adminProducts.find(p => p.name.toLowerCase() === item.name.toLowerCase());
-    if(match){
-      const limit = match.dailyLimit ?? match.stock ?? 0;
-      const soldToday = (match.lastResetDate === todayStr) ? (match.soldToday || 0) : 0;
-      const available = Math.max(0, limit - soldToday);
-      if((item.qty || 1) > available){
-        /* The quantity, not what is left. This is not a refusal —
-           the order is accepted, it just needs the lead time — and a
-           "only 50 left" reads as one. It also quotes a number from
-           soldToday, which barely moves; the quantity the customer
-           typed is a fact the page already knows is true. */
-        stockErrors.push(`<strong>${item.name}</strong> &times; ${item.qty || 1}`);
-      }
+    if(!match) return;
+    const a = availability(match, _cartCommitted, { leadDays });
+    if(a.left === Infinity) return;          // nothing limits this product
+    if((item.qty || 1) > a.left){
+      /* The quantity, not what is left. This is not a refusal —
+         the order is accepted, it just needs the lead time — and a
+         "only 50 left" reads as one. The quantity the customer typed
+         is a fact the page already knows is true. */
+      stockErrors.push(`<strong>${item.name}</strong> &times; ${item.qty || 1}`);
+      if(a.left > 0) someAvailable = true;
     }
   });
   const stockError = document.getElementById("stockError");
@@ -262,7 +282,11 @@ function checkout(){
         `Quantities above what we bake in a day are prepared as a scheduled batch, ` +
         `which we need at least two days to arrange.<br>` +
         `<span style="font-weight:500">Please choose a delivery date on or after <u>${minLabel}</u>` +
-        `, or lower the quantity for a sooner date.</span>`;
+        /* Only offered when a smaller order would actually fit today.
+           With nothing left to bake from, ordering fewer changes
+           nothing, and telling someone to try that sends them round a
+           loop that cannot end. */
+        (someAvailable ? `, or lower the quantity for a sooner date.</span>` : `.</span>`);
       stockError.style.display = "block";
       return;
     }
@@ -385,6 +409,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     rememberProductImages(_cartAdminProducts);
   } catch(e) {}
 
+  /* Live bookings for today, so the check below counts what is really
+     spoken for rather than soldToday. Reloaded when a date is picked. */
+  _cartCommittedDay = todayISO();
+  _cartCommitted    = await loadCommitted(_supa, _cartCommittedDay);
+
   renderCart();
 
   // flatpickr date picker
@@ -408,11 +437,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     onMonthChange: function(_dates, _str, instance){
       instance.calendarContainer.querySelector('.numInputWrapper')?.remove();
     },
-    onChange: function(_selectedDates, dateStr){
+    onChange: async function(selectedDates, dateStr){
       localStorage.setItem("preferredDate", dateStr);
       const wrap = document.getElementById("timepickerWrap");
       if(dateStr){ wrap.classList.remove("hidden"); filterTimeSlots(dateStr); }
       else { wrap.classList.add("hidden"); }
+
+      /* What is spoken for is a question about one delivery day, so
+         picking a different one asks it again. A Friday three weeks
+         out is usually empty even when tomorrow is full. */
+      const day = selectedDates[0] ? localDay(selectedDates[0]) : todayISO();
+      if(day !== _cartCommittedDay){
+        _cartCommittedDay = day;
+        _cartCommitted    = await loadCommitted(_supa, day);
+      }
     }
   });
 

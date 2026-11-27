@@ -187,7 +187,13 @@ would read as unlimited.
 **Two different questions wear this word. Keep them apart.**
 
 *The customer's* "This is a bulk order" (`js/cart.js`) fires per line,
-when a quantity is above what can be baked for the date chosen. It is
+when a quantity is above what `availability()` allows for the date
+chosen. That block used to work the limit out for itself —
+`match.dailyLimit ?? match.stock ?? 0` — and was the last place reading
+`dailyLimit` raw; when the product form stopped asking for one, every
+newly added product fell through to a limit of zero and four cookies
+were announced as a bulk order. **Ask `availability()`; never read
+`dailyLimit` directly.** It is
 not a refusal: the order is prepared as a scheduled batch and needs two
 days' notice, and the message offers the earliest date that works or a
 smaller quantity. The panel is blue because a bulk order is not a
