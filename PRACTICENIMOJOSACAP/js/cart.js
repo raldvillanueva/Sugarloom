@@ -235,7 +235,7 @@ function checkout(){
   cart.forEach(item => {
     const match = adminProducts.find(p => p.name.toLowerCase() === item.name.toLowerCase());
     if(!match) return;
-    const a = availability(match, _cartCommitted, { leadDays });
+    const a = availability(match, _cartCommitted, { leadDays, ingredients: _cartAdminIngredients });
     if(a.left === Infinity) return;          // nothing limits this product
     if((item.qty || 1) > a.left){
       /* The quantity, not what is left. This is not a refusal —

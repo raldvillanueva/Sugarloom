@@ -22,6 +22,14 @@ let products = fallbackProducts.slice(); // start with fallback until Supabase l
    falls back to soldToday rather than emptying the shop. */
 let _committedToday = null;
 
+/* The ingredient shelf, so how many can be made is counted here
+   rather than read from the copy the panel last published. That copy
+   only refreshed when somebody saved something in the admin, so the
+   shop could show fifty while the panel showed a hundred and fifty.
+   Null until it loads, and null if the read fails — availability()
+   then falls back to the published figure. */
+let _shopIngredients = null;
+
 function render(list){
   const container = document.getElementById("product-list");
   container.innerHTML = "";
@@ -35,7 +43,7 @@ function render(list){
        on the shelf could never be ordered ahead, which is exactly
        what bulk customers come to do. Checkout knows the date and
        decides there. */
-    const a = availability(p, _committedToday);
+    const a = availability(p, _committedToday, { ingredients: _shopIngredients });
 
     const badge =
       a.state === 'out'    ? '<span class="stock-badge out">Full for today</span>' :
@@ -243,14 +251,27 @@ document.addEventListener('DOMContentLoaded', async () => {
              sold out: the storefront had no idea stock existed. */
           dailyLimit:  p.dailyLimit,
           soldToday:   p.soldToday,
+          /* The recipe is what the shelf count is read against. Only
+             the ingredient ids and quantities travel, not the
+             ingredient rows themselves. */
+          recipe:      p.recipe,
+          stockLimit:  p.stockLimit,
           ingredients: []
         }));
     }
   } catch(e) {}
 
-  /* Read before the first render, so nothing is ever shown as
-     available and then quietly withdrawn a moment later. */
-  _committedToday = await loadCommitted(_supa);
+  /* Both read before the first render, so nothing is ever shown as
+     available and then quietly withdrawn a moment later. They do not
+     depend on each other, so they go together. */
+  const [_c, _i] = await Promise.all([
+    loadCommitted(_supa),
+    _supa.from('ingredients').select('data')
+         .then(r => (r.data || []).map(x => x.data).filter(Boolean))
+         .catch(() => null)
+  ]);
+  _committedToday  = _c;
+  _shopIngredients = _i && _i.length ? _i : null;
 
   const isCustomize  = localStorage.getItem('customizeMode') === 'true';
   const isBoxesOnly  = sessionStorage.getItem("boxesOnlyMode") === "true";

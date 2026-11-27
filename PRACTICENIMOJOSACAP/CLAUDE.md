@@ -160,12 +160,22 @@ materials.
 only when the ingredients come to **less** than the shop meant to bake,
 which is the case worth naming the short ingredient for.
 
-The storefront cannot see the ingredient table, so `syncStockLimits()`
-writes the ceiling onto each product as `stockLimit`, and
-`stockCappedLimit()` in `js/stock.js` applies it there. It is derived
-data: recomputed at the top of `saveDB()` rather than at each of the
-dozen places stock moves, because all of them end in a save and none of
-them can then forget. It is arithmetic over memory and costs no query.
+The walk itself is `recipeCapacity(product, ingredients)` in
+**`js/stock.js`**, and both sides call it — `ingredientCap(p)` in the
+panel is one line that passes `DB.ingredients`.
+
+**The storefront counts the shelf live.** Every shop page loads the
+ingredients alongside what it already fetches and passes them as
+`opts.ingredients`; `shelfLimit()` prefers that count and falls back to
+the published `stockLimit` only when a caller has no ingredients.
+
+That fallback is all `stockLimit` is now. `syncStockLimits()` still
+writes it on `saveDB()`, but it is a cached copy and it only ever
+refreshed when somebody saved something in the panel — so the shop
+showed 50 while the panel showed 150, and a product whose recipe had
+been added but never saved showed no stock line at all. Counting from
+the ingredients on each page costs one small query and cannot go
+stale.
 
 **The ingredient figure applies only at short notice** (`leadDays < 2`,
 the same rule the rest of `stock.js` uses); beyond that `dailyLimit`

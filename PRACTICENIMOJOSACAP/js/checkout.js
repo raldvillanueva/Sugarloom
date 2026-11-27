@@ -624,7 +624,12 @@ async function placeOrder(){
          what stops a COD order the shop cannot bake: there is no
          payment to reject afterwards. */
       const committed = await loadCommitted(_supa, targetDay);
-      const short     = unavailableLines(cart, byName, committed, { leadDays });
+      /* With the ingredients, how many can be made is counted here
+         rather than read from the figure the panel last published —
+         which only refreshed when somebody saved in the admin. They
+         are already loaded for the allergen check. */
+      const short     = unavailableLines(cart, byName, committed,
+                          { leadDays, ingredients: _adminIngredients });
 
       if(short.length && stockErrorEl){
         const dayLabel = new Date(targetDay + 'T00:00:00')

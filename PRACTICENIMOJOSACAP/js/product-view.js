@@ -82,16 +82,35 @@ async function showStockLine(product){
   const el = document.getElementById('product-stock');
   if(!el) return;
 
-  /* The hand-off carries dailyLimit, but how much of it is spoken for
-     is only knowable from the orders. Without that count this would
-     fall back to soldToday, which is stale — so the line is left off
-     entirely rather than shown wrong. */
-  let committed = null;
-  try { committed = await loadCommitted(_supa); }
-  catch(e){ console.warn("could not count today's orders:", e); }
+  /* Three things, none of which the hand-off can carry truthfully:
+
+     how much of today is spoken for, which is only knowable from the
+     orders; the product's own row, since the copy in localStorage was
+     written whenever the customer last opened the grid; and the
+     ingredient shelf, because how many can be made is counted from
+     the recipe rather than read from the figure the panel last
+     published — that figure only refreshed when somebody saved
+     something in the admin.
+
+     Without the order count this would fall back to soldToday, which
+     is stale, so the line is left off rather than shown wrong. */
+  let committed = null, fresh = product, ingredients = null;
+  try {
+    const [cRes, pRes, iRes] = await Promise.all([
+      loadCommitted(_supa),
+      _supa.from('products').select('data'),
+      _supa.from('ingredients').select('data')
+    ]);
+    committed   = cRes;
+    const row   = (pRes.data || []).map(r => r.data)
+                    .find(x => x && x.name === product.name);
+    if(row) fresh = row;
+    const ings  = (iRes.data || []).map(r => r.data).filter(Boolean);
+    ingredients = ings.length ? ings : null;
+  } catch(e){ console.warn("could not read today's position:", e); }
   if(!committed) return;
 
-  const said = describeStock(availability(product, committed));
+  const said = describeStock(availability(fresh, committed, { ingredients }));
   if(!said) return;
 
   el.textContent = said.text;

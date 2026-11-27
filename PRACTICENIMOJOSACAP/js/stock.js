@@ -262,9 +262,54 @@ async function loadBulkThreshold(supa){
    An absent stockLimit means the panel has not computed one (a
    product with no recipe, or a version saved before this existed) and
    constrains nothing. Zero is a real answer and means zero. */
-function stockCappedLimit(p, leadDays){
+/* ── HOW MANY A RECIPE CAN STILL PRODUCE ──────────────────────────
+   Walks the recipe and asks each ingredient how many whole units are
+   left in it; the smallest answer is the limit, and that ingredient
+   is the one to buy.
+
+   The admin panel had this to itself and published the result onto
+   each product as `stockLimit`, which the shop then read. That is a
+   cached copy, and it was only ever refreshed when somebody saved
+   something in the panel — so the shop could show fifty while the
+   panel showed a hundred and fifty, and neither was lying about what
+   it knew. Given the ingredients, the shop works it out for itself
+   and there is nothing to go stale.
+
+   Infinity, not zero, when there is nothing to go on: a product with
+   no recipe is not a product that can make none. */
+function recipeCapacity(product, ingredients){
+  const recipe = product && product.recipe;
+  if(!Array.isArray(recipe) || !recipe.length) return { units: Infinity, limiting: null };
+  if(!Array.isArray(ingredients)) return { units: Infinity, limiting: null };
+
+  let units = Infinity, limiting = null;
+  recipe.forEach(r => {
+    const ing = ingredients.find(i => i && i.id === r.ingredientId);
+    const per = Number(r && r.qty);
+    if(!ing || !(per > 0)) return;   // an ingredient we know nothing about constrains nothing
+    const canMake = Math.floor((Number(ing.stock) || 0) / per);
+    if(canMake < units){ units = canMake; limiting = ing; }
+  });
+  return { units, limiting };
+}
+
+/* The shelf figure for a product: counted live from `ingredients` when
+   the caller has them, and otherwise the `stockLimit` the panel last
+   published. */
+function shelfLimit(p, ingredients){
+  if(Array.isArray(ingredients)){
+    const { units } = recipeCapacity(p, ingredients);
+    if(Number.isFinite(units)) return units;
+    /* No recipe. Fall through rather than returning: an older product
+       may still carry a published figure. */
+  }
+  const cap = Number(p && p.stockLimit);
+  return Number.isFinite(cap) && cap >= 0 ? cap : NaN;
+}
+
+function stockCappedLimit(p, leadDays, ingredients){
   const limit = Number(p && p.dailyLimit);
-  const cap   = Number(p && p.stockLimit);
+  const cap   = shelfLimit(p, ingredients);
   const hasLimit = Number.isFinite(limit) && limit > 0;
   const hasCap   = Number.isFinite(cap)   && cap >= 0;
 
@@ -309,7 +354,7 @@ function availability(p, committed, opts){
      A cap of zero still must not read as "no limit set", which is why
      this asks stockCappedLimit() for NaN rather than testing for a
      falsy number. */
-  const base = stockCappedLimit(p, leadDays);
+  const base = stockCappedLimit(p, leadDays, opts && opts.ingredients);
   if(!Number.isFinite(base)){
     return { left: Infinity, orderable: true, state: 'ok', capacity: Infinity };
   }

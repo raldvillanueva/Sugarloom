@@ -1348,32 +1348,17 @@ function renderProducts(){
 }
 
 /* ── HOW MANY THE SHELF CAN STILL PRODUCE ──────────────────────────
-   Walks the recipe and asks each ingredient how many whole units it
-   has left in it. The smallest answer is the product's ceiling, and
-   that ingredient is the one to buy.
+   The walk itself lives in js/stock.js as recipeCapacity(), because
+   the shop needs the same answer and used to get a stale copy of it.
+   This is the panel's way of asking, with the panel's ingredients.
 
-   This replaces ingEstimate(), which computed almost the same number
+   It replaced ingEstimate(), which computed almost the same number
    and was never called from anywhere: the daily limit stayed whatever
    somebody last typed, however little was on the shelf. A product
    could advertise fifty with butter for two, take the orders, and the
-   baker found out at the mixer.
-
-   Infinity, not zero, when there is nothing to go on — a product with
-   no recipe is not a product that can make none. Zero is reserved for
-   a recipe whose ingredients have genuinely run out. */
+   baker found out at the mixer. */
 function ingredientCap(p){
-  if(!p || !Array.isArray(p.recipe) || !p.recipe.length){
-    return { units: Infinity, limiting: null };
-  }
-  let units = Infinity, limiting = null;
-  p.recipe.forEach(r => {
-    const ing = DB.ingredients.find(i => i.id === r.ingredientId);
-    const per = Number(r.qty);
-    if(!ing || !(per > 0)) return;   // an ingredient we know nothing about constrains nothing
-    const canMake = Math.floor((Number(ing.stock) || 0) / per);
-    if(canMake < units){ units = canMake; limiting = ing; }
-  });
-  return { units, limiting };
+  return recipeCapacity(p, DB.ingredients);
 }
 
 /* What today's limit really is: what the ingredients can produce.
