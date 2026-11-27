@@ -438,8 +438,11 @@
         <div class="page-header">
           <div><h1>Inventory</h1><p>Monitor daily capacity and ingredients</p></div>
           <div class="header-actions">
+            <!-- "Set Daily Limit" stood here and did nothing: it opened
+                 no dialog, only a toast saying to use a product row
+                 instead. The row's own button is the control, and the
+                 limit itself now comes from the ingredients. -->
             <button class="btn-secondary" onclick="openIngredientModal()"><i class='bx bx-plus'></i> Add Ingredient</button>
-            <button class="btn-primary" onclick="openProductStockModal()"><i class='bx bx-edit'></i> Set Daily Limit</button>
           </div>
         </div>
 

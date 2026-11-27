@@ -4937,9 +4937,6 @@ function deleteIngredient(id){
   });
 }
 
-function openProductStockModal(){
-  toast('Select a product row to adjust its stock','');
-}
 
 /* A setting for the number of orders one delivery date would accept
    used to live here, with a card on the Orders page. It is gone,
