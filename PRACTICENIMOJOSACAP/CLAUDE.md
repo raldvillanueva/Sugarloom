@@ -138,7 +138,19 @@ and the pills.
 
 `dailyLimit` is what the shop *intends* to bake, and is now only the
 fallback for a product with **no recipe**, where there is nothing to
-count from. It used to be an upper bound as well — `effectiveLimit` was
+count from. **The product form no longer asks for one** — the recipe is
+the source — so a product added today carries none at all, and editing
+a product never writes the field.
+
+A product with neither a recipe nor a typed figure has no known limit.
+That is not a limit of zero: the panel shows "No recipe yet" rather
+than "0/0 left" and does not mark it sold out, and `stockCappedLimit()`
+returns `NaN` so the shop treats it as unlimited. `availability()` asks
+that function rather than testing `dailyLimit` — it used to decide
+"unlimited" from `dailyLimit` alone, which was right while every
+product carried one and became wrong the moment the form stopped
+asking: a product with a recipe and nothing on the shelf has a very
+real limit of zero and was being sold without one. It used to be an upper bound as well — `effectiveLimit` was
 the lower of the two — which meant a product with eggs for seventy-two
 still read "50/50 left", a figure nobody had checked against the stock
 room presented as though they had. The limit on a bake is the raw

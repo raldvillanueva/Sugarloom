@@ -1332,7 +1332,7 @@ function renderProducts(){
       <td>
         <div class="stock-bar-wrap">
           <div class="stock-bar"><div class="stock-bar-fill ${stockClass(p)}" style="width:${stockPct(p)}%"></div></div>
-          <div class="stock-label">${leftToday(p)}/${effectiveLimit(p)} left</div>
+          <div class="stock-label">${limitLabel(p)}</div>
         </div>
       </td>
       <td><span class="pill ${p.active?'active':'inactive'}">${p.active?'Active':'Inactive'}</span></td>
@@ -1390,7 +1390,28 @@ function ingredientCap(p){
    shelves cannot back. */
 function effectiveLimit(p){
   const { units } = ingredientCap(p);
-  return Number.isFinite(units) ? units : (Number(p && p.dailyLimit) || 0);
+  if(Number.isFinite(units)) return units;
+
+  /* No recipe to count from. An older product may still carry a typed
+     dailyLimit; a new one carries nothing, because the form stopped
+     asking. Nothing known is not the same as none — returning zero
+     here printed "0/0 left" and a Near Limit pill on a product the
+     shop was meanwhile selling without any limit at all, since
+     availability() reads an absent dailyLimit as unlimited. */
+  const typed = Number(p && p.dailyLimit) || 0;
+  return typed > 0 ? typed : Infinity;
+}
+
+/* False when nothing caps this product: no recipe and no typed
+   figure. The row says so instead of printing a number. */
+function hasKnownLimit(p){
+  return Number.isFinite(effectiveLimit(p));
+}
+
+/* "46/72 left", or a word when there is no limit to count against. */
+function limitLabel(p){
+  if(!hasKnownLimit(p)) return 'No recipe yet';
+  return `${leftToday(p)}/${effectiveLimit(p)} left`;
 }
 
 /* True when the ingredients come to less than the shop meant to bake,
@@ -1488,12 +1509,14 @@ function leftToday(p, committed){
 }
 
 function stockClass(p){
+  if(!hasKnownLimit(p)) return 'ok';
   const remaining = leftToday(p);
   if(remaining <= 0) return 'low';
   if(remaining <= (p.threshold||1)) return 'warn';
   return 'ok';
 }
 function stockPct(p){
+  if(!hasKnownLimit(p)) return 100;
   const limit = effectiveLimit(p) || 1;
   const remaining = leftToday(p);
   return Math.min(100, Math.round((remaining / limit) * 100));
@@ -1509,7 +1532,8 @@ function openProductModal(id){
   document.getElementById('pm-category').value  = p?.category||'';
   document.getElementById('pm-flavor').value    = p?.flavor||'';
   document.getElementById('pm-price').value     = p?.price||'';
-  document.getElementById('pm-stock').value     = p?.dailyLimit||'';
+
+
   document.getElementById('pm-threshold').value = p?.threshold||5;
   document.getElementById('pm-img').value       = p?.img||'';
   document.getElementById('pm-desc').value      = p?.description||'';
@@ -1528,7 +1552,7 @@ function openProductModal(id){
   Object.assign(catEl.style, isEdit ? roStyle : { background:'', cursor:'', color:'' });
 
   // Editable fields — always unlocked
-  ['pm-desc','pm-threshold','pm-stock'].forEach(fid => {
+  ['pm-desc','pm-threshold'].forEach(fid => {
     const el = document.getElementById(fid);
     el.readOnly = false;
     Object.assign(el.style, { background:'', cursor:'', color:'', resize:'' });
@@ -1636,18 +1660,19 @@ function saveProduct(){
   const id    = document.getElementById('pm-id').value;
   const p     = DB.products.find(pp=>pp.id===id);
   const price = parseFloat(document.getElementById('pm-price').value);
-  const stock = parseInt(document.getElementById('pm-stock').value)||0;
   if(isNaN(price)){ toast('Enter a valid price','danger'); return; }
   if(id && p){
     p.price       = price;
-    p.dailyLimit  = stock;
+    /* dailyLimit is deliberately not written here. The form no longer
+       asks for one, and assigning the missing field would quietly set
+       every edited product to zero. */
     p.description = document.getElementById('pm-desc').value.trim();
     p.threshold   = parseInt(document.getElementById('pm-threshold').value)||5;
     p.active      = document.getElementById('pm-active').checked;
     const imgVal  = document.getElementById('pm-img').value.trim();
     if(imgVal) p.img = imgVal;
     saveDB(); closeModal('product-modal'); renderProducts(); updateBadges();
-    logAudit('Products', 'Product updated', p.name, `₱${p.price} · daily limit ${p.dailyLimit}`);
+    logAudit('Products', 'Product updated', p.name, `₱${p.price}`);
     toast('Product updated','success');
     return;
   }
@@ -1659,7 +1684,7 @@ function saveProduct(){
   const data = {
     name, category:cat,
     flavor:      document.getElementById('pm-flavor').value.trim(),
-    price, dailyLimit:stock, soldToday:0, lastResetDate:todayDate(),
+    price, soldToday:0, lastResetDate:todayDate(),
     threshold:   parseInt(document.getElementById('pm-threshold').value)||5,
     img:         document.getElementById('pm-img').value.trim(),
     description: document.getElementById('pm-desc').value.trim(),
@@ -3979,7 +4004,7 @@ function renderInventory(){
       <td>
         <div class="stock-bar-wrap">
           <div class="stock-bar"><div class="stock-bar-fill ${sc}" style="width:${stockPct(p)}%"></div></div>
-          <div class="stock-label">${leftToday(p)}/${effectiveLimit(p)} left</div>
+          <div class="stock-label">${limitLabel(p)}</div>
           ${capNote}
         </div>
       </td>

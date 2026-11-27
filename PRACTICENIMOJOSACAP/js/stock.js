@@ -265,13 +265,24 @@ async function loadBulkThreshold(supa){
 function stockCappedLimit(p, leadDays){
   const limit = Number(p && p.dailyLimit);
   const cap   = Number(p && p.stockLimit);
-  if(!Number.isFinite(cap) || cap < 0) return limit;
-  /* At short notice the shelf is the answer, not the smaller of the
-     shelf and a typed figure — the panel counts the same way, and a
-     shop showing fewer than it can actually bake today turns away
-     orders it could have filled. Further out, dailyLimit governs:
-     there is time to buy more of whatever ran short. */
-  return (Number(leadDays) || 0) < 2 ? cap : limit;
+  const hasLimit = Number.isFinite(limit) && limit > 0;
+  const hasCap   = Number.isFinite(cap)   && cap >= 0;
+
+  /* NaN means nothing caps this product: no recipe to count from and
+     no figure typed. The panel stopped asking for a daily limit when
+     the recipe became the source, so this is now the ordinary state
+     of a product whose recipe has not been filled in yet. */
+  if(!hasLimit && !hasCap) return NaN;
+
+  /* At short notice the shelf is the answer — the panel counts the
+     same way, and a shop showing fewer than it can bake today turns
+     away orders it could have filled. Further out the shop's own
+     intent governs, because there is time to buy more of whatever ran
+     short; without one, the shelf is still the best figure there is
+     and capacityFor() spreads it over the days of notice. */
+  return (Number(leadDays) || 0) < 2
+    ? (hasCap   ? cap   : limit)
+    : (hasLimit ? limit : cap);
 }
 
 /* The single question the storefront asks.
@@ -288,13 +299,18 @@ function availability(p, committed, opts){
   const leadDays    = opts && opts.leadDays != null ? opts.leadDays : 0;
   const shortNotice = leadDays < 2;
 
-  /* Asked of dailyLimit alone, deliberately: a product with no daily
-     limit is unlimited, and that must be decided before the
-     ingredient ceiling is applied. Otherwise a cap of zero would read
-     as "no limit set" and put a product with no ingredients left back
-     on the shelf as unlimited. */
-  const limit = Number(p && p.dailyLimit);
-  if(!Number.isFinite(limit) || limit <= 0){
+  /* Both figures, not dailyLimit alone. It used to ask dailyLimit
+     first and call the product unlimited when there was none — which
+     was right while every product carried one, and became wrong the
+     moment the panel stopped asking for it: a product with a recipe
+     and nothing on the shelf has a very real limit of zero, and was
+     being sold without one.
+
+     A cap of zero still must not read as "no limit set", which is why
+     this asks stockCappedLimit() for NaN rather than testing for a
+     falsy number. */
+  const base = stockCappedLimit(p, leadDays);
+  if(!Number.isFinite(base)){
     return { left: Infinity, orderable: true, state: 'ok', capacity: Infinity };
   }
 
@@ -302,9 +318,7 @@ function availability(p, committed, opts){
     ? committed[p.name]
     : Number(p.soldToday) || 0;
 
-  /* Beyond short notice this is dailyLimit unchanged, so nothing about
-     booking ahead moves. */
-  const capacity = capacityFor(stockCappedLimit(p, leadDays), leadDays);
+  const capacity = capacityFor(base, leadDays);
   const left     = Math.max(0, capacity - used);
   const bar      = shortNotice ? hideThreshold(p) : 0;
 
