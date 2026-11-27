@@ -1480,8 +1480,13 @@ function committedToday(){
 
 function soldTodayFor(p, committed){
   const m = committed || committedToday();
-  return Object.prototype.hasOwnProperty.call(m, p.name)
-    ? m[p.name]
+  /* Keyed by productKey(), the same fold committedForDay() used to
+     build the map. Reading it by the raw name missed an order whose
+     item name differed only in case or a stray space, and the panel
+     showed the full day as still free. */
+  const k = productKey(p && p.name);
+  return Object.prototype.hasOwnProperty.call(m, k)
+    ? m[k]
     : (Number(p.soldToday) || 0);
 }
 
@@ -1489,6 +1494,29 @@ function soldTodayFor(p, committed){
    read dailyLimit straight, so a product with the ingredients for
    three still showed "50 left" — the one screen whose job is to tell
    the admin what the kitchen can do was the screen furthest from it. */
+/* ── BOOKED FOR A LATER DAY ──
+   "Left today" is about today, so an order for Friday does not move
+   it — capacity is per baking day and Friday has its own. That is
+   right, and it reads as a fault: an admin confirms an order, looks
+   at Inventory, and sees the same number as before.
+
+   This counts what is spoken for on every day after today, so the row
+   can say so. One pass over the orders already in memory. */
+function bookedAhead(p){
+  const today = todayISO();
+  const key   = productKey(p && p.name);
+  let n = 0;
+  (DB.orders || []).forEach(o => {
+    if(!commitsStock(o)) return;
+    const day = orderDeliveryDay(o);
+    if(!day || day <= today) return;
+    (o.items || []).forEach(it => {
+      if(it && productKey(it.name) === key) n += Number(it.qty) || 1;
+    });
+  });
+  return n;
+}
+
 function leftToday(p, committed){
   return Math.max(0, effectiveLimit(p) - soldTodayFor(p, committed));
 }
@@ -3977,6 +4005,13 @@ function renderInventory(){
        name the ingredient. "12/50 left" with no explanation reads as
        a slow day; the admin needs to know it is the butter, because
        buying butter is the fix. */
+    /* So a confirmed order for a later day is visible here rather
+       than looking like the count failing to move. */
+    const ahead = bookedAhead(p);
+    const aheadNote = ahead > 0
+      ? `<div class="stock-ahead">${ahead} booked for a later day</div>`
+      : '';
+
     const capNote = isStockLimited(p)
       ? `<div class="stock-capped" title="The daily limit is ${typed}, but the ingredients on hand make ${cap.units}">
            <i class='bx bx-bowl-hot'></i> ingredients allow ${cap.units}${cap.limiting ? ' — short on ' + escHTML(cap.limiting.name) : ''}
@@ -3990,6 +4025,7 @@ function renderInventory(){
         <div class="stock-bar-wrap">
           <div class="stock-bar"><div class="stock-bar-fill ${sc}" style="width:${stockPct(p)}%"></div></div>
           <div class="stock-label">${limitLabel(p)}</div>
+          ${aheadNote}
           ${capNote}
         </div>
       </td>

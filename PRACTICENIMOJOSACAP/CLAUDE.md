@@ -283,6 +283,24 @@ returning anything and lets the re-bake draw fresh stock. It sets the
 status directly rather than through `updateOrderStatus()`, which is
 what keeps the central rule from undoing it.
 
+**Products are matched by `productKey()`** — trimmed and lower-cased —
+everywhere the committed map is built or read (`committedForDay`,
+`availability`, `soldTodayFor`, `unavailableLines`). The rest of the
+shop has always compared names case-insensitively, so an item can
+reach an order cased differently from the catalogue row; matching on
+the exact string made them two different products and the confirmed
+order moved no count at all.
+
+**An order with no `preferredDate` counts against the day it was
+placed.** `orderDeliveryDay()` used to return null for one, so it was
+counted against no day at all — confirmed, due to be baked, invisible
+to every capacity figure on both sides.
+
+**"Left today" is about today.** An order for Friday does not move it;
+Friday has its own capacity. That is right and reads as a fault, so
+the Inventory row says "N booked for a later day" when there is
+something to say — `bookedAhead(p)`.
+
 **The day's capacity is held from Confirmed, not from placement.**
 `commitsStock()` in `js/stock.js` is the rule. A Pending order is not
 yet an agreement — the customer's Cancel Order button is offered on

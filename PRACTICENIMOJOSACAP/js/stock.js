@@ -41,9 +41,17 @@ function localDay(d){
 }
 
 /* Supabase stores preferredDate as text the admin typed, like
-   "November 6, 2026", so it is parsed rather than compared. */
+   "November 6, 2026", so it is parsed rather than compared.
+
+   An order without one falls back to the day it was placed. It used
+   to return null, which meant such an order was counted against no
+   day at all — confirmed, due to be baked, and invisible to every
+   capacity figure in the shop and the panel. syncStoreOrders() has
+   always read a missing preferred date as the order's own day; this
+   is the same rule, in the place that counts. */
 function orderDeliveryDay(order){
-  const raw = order && order.preferredDate;
+  if(!order) return null;
+  const raw = order.preferredDate || order.date;
   if(!raw) return null;
   const d = new Date(raw);
   return isNaN(d) ? null : localDay(d);
@@ -90,7 +98,26 @@ function commitsStock(order){
   return !!order.declineReason;
 }
 
-/* { "Fudge Brownies": 6, ... } for one delivery day. */
+/* ── MATCHING A PRODUCT BY NAME ──
+   Orders carry the product's name as text, so counting them means
+   matching on it. The rest of the shop already compares names
+   case-insensitively — cart.js has always done
+   `p.name.toLowerCase() === item.name.toLowerCase()` — so an item can
+   reach an order with a different casing from the product row and
+   still have been added legitimately.
+
+   This counted on the exact string, so "gsac" in an order and "GSAC"
+   in the catalogue were two different products: the order was
+   confirmed, and the panel went on showing the full day's capacity as
+   though nothing had been booked. A trailing space did the same.
+
+   One key, folded the same way everywhere that reads this map. */
+function productKey(name){
+  return String(name == null ? '' : name).trim().toLowerCase();
+}
+
+/* { "fudge brownies": 6, ... } for one delivery day, keyed by
+   productKey() rather than by the raw name. */
 function committedForDay(orders, isoDay){
   const out = {};
   (orders || []).forEach(o => {
@@ -98,7 +125,9 @@ function committedForDay(orders, isoDay){
     if(orderDeliveryDay(o) !== isoDay) return;
     (o.items || []).forEach(it => {
       if(!it || !it.name) return;
-      out[it.name] = (out[it.name] || 0) + (Number(it.qty) || 1);
+      const k = productKey(it.name);
+      if(!k) return;
+      out[k] = (out[k] || 0) + (Number(it.qty) || 1);
     });
   });
   return out;
@@ -359,8 +388,9 @@ function availability(p, committed, opts){
     return { left: Infinity, orderable: true, state: 'ok', capacity: Infinity };
   }
 
-  const used = committed && Object.prototype.hasOwnProperty.call(committed, p.name)
-    ? committed[p.name]
+  const key  = productKey(p && p.name);
+  const used = committed && Object.prototype.hasOwnProperty.call(committed, key)
+    ? committed[key]
     : Number(p.soldToday) || 0;
 
   const capacity = capacityFor(base, leadDays);
@@ -377,8 +407,14 @@ function availability(p, committed, opts){
    longer fit, so the customer is told which ones rather than simply
    being refused. */
 function unavailableLines(cart, byName, committed, opts){
+  /* Keyed the same way, so a line whose casing differs from the
+     catalogue still finds its product instead of being waved through
+     as "not in the catalogue". */
+  const index = {};
+  Object.keys(byName || {}).forEach(n => { index[productKey(n)] = byName[n]; });
+
   return (cart || []).reduce((bad, line) => {
-    const p = byName[line.name];
+    const p = index[productKey(line.name)];
     if(!p) return bad;                      // not in the catalogue; leave it alone
 
     const a = availability(p, committed, opts);
